@@ -15,4 +15,160 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-public class MirroringAsyncConnection {}
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConfiguration;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowControlStrategy;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.ServerName;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.security.User;
+
+public class MirroringAsyncConnection implements AsyncConnection {
+  private MirroringConfiguration configuration;
+  private AsyncConnection primaryConnection;
+  private AsyncConnection secondaryConnection;
+  private final ExecutorService executorService;
+  private final MismatchDetector mismatchDetector;
+  private final FlowController flowController;
+
+  public MirroringAsyncConnection(
+      Configuration conf, /* AsyncRegion */ Object o, String clusterId, User user)
+      throws ExecutionException, InterruptedException {
+    this(conf, null, user);
+  }
+
+  public MirroringAsyncConnection(Configuration conf, ExecutorService pool, User user)
+      throws ExecutionException, InterruptedException {
+    this.configuration = new MirroringAsyncConfiguration(conf);
+
+    this.primaryConnection =
+        ConnectionFactory.createAsyncConnection(this.configuration.primaryConfiguration, user)
+            .get();
+    this.secondaryConnection =
+        ConnectionFactory.createAsyncConnection(this.configuration.secondaryConfiguration, user)
+            .get();
+
+    if (pool == null) {
+      this.executorService = Executors.newCachedThreadPool();
+    } else {
+      this.executorService = pool;
+    }
+    this.flowController =
+        new FlowController(
+            this.<FlowControlStrategy>construct(
+                this.configuration.mirroringOptions.flowControllerStrategyClass,
+                this.configuration.mirroringOptions));
+
+    this.mismatchDetector = construct(this.configuration.mirroringOptions.mismatchDetectorClass);
+  }
+
+  private <T> T construct(String className, Object... params) {
+    List<Class<?>> constructorArgs = new ArrayList<>();
+    for (Object param : params) {
+      constructorArgs.add(param.getClass());
+    }
+    Constructor<T> constructor =
+        getConstructor(className, constructorArgs.toArray(new Class<?>[0]));
+    try {
+      return constructor.newInstance(params);
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private <T> Constructor<T> getConstructor(String className, Class<?>... parameterTypes) {
+    try {
+      @SuppressWarnings("unchecked")
+      Class<T> c = (Class<T>) Class.forName(className);
+      return c.getDeclaredConstructor(parameterTypes);
+    } catch (ClassNotFoundException | ClassCastException | NoSuchMethodException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public Configuration getConfiguration() {
+    return this.configuration;
+  }
+
+  // TODO: use default method after implementing MirroringAsyncTableBuilder
+  @Override
+  public AsyncTable<ScanResultConsumer> getTable(TableName tableName, ExecutorService pool) {
+    return new MirroringAsyncTable(
+        this.primaryConnection.getTable(tableName),
+        this.secondaryConnection.getTable(tableName),
+        this.executorService,
+        this.mismatchDetector,
+        this.flowController);
+  }
+
+  @Override
+  public AsyncTableRegionLocator getRegionLocator(TableName tableName) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void clearRegionLocationCache() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public AsyncTableBuilder<AdvancedScanResultConsumer> getTableBuilder(TableName tableName) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public AsyncTableBuilder<ScanResultConsumer> getTableBuilder(
+      TableName tableName, ExecutorService executorService) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public AsyncAdminBuilder getAdminBuilder() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public AsyncAdminBuilder getAdminBuilder(ExecutorService executorService) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public AsyncBufferedMutatorBuilder getBufferedMutatorBuilder(TableName tableName) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public AsyncBufferedMutatorBuilder getBufferedMutatorBuilder(
+      TableName tableName, ExecutorService executorService) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public boolean isClosed() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public CompletableFuture<Hbck> getHbck() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Hbck getHbck(ServerName serverName) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void close() throws IOException {
+    throw new UnsupportedOperationException();
+  }
+}
