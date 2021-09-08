@@ -15,8 +15,12 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
+import java.util.concurrent.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.ServerName;
@@ -29,8 +33,17 @@ import org.apache.hadoop.hbase.client.AsyncTableBuilder;
 import org.apache.hadoop.hbase.client.AsyncTableRegionLocator;
 import org.apache.hadoop.hbase.client.Hbck;
 import org.apache.hadoop.hbase.client.ScanResultConsumer;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.TestRegistry;
+import org.apache.hadoop.hbase.security.User;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-public class TestMirroringAsyncConnection implements AsyncConnection {
+class TestAsyncConnection implements AsyncConnection {
+  public TestAsyncConnection(
+      Configuration conf, /* AsyncRegion */ Object o, String clusterId, User user) {}
+
   @Override
   public Configuration getConfiguration() {
     throw new UnsupportedOperationException();
@@ -96,5 +109,22 @@ public class TestMirroringAsyncConnection implements AsyncConnection {
   @Override
   public void close() throws IOException {
     throw new UnsupportedOperationException();
+  }
+}
+
+@RunWith(JUnit4.class)
+public class TestMirroringAsyncConnection {
+  @Test
+  public void testConnectionFactoryCreatesMirroringAsyncConnection()
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    Configuration testConfiguration = new Configuration();
+    testConfiguration.set("hbase.client.registry.impl", TestRegistry.class.getCanonicalName());
+    testConfiguration.set(
+        "hbase.client.async.connection.impl", TestAsyncConnection.class.getCanonicalName());
+    MirroringAsyncConfiguration configuration =
+        new MirroringAsyncConfiguration(testConfiguration, testConfiguration, testConfiguration);
+    configuration.set("hbase.client.registry.impl", TestRegistry.class.getCanonicalName());
+    AsyncConnection connection = ConnectionFactory.createAsyncConnection(configuration).get();
+    assertTrue(connection instanceof MirroringAsyncConnection);
   }
 }
