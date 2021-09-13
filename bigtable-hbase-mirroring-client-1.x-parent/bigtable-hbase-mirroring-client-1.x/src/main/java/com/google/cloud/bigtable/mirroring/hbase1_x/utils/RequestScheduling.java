@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
@@ -36,7 +37,7 @@ public class RequestScheduling {
 
   public static <T> ListenableFuture<Void> scheduleVerificationAndRequestWithFlowControl(
       final RequestResourcesDescription requestResourcesDescription,
-      final ListenableFuture<T> secondaryGetFuture,
+      final Callable<ListenableFuture<T>> secondaryResultFutureCaller,
       final FutureCallback<T> verificationCallback,
       final FlowController flowController) {
     final SettableFuture<Void> verificationCompletedFuture = SettableFuture.create();
@@ -45,8 +46,15 @@ public class RequestScheduling {
         flowController.asyncRequestResource(requestResourcesDescription);
     try {
       final ResourceReservation reservation = reservationRequest.get();
+      ListenableFuture<T> secondaryResultFuture = null;
+      try {
+        secondaryResultFuture = secondaryResultFutureCaller.call();
+      } catch (Exception e) {
+        assert false;
+      }
+
       Futures.addCallback(
-          secondaryGetFuture,
+          secondaryResultFuture,
           new FutureCallback<T>() {
             @Override
             public void onSuccess(@NullableDecl T t) {

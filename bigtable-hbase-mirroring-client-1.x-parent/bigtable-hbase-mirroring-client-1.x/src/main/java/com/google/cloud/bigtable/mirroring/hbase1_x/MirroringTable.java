@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
@@ -546,21 +547,21 @@ public class MirroringTable implements Table, ListenableCloseable {
 
   private <T> void scheduleVerificationAndRequestWithFlowControl(
       final RequestResourcesDescription resultInfo,
-      final ListenableFuture<T> secondaryGetFuture,
+      final Callable<ListenableFuture<T>> secondaryGetFutureCaller,
       final FutureCallback<T> verificationCallback) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-            resultInfo, secondaryGetFuture, verificationCallback, this.flowController));
+            resultInfo, secondaryGetFutureCaller, verificationCallback, this.flowController));
   }
 
   public <T> void scheduleWriteWithControlFlow(
       final WriteOperationInfo writeOperationInfo,
-      final ListenableFuture<T> secondaryResultFuture,
+      final Callable<ListenableFuture<T>> secondaryResultFutureCaller,
       final FlowController flowController) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
             writeOperationInfo.requestResourcesDescription,
-            secondaryResultFuture,
+            secondaryResultFutureCaller,
             new FutureCallback<T>() {
               @Override
               public void onSuccess(@NullableDecl T t) {}

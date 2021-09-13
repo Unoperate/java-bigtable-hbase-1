@@ -29,6 +29,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -85,11 +86,19 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     Result result = this.primaryResultScanner.next();
     int startingIndex = this.readEntries;
     this.readEntries += 1;
-    ScannerRequestContext context =
+    final ScannerRequestContext context =
         new ScannerRequestContext(this.originalScan, result, startingIndex);
+
     this.scheduleRequest(
         new RequestResourcesDescription(result),
-        this.secondaryResultScannerWrapper.next(context),
+        new Callable<
+            ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>>() {
+          @Override
+          public ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>
+              call() {
+            return secondaryResultScannerWrapper.next(context);
+          }
+        },
         this.verificationContinuationFactory.scannerNext());
     return result;
   }
@@ -99,11 +108,18 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     Result[] results = this.primaryResultScanner.next(entriesToRead);
     int startingIndex = this.readEntries;
     this.readEntries += entriesToRead;
-    ScannerRequestContext context =
+    final ScannerRequestContext context =
         new ScannerRequestContext(this.originalScan, results, startingIndex, entriesToRead);
     this.scheduleRequest(
         new RequestResourcesDescription(results),
-        this.secondaryResultScannerWrapper.next(context),
+        new Callable<
+            ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>>() {
+          @Override
+          public ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>
+              call() {
+            return secondaryResultScannerWrapper.next(context);
+          }
+        },
         this.verificationContinuationFactory.scannerNext());
     return results;
   }
@@ -176,7 +192,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
 
   private <T> void scheduleRequest(
       RequestResourcesDescription requestResourcesDescription,
-      ListenableFuture<T> next,
+      Callable<ListenableFuture<T>> next,
       FutureCallback<T> scannerNext) {
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
