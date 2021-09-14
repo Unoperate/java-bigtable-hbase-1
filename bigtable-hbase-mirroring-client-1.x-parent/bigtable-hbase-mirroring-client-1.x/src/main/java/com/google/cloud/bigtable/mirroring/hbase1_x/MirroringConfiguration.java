@@ -23,9 +23,9 @@ import java.util.regex.Pattern;
 import org.apache.hadoop.conf.Configuration;
 
 public class MirroringConfiguration extends Configuration {
-  Configuration primaryConfiguration;
-  Configuration secondaryConfiguration;
-  MirroringOptions mirroringOptions;
+  public final Configuration primaryConfiguration;
+  public final Configuration secondaryConfiguration;
+  public final MirroringOptions mirroringOptions;
 
   /**
    * Key to set to a name of Connection class that should be used to connect to primary database. It
@@ -42,6 +42,22 @@ public class MirroringConfiguration extends Configuration {
    */
   public static final String MIRRORING_SECONDARY_CONNECTION_CLASS_KEY =
       "google.bigtable.mirroring.secondary-client.connection.impl";
+
+  /**
+   * Key to set to a name of Connection class that should be used to connect asynchronously to
+   * primary database. It is used as hbase.client.async.connection.impl when creating connection to
+   * primary database. Set to {@code default} to use default HBase connection class.
+   */
+  public static final String MIRRORING_PRIMARY_ASYNC_CONNECTION_CLASS_KEY =
+      "google.bigtable.mirroring.primary-client.async.connection.impl";
+
+  /**
+   * Key to set to a name of Connection class that should be used to connect asynchronously to
+   * secondary database. It is used as hbase.client.async.connection.impl when creating connection
+   * to secondary database. Set to {@code default} to use default HBase connection class.
+   */
+  public static final String MIRRORING_SECONDARY_ASYNC_CONNECTION_CLASS_KEY =
+      "google.bigtable.mirroring.secondary-client.async.connection.impl";
 
   /**
    * By default all parameters from the Configuration object passed to
@@ -91,7 +107,7 @@ public class MirroringConfiguration extends Configuration {
           new Configuration(mirroringConfiguration.secondaryConfiguration);
       this.mirroringOptions = mirroringConfiguration.mirroringOptions;
     } else {
-      checkParameters(conf);
+      verifyParameters(conf);
       this.primaryConfiguration = constructPrimaryConfiguration(conf);
       this.secondaryConfiguration = constructSecondaryConfiguration(conf);
       this.mirroringOptions = new MirroringOptions(conf);
@@ -100,37 +116,61 @@ public class MirroringConfiguration extends Configuration {
 
   private Configuration constructPrimaryConfiguration(Configuration conf) {
     return constructConnectionConfiguration(
-        conf, MIRRORING_PRIMARY_CONNECTION_CLASS_KEY, MIRRORING_PRIMARY_CONFIG_PREFIX_KEY);
+        conf,
+        MIRRORING_PRIMARY_CONNECTION_CLASS_KEY,
+        MIRRORING_PRIMARY_ASYNC_CONNECTION_CLASS_KEY,
+        MIRRORING_PRIMARY_CONFIG_PREFIX_KEY);
   }
 
   private Configuration constructSecondaryConfiguration(Configuration conf) {
     return constructConnectionConfiguration(
-        conf, MIRRORING_SECONDARY_CONNECTION_CLASS_KEY, MIRRORING_SECONDARY_CONFIG_PREFIX_KEY);
+        conf,
+        MIRRORING_SECONDARY_CONNECTION_CLASS_KEY,
+        MIRRORING_SECONDARY_ASYNC_CONNECTION_CLASS_KEY,
+        MIRRORING_SECONDARY_CONFIG_PREFIX_KEY);
   }
 
   private Configuration constructConnectionConfiguration(
-      Configuration conf, String connectionClassKey, String prefixKey) {
-    String connectionClassName = conf.get(connectionClassKey);
+      Configuration conf,
+      String connectionClassKey,
+      String asyncConnectionClassKey,
+      String prefixKey) {
     String prefix = conf.get(prefixKey, "");
     Configuration connectionConfig = extractPrefixedConfig(prefix, conf);
-    if (!connectionClassName.equalsIgnoreCase("default")) {
-      connectionConfig.set("hbase.client.connection.impl", connectionClassName);
-    }
+    fillConnectionConfigWithClassImplementations(
+        connectionConfig, conf, connectionClassKey, asyncConnectionClassKey);
     return connectionConfig;
   }
 
-  private static void checkParameters(Configuration conf) {
-    String primaryConnectionClassName = conf.get(MIRRORING_PRIMARY_CONNECTION_CLASS_KEY);
-    String secondaryConnectionClassName = conf.get(MIRRORING_SECONDARY_CONNECTION_CLASS_KEY);
+  protected void fillConnectionConfigWithClassImplementations(
+      Configuration connectionConfig,
+      Configuration conf,
+      String connectionClassKey,
+      String asyncConnectionClassKey) {
+    String connectionClassName = conf.get(connectionClassKey);
+    if (!connectionClassName.equalsIgnoreCase("default")) {
+      connectionConfig.set("hbase.client.connection.impl", connectionClassName);
+    }
+  }
+
+  protected void verifyParameters(Configuration conf) {
+    checkParameters(
+        conf, MIRRORING_PRIMARY_CONNECTION_CLASS_KEY, MIRRORING_SECONDARY_CONNECTION_CLASS_KEY);
+  }
+
+  protected static void checkParameters(
+      Configuration conf, String primaryConnectionClassKey, String secondaryConnectionClassKey) {
+    String primaryConnectionClassName = conf.get(primaryConnectionClassKey);
+    String secondaryConnectionClassName = conf.get(secondaryConnectionClassKey);
     String primaryConnectionConfigPrefix = conf.get(MIRRORING_PRIMARY_CONFIG_PREFIX_KEY, "");
     String secondaryConnectionConfigPrefix = conf.get(MIRRORING_SECONDARY_CONFIG_PREFIX_KEY, "");
 
     checkArgument(
         primaryConnectionClassName != null,
-        String.format("Specify %s.", MIRRORING_PRIMARY_CONNECTION_CLASS_KEY));
+        String.format("Specify %s.", primaryConnectionClassKey));
     checkArgument(
         secondaryConnectionClassName != null,
-        String.format("Specify %s.", MIRRORING_SECONDARY_CONNECTION_CLASS_KEY));
+        String.format("Specify %s.", secondaryConnectionClassKey));
 
     if (Objects.equals(primaryConnectionClassName, secondaryConnectionClassName)
         && Objects.equals(primaryConnectionConfigPrefix, secondaryConnectionConfigPrefix)) {
