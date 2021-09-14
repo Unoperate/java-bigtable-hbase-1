@@ -28,3 +28,33 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: verify 1.x
         run: mvn --batch-mode --update-snapshots verify -pl bigtable-hbase-mirroring-client-1.x-parent/bigtable-hbase-mirroring-client-1.x
+      - name: upload 1.x jars
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.sha }}-jars
+          path: bigtable-hbase-mirroring-client-1.x-parent/bigtable-hbase-mirroring-client-1.x/target/**/*.jar
+          retention-days: 1
+  tests_2_x:
+    needs: tests_1_x
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 8
+        uses: actions/setup-java@v2
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+      - name: Cache Maven packages
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('bigtable-hbase-mirroring-client-2.x-parent/bigtable-hbase-mirroring-client-2.x/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: download 1.x jars
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ github.sha }}-jars
+      - name: Install 1.x jars
+        run: mvn org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file -Dfile=bigtable-hbase-mirroring-client-1.x-2.0.0-alpha2-SNAPSHOT.jar
+      - name: verify 2.x
+        run: mvn --batch-mode --update-snapshots verify -pl bigtable-hbase-mirroring-client-2.x-parent/bigtable-hbase-mirroring-client-2.x
