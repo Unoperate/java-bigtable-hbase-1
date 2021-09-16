@@ -42,7 +42,10 @@ import org.junit.runners.JUnit4;
 
 class TestAsyncConnection implements AsyncConnection {
   public TestAsyncConnection(
-      Configuration conf, /* AsyncRegion */ Object o, String clusterId, User user) {}
+      Configuration conf,
+      /* AsyncRegion - see comments in MirroringAsyncConnection */ Object o,
+      String clusterId,
+      User user) {}
 
   @Override
   public Configuration getConfiguration() {
