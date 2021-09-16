@@ -25,11 +25,11 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
+import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.io.IOException;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -86,19 +86,11 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     Result result = this.primaryResultScanner.next();
     int startingIndex = this.readEntries;
     this.readEntries += 1;
-    final ScannerRequestContext context =
+    ScannerRequestContext context =
         new ScannerRequestContext(this.originalScan, result, startingIndex);
-
     this.scheduleRequest(
         new RequestResourcesDescription(result),
-        new Callable<
-            ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>>() {
-          @Override
-          public ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>
-              call() {
-            return secondaryResultScannerWrapper.next(context);
-          }
-        },
+        this.secondaryResultScannerWrapper.next(context),
         this.verificationContinuationFactory.scannerNext());
     return result;
   }
@@ -108,18 +100,11 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     Result[] results = this.primaryResultScanner.next(entriesToRead);
     int startingIndex = this.readEntries;
     this.readEntries += entriesToRead;
-    final ScannerRequestContext context =
+    ScannerRequestContext context =
         new ScannerRequestContext(this.originalScan, results, startingIndex, entriesToRead);
     this.scheduleRequest(
         new RequestResourcesDescription(results),
-        new Callable<
-            ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>>() {
-          @Override
-          public ListenableFuture<AsyncResultScannerWrapper.AsyncScannerVerificationPayload>
-              call() {
-            return secondaryResultScannerWrapper.next(context);
-          }
-        },
+        this.secondaryResultScannerWrapper.next(context),
         this.verificationContinuationFactory.scannerNext());
     return results;
   }
@@ -192,7 +177,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
 
   private <T> void scheduleRequest(
       RequestResourcesDescription requestResourcesDescription,
-      Callable<ListenableFuture<T>> next,
+      Supplier<ListenableFuture<T>> next,
       FutureCallback<T> scannerNext) {
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
