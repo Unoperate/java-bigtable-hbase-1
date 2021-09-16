@@ -16,7 +16,8 @@
 
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures;
 
-import static net.javacrumbs.futureconverter.java8guava.FutureConverter.*;
+import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toCompletableFuture;
+import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toListenableFuture;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import java.util.concurrent.CompletableFuture;
