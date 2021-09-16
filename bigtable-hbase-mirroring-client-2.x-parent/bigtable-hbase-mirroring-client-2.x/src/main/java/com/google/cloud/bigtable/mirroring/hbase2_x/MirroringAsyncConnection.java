@@ -52,7 +52,12 @@ public class MirroringAsyncConnection implements AsyncConnection {
   private final FlowController flowController;
 
   public MirroringAsyncConnection(
-      Configuration conf, /* AsyncRegion */ Object o, String clusterId, User user)
+      Configuration conf,
+      /* The constructor is passed an AsyncRegion, which is a private interface in org.apache.hadoop.hbase.client.
+       * It points the client to appropriate ZooKeeper instances. It's not needed here. */
+      Object o,
+      String clusterId,
+      User user)
       throws ExecutionException, InterruptedException {
     this(conf, null, user);
   }
