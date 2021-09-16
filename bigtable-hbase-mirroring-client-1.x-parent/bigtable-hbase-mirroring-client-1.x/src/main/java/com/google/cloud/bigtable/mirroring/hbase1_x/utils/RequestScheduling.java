@@ -38,7 +38,7 @@ public class RequestScheduling {
 
   public static <T> ListenableFuture<Void> scheduleVerificationAndRequestWithFlowControl(
       final RequestResourcesDescription requestResourcesDescription,
-      final Supplier<ListenableFuture<T>> secondaryResultFutureCaller,
+      final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
       final FutureCallback<T> verificationCallback,
       final FlowController flowController) {
     final SettableFuture<Void> verificationCompletedFuture = SettableFuture.create();
@@ -48,7 +48,7 @@ public class RequestScheduling {
     try {
       final ResourceReservation reservation = reservationRequest.get();
       Futures.addCallback(
-          secondaryResultFutureCaller.get(),
+          secondaryResultFutureSupplier.get(),
           new FutureCallback<T>() {
             @Override
             public void onSuccess(@NullableDecl T t) {

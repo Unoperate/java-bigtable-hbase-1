@@ -547,21 +547,21 @@ public class MirroringTable implements Table, ListenableCloseable {
 
   private <T> void scheduleVerificationAndRequestWithFlowControl(
       final RequestResourcesDescription resultInfo,
-      final Supplier<ListenableFuture<T>> secondaryGetFutureCaller,
+      final Supplier<ListenableFuture<T>> secondaryGetFutureSupplier,
       final FutureCallback<T> verificationCallback) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-            resultInfo, secondaryGetFutureCaller, verificationCallback, this.flowController));
+            resultInfo, secondaryGetFutureSupplier, verificationCallback, this.flowController));
   }
 
   public <T> void scheduleWriteWithControlFlow(
       final WriteOperationInfo writeOperationInfo,
-      final Supplier<ListenableFuture<T>> secondaryResultFutureCaller,
+      final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
       final FlowController flowController) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
             writeOperationInfo.requestResourcesDescription,
-            secondaryResultFutureCaller,
+            secondaryResultFutureSupplier,
             new FutureCallback<T>() {
               @Override
               public void onSuccess(@NullableDecl T t) {}

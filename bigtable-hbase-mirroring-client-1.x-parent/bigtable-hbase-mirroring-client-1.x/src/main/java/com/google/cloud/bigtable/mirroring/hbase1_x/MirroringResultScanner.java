@@ -177,11 +177,11 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
 
   private <T> void scheduleRequest(
       RequestResourcesDescription requestResourcesDescription,
-      Supplier<ListenableFuture<T>> next,
+      Supplier<ListenableFuture<T>> nextSupplier,
       FutureCallback<T> scannerNext) {
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-            requestResourcesDescription, next, scannerNext, this.flowController));
+            requestResourcesDescription, nextSupplier, scannerNext, this.flowController));
   }
 
   @Override
