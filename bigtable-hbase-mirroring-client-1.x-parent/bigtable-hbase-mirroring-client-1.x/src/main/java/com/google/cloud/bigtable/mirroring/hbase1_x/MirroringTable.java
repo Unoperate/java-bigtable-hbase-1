@@ -25,6 +25,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
+import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -34,7 +35,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
@@ -547,7 +547,7 @@ public class MirroringTable implements Table, ListenableCloseable {
 
   private <T> void scheduleVerificationAndRequestWithFlowControl(
       final RequestResourcesDescription resultInfo,
-      final Callable<ListenableFuture<T>> secondaryGetFutureCaller,
+      final Supplier<ListenableFuture<T>> secondaryGetFutureCaller,
       final FutureCallback<T> verificationCallback) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
@@ -556,7 +556,7 @@ public class MirroringTable implements Table, ListenableCloseable {
 
   public <T> void scheduleWriteWithControlFlow(
       final WriteOperationInfo writeOperationInfo,
-      final Callable<ListenableFuture<T>> secondaryResultFutureCaller,
+      final Supplier<ListenableFuture<T>> secondaryResultFutureCaller,
       final FlowController flowController) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
