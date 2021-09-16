@@ -48,9 +48,9 @@ import org.apache.hadoop.hbase.shaded.com.google.protobuf.RpcChannel;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements AsyncTable<C> {
-  AsyncTable<C> primaryTable;
-  AsyncTable<C> secondaryTable;
-  VerificationContinuationFactory verificationContinuationFactory;
+  private final AsyncTable<C> primaryTable;
+  private final AsyncTable<C> secondaryTable;
+  private final VerificationContinuationFactory verificationContinuationFactory;
   private final ExecutorService executorService;
   private final FlowController flowController;
 
