@@ -53,8 +53,11 @@ public class MirroringAsyncConnection implements AsyncConnection {
 
   public MirroringAsyncConnection(
       Configuration conf,
-      /* The constructor is passed an AsyncRegion, which is a private interface in org.apache.hadoop.hbase.client.
-       * It points the client to appropriate ZooKeeper instances. It's not needed here. */
+      /**
+       * The constructor is passed an AsyncRegion, which is a private interface in
+       * org.apache.hadoop.hbase.client. It points the client to appropriate ZooKeeper instances.
+       * It's not needed here.
+       */
       Object o,
       String clusterId,
       User user)
