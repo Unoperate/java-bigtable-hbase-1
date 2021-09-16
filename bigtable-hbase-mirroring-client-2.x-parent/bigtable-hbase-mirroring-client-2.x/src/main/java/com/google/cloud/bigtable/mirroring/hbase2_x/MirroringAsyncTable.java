@@ -267,7 +267,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   }
 
   public void handleFailedOperations(List<? extends Row> operations) {
-    // TODO: call write error handler.
+    // TODO(aczajkowski): call write error handler.
   }
 
   @Override
