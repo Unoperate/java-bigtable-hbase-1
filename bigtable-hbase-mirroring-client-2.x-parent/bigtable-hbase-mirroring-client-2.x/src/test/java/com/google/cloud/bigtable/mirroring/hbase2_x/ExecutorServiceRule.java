@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.rules.ExternalResource;
 
 // Copypaste from hbase1_x
-// TODO: extract into some common package
+// TODO(aczajkowski): extract into some common package
 public class ExecutorServiceRule extends ExternalResource {
   private enum Type {
     Fixed,

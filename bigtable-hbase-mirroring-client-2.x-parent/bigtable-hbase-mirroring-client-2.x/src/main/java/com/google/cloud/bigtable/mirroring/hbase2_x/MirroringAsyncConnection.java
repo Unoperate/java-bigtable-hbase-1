@@ -116,7 +116,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
     return this.configuration;
   }
 
-  // TODO: use default method after implementing MirroringAsyncTableBuilder
+  // TODO(aczajkowski): use default method after implementing MirroringAsyncTableBuilder
   @Override
   public AsyncTable<ScanResultConsumer> getTable(TableName tableName, ExecutorService pool) {
     return new MirroringAsyncTable(
