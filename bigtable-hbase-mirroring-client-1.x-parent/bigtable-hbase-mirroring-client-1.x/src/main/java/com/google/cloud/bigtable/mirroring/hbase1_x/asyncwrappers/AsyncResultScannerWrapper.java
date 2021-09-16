@@ -35,6 +35,8 @@ import org.apache.hadoop.hbase.client.Table;
  * {@link MirroringResultScanner} schedules asynchronous next()s after synchronous operations to
  * verify consistency. HBase doesn't provide any Asynchronous API for Scanners thus we wrap
  * ResultScanner into AsyncResultScannerWrapper to enable async operations on scanners.
+ *
+ * <p>Note that next() method returns a Supplier<> as its result is used only in callbacks
  */
 @InternalApi("For internal usage only")
 public class AsyncResultScannerWrapper implements ListenableCloseable {

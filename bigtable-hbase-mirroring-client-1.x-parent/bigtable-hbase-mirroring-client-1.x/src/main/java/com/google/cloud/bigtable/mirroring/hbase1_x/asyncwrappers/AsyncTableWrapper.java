@@ -46,6 +46,9 @@ import org.apache.hadoop.hbase.client.Table;
  *
  * <p>Table instances are not thread-safe, every operation is synchronized to prevent concurrent
  * accesses to the table from different threads in the executor.
+ *
+ * <p>Note that the most of the class' interface is wrapped in Supplier<> as the results are only
+ * used in callbacks.
  */
 @InternalApi("For internal usage only")
 public class AsyncTableWrapper implements ListenableCloseable {
