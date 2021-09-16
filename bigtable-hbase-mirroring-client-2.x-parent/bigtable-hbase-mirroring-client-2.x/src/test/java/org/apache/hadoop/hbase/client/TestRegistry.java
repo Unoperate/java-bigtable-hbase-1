@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 package org.apache.hadoop.hbase.client;
-
+/**
+ * AsyncRegistry is private in org.apache.hadoop.hbase.client so this mock must be in the same
+ * package.
+ */
 import java.util.concurrent.CompletableFuture;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.RegionLocations;
