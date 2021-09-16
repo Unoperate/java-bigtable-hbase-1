@@ -71,7 +71,8 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
     this.nextContextQueue = new ConcurrentLinkedQueue<>();
   }
 
-  public Supplier<ListenableFuture<AsyncScannerVerificationPayload>> next(final ScannerRequestContext context) {
+  public Supplier<ListenableFuture<AsyncScannerVerificationPayload>> next(
+      final ScannerRequestContext context) {
     return new Supplier<ListenableFuture<AsyncScannerVerificationPayload>>() {
       @Override
       public ListenableFuture<AsyncScannerVerificationPayload> get() {

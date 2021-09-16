@@ -25,7 +25,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
