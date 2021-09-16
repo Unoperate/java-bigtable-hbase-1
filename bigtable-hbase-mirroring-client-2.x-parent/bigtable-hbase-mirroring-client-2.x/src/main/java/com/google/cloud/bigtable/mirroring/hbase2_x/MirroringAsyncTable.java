@@ -25,6 +25,7 @@ import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverte
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -90,6 +91,51 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             },
             executorService);
     return future;
+  }
+
+  private <T> CompletableFuture<T> doWithResources(
+      CompletableFuture<FlowController.ResourceReservation> reservationFuture,
+      CompletableFuture<T> primaryFuture,
+      Supplier<CompletableFuture<T>> secondaryFutureSupplier,
+      Function<T, FutureCallback<T>> verificationCreator) {
+    CompletableFuture<T> resultFuture = new CompletableFuture<T>();
+    reservationFuture
+        .thenAcceptBothAsync(
+            primaryFuture,
+            (reservation, primaryResult) -> {
+              resultFuture.complete(primaryResult);
+              FutureCallback<T> verificationCallback = verificationCreator.apply(primaryResult);
+              secondaryFutureSupplier
+                  .get()
+                  .handle(
+                      (secondaryResult, secondaryError) -> {
+                        try {
+                          if (secondaryError != null) {
+                            verificationCallback.onFailure(secondaryError);
+                          } else {
+                            verificationCallback.onSuccess(secondaryResult);
+                          }
+                          return null;
+                        } finally {
+                          reservation.release();
+                        }
+                      });
+            })
+        .exceptionally(
+            t -> {
+              if (!reservationFuture.cancel(true)) {
+                try {
+                  reservationFuture.get().release();
+                } catch (InterruptedException | ExecutionException ex) {
+                  // If we couldn't cancel the request, it must have already been set, we assume
+                  // that we will get the reservation without problems
+                  assert false;
+                }
+              }
+              resultFuture.completeExceptionally(t);
+              return null;
+            });
+    return resultFuture;
   }
 
   @Override
