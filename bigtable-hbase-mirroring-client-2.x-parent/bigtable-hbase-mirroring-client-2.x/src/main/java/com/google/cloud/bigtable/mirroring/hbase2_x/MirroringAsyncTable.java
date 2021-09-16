@@ -74,9 +74,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .get(get)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleVerificationAndRequestWithFlowControl(
                     new RequestResourcesDescription(result),
@@ -99,9 +99,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .exists(get)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleVerificationAndRequestWithFlowControl(
                     new RequestResourcesDescription(result),
@@ -124,9 +124,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .put(put)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleWriteWithControlFlow(
                     new MirroringTable.WriteOperationInfo(put),
@@ -148,9 +148,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .delete(delete)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleWriteWithControlFlow(
                     new MirroringTable.WriteOperationInfo(delete),
@@ -172,9 +172,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .append(append)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleWriteWithControlFlow(
                     new MirroringTable.WriteOperationInfo(append),
@@ -196,9 +196,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .increment(increment)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleWriteWithControlFlow(
                     new MirroringTable.WriteOperationInfo(increment),
@@ -220,9 +220,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.primaryTable
         .mutateRow(rowMutations)
         .handleAsync(
-            (result, err) -> {
-              if (err != null) {
-                future.completeExceptionally(err);
+            (result, error) -> {
+              if (error != null) {
+                future.completeExceptionally(error);
               } else {
                 scheduleWriteWithControlFlow(
                     new MirroringTable.WriteOperationInfo(rowMutations),
