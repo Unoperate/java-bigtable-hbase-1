@@ -21,7 +21,14 @@ import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.AdvancedScanResultConsumer;
+import org.apache.hadoop.hbase.client.AsyncAdminBuilder;
+import org.apache.hadoop.hbase.client.AsyncBufferedMutatorBuilder;
+import org.apache.hadoop.hbase.client.AsyncConnection;
+import org.apache.hadoop.hbase.client.AsyncTableBuilder;
+import org.apache.hadoop.hbase.client.AsyncTableRegionLocator;
+import org.apache.hadoop.hbase.client.Hbck;
+import org.apache.hadoop.hbase.client.ScanResultConsumer;
 
 public class TestMirroringAsyncConnection implements AsyncConnection {
   @Override
