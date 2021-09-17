@@ -125,7 +125,6 @@ public class MirroringAsyncConnection implements AsyncConnection {
     return new MirroringAsyncTable(
         this.primaryConnection.getTable(tableName),
         this.secondaryConnection.getTable(tableName),
-        this.executorService,
         this.mismatchDetector,
         this.flowController);
   }
