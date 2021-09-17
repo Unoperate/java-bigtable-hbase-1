@@ -25,7 +25,6 @@ import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -67,7 +66,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   @Override
   public CompletableFuture<Result> get(Get get) {
     CompletableFuture<Result> primaryFuture = this.primaryTable.get(get);
-    return getWithVerificationAndFlowControl(
+    return readWithVerificationAndFlowControl(
         RequestResourcesDescription::new,
         primaryFuture,
         () -> this.secondaryTable.get(get),
@@ -77,7 +76,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   @Override
   public CompletableFuture<Boolean> exists(Get get) {
     CompletableFuture<Boolean> primaryFuture = this.primaryTable.exists(get);
-    return getWithVerificationAndFlowControl(
+    return readWithVerificationAndFlowControl(
         RequestResourcesDescription::new,
         primaryFuture,
         () -> this.secondaryTable.exists(get),
@@ -129,7 +128,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         () -> this.secondaryTable.mutateRow(rowMutations));
   }
 
-  private <T> CompletableFuture<T> getWithVerificationAndFlowControl(
+  private <T> CompletableFuture<T> readWithVerificationAndFlowControl(
       final Function<T, RequestResourcesDescription> resourcesDescriptionCreator,
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
