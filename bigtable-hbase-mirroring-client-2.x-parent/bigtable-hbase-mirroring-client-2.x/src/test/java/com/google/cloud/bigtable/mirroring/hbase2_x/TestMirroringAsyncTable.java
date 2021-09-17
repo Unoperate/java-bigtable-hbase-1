@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.KeyValue;
@@ -64,10 +65,6 @@ import org.mockito.junit.MockitoRule;
 public class TestMirroringAsyncTable {
   @Rule public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
-  @Rule
-  public final ExecutorServiceRule executorServiceRule =
-      ExecutorServiceRule.singleThreadedExecutor();
-
   @Mock AsyncTable primaryTable;
   @Mock AsyncTable secondaryTable;
   @Mock MismatchDetector mismatchDetector;
@@ -80,11 +77,7 @@ public class TestMirroringAsyncTable {
     this.mirroringTable =
         spy(
             new MirroringAsyncTable<ScanResultConsumerBase>(
-                primaryTable,
-                secondaryTable,
-                this.executorServiceRule.executorService,
-                mismatchDetector,
-                flowController));
+                primaryTable, secondaryTable, mismatchDetector, flowController));
   }
 
   private void mockFlowController() {
@@ -126,13 +119,15 @@ public class TestMirroringAsyncTable {
     mockFlowController();
     Get get = createGets("test").get(0);
     Result expectedResult = createResult("test", "value");
-    CompletableFuture<Result> expectedFuture = CompletableFuture.completedFuture(expectedResult);
+    CompletableFuture<Result> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Result> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.get(get)).thenReturn(primaryFuture);
+    when(secondaryTable.get(get)).thenReturn(secondaryFuture);
 
-    when(primaryTable.get(get)).thenReturn(expectedFuture);
-    when(secondaryTable.get(get)).thenReturn(expectedFuture);
-
-    Result result = mirroringTable.get(get).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Result> resultFuture = mirroringTable.get(get);
+    primaryFuture.complete(expectedResult);
+    secondaryFuture.complete(expectedResult);
+    Result result = resultFuture.get();
 
     assertThat(result).isEqualTo(expectedResult);
 
@@ -146,23 +141,24 @@ public class TestMirroringAsyncTable {
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnSingleGet()
       throws IOException, ExecutionException, InterruptedException {
     mockFlowController();
-    Get request = createGet("test");
+    Get get = createGet("test");
     Result expectedResult = createResult("test", "value");
-    CompletableFuture<Result> expectedFuture = CompletableFuture.completedFuture(expectedResult);
+    CompletableFuture<Result> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Result> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.get(get)).thenReturn(primaryFuture);
+    when(secondaryTable.get(get)).thenReturn(secondaryFuture);
 
-    when(primaryTable.get(request)).thenReturn(expectedFuture);
     IOException expectedException = new IOException("expected");
     CompletableFuture<Throwable> exceptionalFuture = new CompletableFuture<Throwable>();
-    exceptionalFuture.completeExceptionally(expectedException);
 
-    when(secondaryTable.get(request)).thenReturn(exceptionalFuture);
-
-    Result result = mirroringTable.get(request).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Result> resultFuture = mirroringTable.get(get);
+    primaryFuture.complete(expectedResult);
+    secondaryFuture.completeExceptionally(expectedException);
+    Result result = resultFuture.get();
 
     assertThat(result).isEqualTo(expectedResult);
 
-    verify(mismatchDetector, times(1)).get(request, expectedException);
+    verify(mismatchDetector, times(1)).get(get, expectedException);
   }
 
   @Test
@@ -171,13 +167,15 @@ public class TestMirroringAsyncTable {
     mockFlowController();
     Get get = createGet("test");
     boolean expectedResult = true;
-    CompletableFuture<Boolean> expectedFuture = CompletableFuture.completedFuture(expectedResult);
+    CompletableFuture<Boolean> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Boolean> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.exists(get)).thenReturn(primaryFuture);
+    when(secondaryTable.exists(get)).thenReturn(secondaryFuture);
 
-    when(primaryTable.exists(get)).thenReturn(expectedFuture);
-    when(secondaryTable.exists(get)).thenReturn(expectedFuture);
-
-    boolean result = mirroringTable.exists(get).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Boolean> resultFuture = mirroringTable.exists(get);
+    primaryFuture.complete(expectedResult);
+    secondaryFuture.complete(expectedResult);
+    Boolean result = resultFuture.get();
 
     assertThat(result).isEqualTo(expectedResult);
 
@@ -189,22 +187,23 @@ public class TestMirroringAsyncTable {
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnExists()
       throws IOException, ExecutionException, InterruptedException {
     mockFlowController();
-    Get request = createGet("test");
+    Get get = createGet("test");
     boolean expectedResult = true;
-    CompletableFuture<Boolean> expectedFuture = CompletableFuture.completedFuture(expectedResult);
+    CompletableFuture<Boolean> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Boolean> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.exists(get)).thenReturn(primaryFuture);
+    when(secondaryTable.exists(get)).thenReturn(secondaryFuture);
 
-    when(primaryTable.exists(request)).thenReturn(expectedFuture);
     IOException expectedException = new IOException("expected");
-    CompletableFuture<Throwable> exceptionalFuture = new CompletableFuture<Throwable>();
-    exceptionalFuture.completeExceptionally(expectedException);
-    when(secondaryTable.exists(request)).thenReturn(exceptionalFuture);
 
-    boolean result = mirroringTable.exists(request).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Boolean> resultFuture = mirroringTable.exists(get);
+    primaryFuture.complete(expectedResult);
+    secondaryFuture.completeExceptionally(expectedException);
+    Boolean result = resultFuture.get();
 
     assertThat(result).isEqualTo(expectedResult);
 
-    verify(mismatchDetector, times(1)).exists(request, expectedException);
+    verify(mismatchDetector, times(1)).exists(get, expectedException);
   }
 
   private Put createPut(String row, String family, String qualifier, String value) {
@@ -217,27 +216,33 @@ public class TestMirroringAsyncTable {
   public void testPutIsMirrored() throws IOException, InterruptedException, ExecutionException {
     mockFlowController();
     Put put = createPut("test", "f1", "q1", "v1");
-    when(primaryTable.put(put)).thenReturn(CompletableFuture.completedFuture(null));
-    when(secondaryTable.put(put)).thenReturn(CompletableFuture.completedFuture(null));
-    mirroringTable.put(put).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.put(put)).thenReturn(primaryFuture);
+    when(secondaryTable.put(put)).thenReturn(secondaryFuture);
+
+    CompletableFuture<Void> resultFuture = mirroringTable.put(put);
+    primaryFuture.complete(null);
+    secondaryFuture.complete(null);
+    resultFuture.get();
+
     verify(primaryTable, times(1)).put(put);
     verify(secondaryTable, times(1)).put(put);
   }
 
   @Test
   public void testPutWithErrorIsNotMirrored() throws IOException {
+    mockFlowController();
     final Put put = createPut("test", "f1", "q1", "v1");
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    when(primaryTable.put(put)).thenReturn(primaryFuture);
+
+    CompletableFuture<Void> resultFuture = mirroringTable.put(put);
 
     IOException expectedException = new IOException("expected");
-    CompletableFuture<Throwable> exceptionalFuture = new CompletableFuture<Throwable>();
-    exceptionalFuture.completeExceptionally(expectedException);
-    when(primaryTable.put(put)).thenReturn(exceptionalFuture);
+    primaryFuture.completeExceptionally(expectedException);
 
-    CompletableFuture<Void> result = mirroringTable.put(put);
-    assertThat(result.isCompletedExceptionally());
-
-    executorServiceRule.waitForExecutor();
+    assertThat(resultFuture.isCompletedExceptionally());
 
     verify(primaryTable, times(1)).put(put);
     verify(secondaryTable, times(0)).put(put);
@@ -248,15 +253,16 @@ public class TestMirroringAsyncTable {
       throws IOException, ExecutionException, InterruptedException {
     mockFlowController();
     final Put put = createPut("test", "f1", "q1", "v1");
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.put(put)).thenReturn(primaryFuture);
+    when(secondaryTable.put(put)).thenReturn(secondaryFuture);
 
-    when(primaryTable.put(put)).thenReturn(CompletableFuture.completedFuture(null));
+    CompletableFuture<Void> resultFuture = mirroringTable.put(put);
+    primaryFuture.complete(null);
     IOException expectedException = new IOException("expected");
-    CompletableFuture<Throwable> exceptionalFuture = new CompletableFuture<Throwable>();
-    exceptionalFuture.completeExceptionally(expectedException);
-    when(secondaryTable.put(put)).thenReturn(exceptionalFuture);
-
-    mirroringTable.put(put).get();
-    executorServiceRule.waitForExecutor();
+    secondaryFuture.completeExceptionally(expectedException);
+    resultFuture.get();
 
     verify(primaryTable, times(1)).put(put);
     verify(secondaryTable, times(1)).put(put);
@@ -271,10 +277,15 @@ public class TestMirroringAsyncTable {
   public void testDelete() throws IOException, InterruptedException, ExecutionException {
     mockFlowController();
     Delete delete = new Delete("r1".getBytes());
-    when(primaryTable.delete(delete)).thenReturn(CompletableFuture.completedFuture(null));
-    when(secondaryTable.delete(delete)).thenReturn(CompletableFuture.completedFuture(null));
-    mirroringTable.delete(delete).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.delete(delete)).thenReturn(primaryFuture);
+    when(secondaryTable.delete(delete)).thenReturn(secondaryFuture);
+
+    CompletableFuture<Void> resultFuture = mirroringTable.delete(delete);
+    primaryFuture.complete(null);
+    secondaryFuture.complete(null);
+    resultFuture.get();
     verify(secondaryTable, times(1)).delete(delete);
   }
 
@@ -282,10 +293,15 @@ public class TestMirroringAsyncTable {
   public void testMutateRow() throws IOException, ExecutionException, InterruptedException {
     mockFlowController();
     RowMutations mutations = new RowMutations("r1".getBytes());
-    when(primaryTable.mutateRow(mutations)).thenReturn(CompletableFuture.completedFuture(null));
-    when(secondaryTable.mutateRow(mutations)).thenReturn(CompletableFuture.completedFuture(null));
-    mirroringTable.mutateRow(mutations).get();
-    executorServiceRule.waitForExecutor();
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryFuture = new CompletableFuture<>();
+    when(primaryTable.mutateRow(mutations)).thenReturn(primaryFuture);
+    when(secondaryTable.mutateRow(mutations)).thenReturn(secondaryFuture);
+
+    CompletableFuture<Void> resultFuture = mirroringTable.mutateRow(mutations);
+    primaryFuture.complete(null);
+    secondaryFuture.complete(null);
+    resultFuture.get();
     verify(secondaryTable, times(1)).mutateRow(mutations);
   }
 
@@ -315,7 +331,6 @@ public class TestMirroringAsyncTable {
         .incrementColumnValue(
             "r1".getBytes(), "f1".getBytes(), "q1".getBytes(), 3L, Durability.SYNC_WAL)
         .get();
-    executorServiceRule.waitForExecutor();
 
     ArgumentCaptor<Increment> argument = ArgumentCaptor.forClass(Increment.class);
     verify(secondaryTable, times(3)).increment(argument.capture());
@@ -340,7 +355,6 @@ public class TestMirroringAsyncTable {
     when(primaryTable.append(any(Append.class)))
         .thenReturn(CompletableFuture.completedFuture(appendResult));
     mirroringTable.append(append).get();
-    executorServiceRule.waitForExecutor();
 
     verify(secondaryTable, times(1)).append(append);
   }
