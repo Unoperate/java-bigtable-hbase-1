@@ -93,6 +93,58 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     return future;
   }
 
+  private <T> CompletableFuture<T> getWithVerificationAndFlowControl(
+      final Function<T, RequestResourcesDescription> resourcesDescriptionCreator,
+      final CompletableFuture<T> primaryFuture,
+      final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
+      final Function<T, FutureCallback<T>> verificationCallbackCreator) {
+    CompletableFuture<T> resultFuture = new CompletableFuture<T>();
+
+    primaryFuture.handleAsync(
+        (primaryResult, primaryError) -> {
+          if (primaryError != null) {
+            resultFuture.completeExceptionally(primaryError);
+          } else {
+            doWithResources(
+                    FutureConverter.toCompletable(
+                        this.flowController.asyncRequestResource(
+                            resourcesDescriptionCreator.apply(primaryResult))),
+                    primaryFuture,
+                    secondaryFutureSupplier,
+                    verificationCallbackCreator)
+                .handleAsync(
+                    (ignoredResult, ignoredError) -> {
+                      resultFuture.complete(primaryResult);
+                      return null;
+                    });
+          }
+          return null;
+        });
+    return resultFuture;
+  }
+
+  private <T> CompletableFuture<T> writeWithFlowControl(
+      final MirroringTable.WriteOperationInfo writeOperationInfo,
+      final RequestResourcesDescription resourcesDescription,
+      final CompletableFuture<T> primaryFuture,
+      final Supplier<CompletableFuture<T>> secondaryFutureSupplier) {
+    return doWithResources(
+        FutureConverter.toCompletable(
+            this.flowController.asyncRequestResource(resourcesDescription)),
+        primaryFuture,
+        secondaryFutureSupplier,
+        (ignoredResult) ->
+            new FutureCallback<T>() {
+              @Override
+              public void onSuccess(@NullableDecl T t) {}
+
+              @Override
+              public void onFailure(Throwable throwable) {
+                handleFailedOperations(writeOperationInfo.operations);
+              }
+            });
+  }
+
   private <T> CompletableFuture<T> doWithResources(
       CompletableFuture<FlowController.ResourceReservation> reservationFuture,
       CompletableFuture<T> primaryFuture,
