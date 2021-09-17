@@ -51,18 +51,15 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private final AsyncTable<C> primaryTable;
   private final AsyncTable<C> secondaryTable;
   private final VerificationContinuationFactory verificationContinuationFactory;
-  private final ExecutorService executorService;
   private final FlowController flowController;
 
   public MirroringAsyncTable(
       AsyncTable<C> primaryTable,
       AsyncTable<C> secondaryTable,
-      ExecutorService executorService,
       MismatchDetector mismatchDetector,
       FlowController flowController) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
-    this.executorService = executorService;
     this.verificationContinuationFactory = new VerificationContinuationFactory(mismatchDetector);
     this.flowController = flowController;
   }
