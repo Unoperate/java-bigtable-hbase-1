@@ -16,7 +16,6 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -70,27 +69,67 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
   @Override
   public CompletableFuture<Result> get(Get get) {
-    CompletableFuture<Result> future = new CompletableFuture<Result>();
+    CompletableFuture<Result> primaryFuture = this.primaryTable.get(get);
+    return getWithVerificationAndFlowControl(
+        RequestResourcesDescription::new,
+        primaryFuture,
+        () -> this.secondaryTable.get(get),
+        (result) -> this.verificationContinuationFactory.get(get, result));
+  }
 
-    this.primaryTable
-        .get(get)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleVerificationAndRequestWithFlowControl(
-                    new RequestResourcesDescription(result),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.get(get);
-                    },
-                    this.verificationContinuationFactory.get(get, result));
-              }
-              return null;
-            },
-            executorService);
-    return future;
+  @Override
+  public CompletableFuture<Boolean> exists(Get get) {
+    CompletableFuture<Boolean> primaryFuture = this.primaryTable.exists(get);
+    return getWithVerificationAndFlowControl(
+        RequestResourcesDescription::new,
+        primaryFuture,
+        () -> this.secondaryTable.exists(get),
+        (result) -> this.verificationContinuationFactory.exists(get, result));
+  }
+
+  @Override
+  public CompletableFuture<Void> put(Put put) {
+    CompletableFuture<Void> primaryFuture = this.primaryTable.put(put);
+    return writeWithFlowControl(
+        new MirroringTable.WriteOperationInfo(put),
+        primaryFuture,
+        () -> this.secondaryTable.put(put));
+  }
+
+  @Override
+  public CompletableFuture<Void> delete(Delete delete) {
+    CompletableFuture<Void> primaryFuture = this.primaryTable.delete(delete);
+    return writeWithFlowControl(
+        new MirroringTable.WriteOperationInfo(delete),
+        primaryFuture,
+        () -> this.secondaryTable.delete(delete));
+  }
+
+  @Override
+  public CompletableFuture<Result> append(Append append) {
+    CompletableFuture<Result> primaryFuture = this.primaryTable.append(append);
+    return writeWithFlowControl(
+        new MirroringTable.WriteOperationInfo(append),
+        primaryFuture,
+        () -> this.secondaryTable.append(append));
+  }
+
+  @Override
+  public CompletableFuture<Result> increment(Increment increment) {
+    CompletableFuture<Result> primaryFuture = this.primaryTable.increment(increment);
+    return writeWithFlowControl(
+        new MirroringTable.WriteOperationInfo(increment),
+        primaryFuture,
+        () -> this.secondaryTable.increment(increment));
+  }
+
+  @Override
+  public CompletableFuture<Void> mutateRow(RowMutations rowMutations) {
+    CompletableFuture<Void> primaryFuture = this.primaryTable.mutateRow(rowMutations);
+    return writeWithFlowControl(
+        new MirroringTable.WriteOperationInfo(rowMutations),
+        primaryFuture,
+        () -> this.secondaryTable.mutateRow(rowMutations));
   }
 
   private <T> CompletableFuture<T> getWithVerificationAndFlowControl(
@@ -100,19 +139,22 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       final Function<T, FutureCallback<T>> verificationCallbackCreator) {
     CompletableFuture<T> resultFuture = new CompletableFuture<T>();
 
-    primaryFuture.handleAsync(
+    primaryFuture.handle(
         (primaryResult, primaryError) -> {
           if (primaryError != null) {
             resultFuture.completeExceptionally(primaryError);
           } else {
-            doWithResources(
-                    FutureConverter.toCompletable(
-                        this.flowController.asyncRequestResource(
-                            resourcesDescriptionCreator.apply(primaryResult))),
+            RequestResourcesDescription resourcesDescription =
+                resourcesDescriptionCreator.apply(primaryResult);
+            CompletableFuture<FlowController.ResourceReservation> resourceFuture =
+                FutureConverter.toCompletable(
+                    this.flowController.asyncRequestResource(resourcesDescription));
+            reserveControlFlowResourcesThenScheduleSecondary(
+                    resourceFuture,
                     primaryFuture,
                     secondaryFutureSupplier,
                     verificationCallbackCreator)
-                .handleAsync(
+                .handle(
                     (ignoredResult, ignoredError) -> {
                       resultFuture.complete(primaryResult);
                       return null;
@@ -120,20 +162,21 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
           }
           return null;
         });
+
     return resultFuture;
   }
 
   private <T> CompletableFuture<T> writeWithFlowControl(
       final MirroringTable.WriteOperationInfo writeOperationInfo,
-      final RequestResourcesDescription resourcesDescription,
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier) {
-    return doWithResources(
+    return reserveControlFlowResourcesThenScheduleSecondary(
         FutureConverter.toCompletable(
-            this.flowController.asyncRequestResource(resourcesDescription)),
+            this.flowController.asyncRequestResource(
+                writeOperationInfo.requestResourcesDescription)),
         primaryFuture,
         secondaryFutureSupplier,
-        (ignoredResult) ->
+        (ignoredSecondaryResult) ->
             new FutureCallback<T>() {
               @Override
               public void onSuccess(@NullableDecl T t) {}
@@ -145,33 +188,21 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             });
   }
 
-  private <T> CompletableFuture<T> doWithResources(
+  private <T> CompletableFuture<T> reserveControlFlowResourcesThenScheduleSecondary(
       CompletableFuture<FlowController.ResourceReservation> reservationFuture,
       CompletableFuture<T> primaryFuture,
       Supplier<CompletableFuture<T>> secondaryFutureSupplier,
       Function<T, FutureCallback<T>> verificationCreator) {
     CompletableFuture<T> resultFuture = new CompletableFuture<T>();
-    reservationFuture
-        .thenAcceptBothAsync(
-            primaryFuture,
-            (reservation, primaryResult) -> {
+    primaryFuture
+        .thenAcceptBoth(
+            reservationFuture,
+            (primaryResult, reservation) -> {
               resultFuture.complete(primaryResult);
-              FutureCallback<T> verificationCallback = verificationCreator.apply(primaryResult);
-              secondaryFutureSupplier
-                  .get()
-                  .handle(
-                      (secondaryResult, secondaryError) -> {
-                        try {
-                          if (secondaryError != null) {
-                            verificationCallback.onFailure(secondaryError);
-                          } else {
-                            verificationCallback.onSuccess(secondaryResult);
-                          }
-                          return null;
-                        } finally {
-                          reservation.release();
-                        }
-                      });
+              sendSecondaryRequestAndVerify(
+                  reservation,
+                  secondaryFutureSupplier.get(),
+                  verificationCreator.apply(primaryResult));
             })
         .exceptionally(
             t -> {
@@ -190,178 +221,23 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     return resultFuture;
   }
 
-  @Override
-  public CompletableFuture<Boolean> exists(Get get) {
-    CompletableFuture<Boolean> future = new CompletableFuture<Boolean>();
-
-    this.primaryTable
-        .exists(get)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleVerificationAndRequestWithFlowControl(
-                    new RequestResourcesDescription(result),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.exists(get);
-                    },
-                    this.verificationContinuationFactory.exists(get, result));
-              }
-              return null;
-            },
-            executorService);
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Void> put(Put put) {
-    CompletableFuture<Void> future = new CompletableFuture<Void>();
-
-    this.primaryTable
-        .put(put)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleWriteWithControlFlow(
-                    new MirroringTable.WriteOperationInfo(put),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.put(put);
-                    });
-              }
-              return null;
-            },
-            executorService);
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Void> delete(Delete delete) {
-    CompletableFuture<Void> future = new CompletableFuture<Void>();
-
-    this.primaryTable
-        .delete(delete)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleWriteWithControlFlow(
-                    new MirroringTable.WriteOperationInfo(delete),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.delete(delete);
-                    });
-              }
-              return null;
-            },
-            executorService);
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Result> append(Append append) {
-    CompletableFuture<Result> future = new CompletableFuture<Result>();
-
-    this.primaryTable
-        .append(append)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleWriteWithControlFlow(
-                    new MirroringTable.WriteOperationInfo(append),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.append(append);
-                    });
-              }
-              return null;
-            },
-            executorService);
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Result> increment(Increment increment) {
-    CompletableFuture<Result> future = new CompletableFuture<Result>();
-
-    this.primaryTable
-        .increment(increment)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleWriteWithControlFlow(
-                    new MirroringTable.WriteOperationInfo(increment),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.increment(increment);
-                    });
-              }
-              return null;
-            },
-            executorService);
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Void> mutateRow(RowMutations rowMutations) {
-    CompletableFuture<Void> future = new CompletableFuture<Void>();
-
-    this.primaryTable
-        .mutateRow(rowMutations)
-        .handleAsync(
-            (result, error) -> {
-              if (error != null) {
-                future.completeExceptionally(error);
-              } else {
-                scheduleWriteWithControlFlow(
-                    new MirroringTable.WriteOperationInfo(rowMutations),
-                    () -> {
-                      future.complete(result);
-                      return this.secondaryTable.mutateRow(rowMutations);
-                    });
-              }
-              return null;
-            },
-            executorService);
-    return future;
-  }
-
-  private <T> void scheduleVerificationAndRequestWithFlowControl(
-      final RequestResourcesDescription resultInfo,
-      final Supplier<CompletableFuture<T>> futureCompleterAndSecondaryResultFutureCaller,
-      final FutureCallback<T> verificationCallback) {
-    RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-        resultInfo,
-        () -> FutureConverter.toListenable(futureCompleterAndSecondaryResultFutureCaller.get()),
-        verificationCallback,
-        this.flowController);
-  }
-
-  private <T> void scheduleWriteWithControlFlow(
-      final MirroringTable.WriteOperationInfo writeOperationInfo,
-      final Supplier<CompletableFuture<T>> secondaryResultFutureCaller) {
-    RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-        writeOperationInfo.requestResourcesDescription,
-        () -> FutureConverter.toListenable(secondaryResultFutureCaller.get()),
-        new FutureCallback<T>() {
-          @Override
-          public void onSuccess(@NullableDecl T t) {}
-
-          @Override
-          public void onFailure(Throwable throwable) {
-            handleFailedOperations(writeOperationInfo.operations);
+  private <T> void sendSecondaryRequestAndVerify(
+      FlowController.ResourceReservation reservation,
+      CompletableFuture<T> secondaryFuture,
+      FutureCallback<T> verificationCallback) {
+    secondaryFuture.handle(
+        (secondaryResult, secondaryError) -> {
+          try {
+            if (secondaryError != null) {
+              verificationCallback.onFailure(secondaryError);
+            } else {
+              verificationCallback.onSuccess(secondaryResult);
+            }
+            return null;
+          } finally {
+            reservation.release();
           }
-        },
-        this.flowController);
+        });
   }
 
   public void handleFailedOperations(List<? extends Row> operations) {
