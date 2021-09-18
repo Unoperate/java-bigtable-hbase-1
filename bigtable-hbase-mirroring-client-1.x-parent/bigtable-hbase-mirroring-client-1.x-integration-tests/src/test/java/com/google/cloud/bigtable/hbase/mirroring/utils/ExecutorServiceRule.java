@@ -16,6 +16,8 @@
 
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
@@ -39,7 +41,7 @@ public class ExecutorServiceRule extends ExternalResource {
   public void after() {
     executorService.shutdown();
     try {
-      executorService.awaitTermination(10, TimeUnit.SECONDS);
+      assertThat(executorService.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     } catch (InterruptedException e) {
       e.printStackTrace();
     }

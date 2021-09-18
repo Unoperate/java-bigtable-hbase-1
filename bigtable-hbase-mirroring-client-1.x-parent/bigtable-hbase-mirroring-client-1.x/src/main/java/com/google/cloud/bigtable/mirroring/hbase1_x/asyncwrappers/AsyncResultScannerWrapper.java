@@ -19,10 +19,13 @@ import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringSpan;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.opencensus.common.Scope;
+import io.opencensus.trace.Span;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -41,16 +44,15 @@ import org.apache.hadoop.hbase.client.Table;
 @InternalApi("For internal usage only")
 public class AsyncResultScannerWrapper implements ListenableCloseable {
   private final Table table;
-  private ResultScanner scanner;
-  private ListeningExecutorService executorService;
-  private boolean closed;
-
   /**
    * We use this queue to ensure that asynchronous next()s are called in the same order and with the
    * same parameters as next()s on primary result scanner.
    */
   private final ConcurrentLinkedQueue<ScannerRequestContext> nextContextQueue;
 
+  private ResultScanner scanner;
+  private ListeningExecutorService executorService;
+  private boolean closed;
   /**
    * We are counting references to this object to be able to call {@link ResultScanner#close()} on
    * underlying scanner in a predictable way. The reference count is increased before submitting
@@ -91,11 +93,14 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
         new Callable<AsyncScannerVerificationPayload>() {
           @Override
           public AsyncScannerVerificationPayload call() throws AsyncScannerExceptionWithContext {
+            Span span = MirroringSpan.secondaryOperationsSynchronizationWithoutParent();
             synchronized (AsyncResultScannerWrapper.this.table) {
+              span.end();
               ScannerRequestContext requestContext =
                   AsyncResultScannerWrapper.this.nextContextQueue.remove();
+              requestContext.span.addChild(span);
 
-              try {
+              try (Scope scope = requestContext.span.secondaryOperationsScope()) {
                 if (requestContext.singleNext) {
                   Result result = AsyncResultScannerWrapper.this.scanner.next();
                   return new AsyncScannerVerificationPayload(requestContext, result);
@@ -175,6 +180,8 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
     public final int startingIndex;
     /** Number of Results requested in current next call. */
     public final int numRequests;
+    /** Tracing MirroringSpan will be used as a parent span of current request. */
+    public final MirroringSpan span;
     /**
      * Marks whether this next was issued using {@link ResultScanner#next()} (true) or {@link
      * ResultScanner#next(int)} (false). Used to forward the same method call to underlying
@@ -183,20 +190,27 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
     public final boolean singleNext;
 
     private ScannerRequestContext(
-        Scan scan, Result[] result, int startingIndex, int numRequests, boolean singleNext) {
+        Scan scan,
+        Result[] result,
+        int startingIndex,
+        int numRequests,
+        boolean singleNext,
+        MirroringSpan span) {
       this.scan = scan;
       this.result = result;
       this.startingIndex = startingIndex;
       this.numRequests = numRequests;
+      this.span = span;
       this.singleNext = singleNext;
     }
 
-    public ScannerRequestContext(Scan scan, Result[] result, int startingIndex, int numRequests) {
-      this(scan, result, startingIndex, numRequests, false);
+    public ScannerRequestContext(
+        Scan scan, Result[] result, int startingIndex, int numRequests, MirroringSpan span) {
+      this(scan, result, startingIndex, numRequests, false, span);
     }
 
-    public ScannerRequestContext(Scan scan, Result result, int startingIndex) {
-      this(scan, new Result[] {result}, startingIndex, 1, true);
+    public ScannerRequestContext(Scan scan, Result result, int startingIndex, MirroringSpan span) {
+      this(scan, new Result[] {result}, startingIndex, 1, true, span);
     }
   }
 

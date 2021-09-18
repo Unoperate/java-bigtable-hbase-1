@@ -26,7 +26,10 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounter;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.SlowMismatchDetector;
+import com.google.cloud.bigtable.hbase.mirroring.utils.ZipkinTracingRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import io.opencensus.trace.Span;
+import io.opencensus.trace.Tracing;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
@@ -40,16 +43,15 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class TestBlocking {
+  static final byte[] columnFamily1 = "cf1".getBytes();
+  static final byte[] qualifier1 = "q1".getBytes();
   @ClassRule public static ConnectionRule connectionRule = new ConnectionRule();
-
+  @ClassRule public static ZipkinTracingRule zipkinTracingRule = new ZipkinTracingRule();
   @Rule public ExecutorServiceRule executorServiceRule = new ExecutorServiceRule(connectionRule);
 
   @Rule
   public MismatchDetectorCounterRule mismatchDetectorCounterRule =
       new MismatchDetectorCounterRule();
-
-  static final byte[] columnFamily1 = "cf1".getBytes();
-  static final byte[] qualifier1 = "q1".getBytes();
 
   @Test
   public void testConnectionCloseBlocksUntilAllRequestsHaveBeenVerified()
@@ -57,6 +59,9 @@ public class TestBlocking {
     long beforeTableClose;
     long afterTableClose;
     long afterConnectionClose;
+
+    Span span = Tracing.getTracer().spanBuilder("test").startSpan();
+    span.end();
 
     Configuration config = ConfigurationHelper.newConfiguration();
     config.set(MIRRORING_MISMATCH_DETECTOR_CLASS, SlowMismatchDetector.class.getCanonicalName());

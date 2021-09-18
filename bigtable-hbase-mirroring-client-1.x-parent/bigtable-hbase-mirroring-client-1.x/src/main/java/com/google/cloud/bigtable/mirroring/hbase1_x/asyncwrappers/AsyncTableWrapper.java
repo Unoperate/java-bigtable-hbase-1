@@ -19,11 +19,14 @@ import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringSpan;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import io.opencensus.common.Scope;
+import io.opencensus.trace.Span;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.List;
@@ -52,9 +55,9 @@ import org.apache.hadoop.hbase.client.Table;
  */
 @InternalApi("For internal usage only")
 public class AsyncTableWrapper implements ListenableCloseable {
+  private static final Logger Log = new Logger(AsyncTableWrapper.class);
   private final Table table;
   private final ListeningExecutorService executorService;
-  private static final Logger Log = new Logger(AsyncTableWrapper.class);
   /**
    * We are counting references to this object to be able to call {@link Table#close()} on
    * underlying table in a predictable way. The reference count is increased before submitting each
@@ -74,59 +77,57 @@ public class AsyncTableWrapper implements ListenableCloseable {
     this.pendingOperationsReferenceCounter = new ListenableReferenceCounter();
   }
 
-  public Supplier<ListenableFuture<Result>> get(final Get gets) {
+  public Supplier<ListenableFuture<Result>> get(final Get gets, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Result>() {
           @Override
           public Result call() throws Exception {
-            synchronized (table) {
-              Log.trace("get(Get)");
-              return table.get(gets);
-            }
+            Log.trace("get(Get)");
+            return table.get(gets);
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<Result[]>> get(final List<Get> gets) {
+  public Supplier<ListenableFuture<Result[]>> get(final List<Get> gets, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Result[]>() {
           @Override
           public Result[] call() throws Exception {
-            synchronized (table) {
-              Log.trace("get(List<Get>)");
-              return table.get(gets);
-            }
+            Log.trace("get(List<Get>)");
+            return table.get(gets);
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<Boolean>> exists(final Get get) {
+  public Supplier<ListenableFuture<Boolean>> exists(final Get get, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Boolean>() {
           @Override
           public Boolean call() throws Exception {
-            synchronized (table) {
-              Log.trace("exists(Get)");
-              return table.exists(get);
-            }
+            Log.trace("exists(Get)");
+            return table.exists(get);
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<boolean[]>> existsAll(final List<Get> gets) {
+  public Supplier<ListenableFuture<boolean[]>> existsAll(
+      final List<Get> gets, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<boolean[]>() {
           @Override
           public boolean[] call() throws Exception {
-            synchronized (table) {
-              Log.trace("existsAll(List<Get>)");
-              return table.existsAll(gets);
-            }
+            Log.trace("existsAll(List<Get>)");
+            return table.existsAll(gets);
           }
-        });
+        },
+        span);
   }
 
   public synchronized ListenableFuture<Void> asyncClose() {
+    final MirroringSpan span = new MirroringSpan("AsyncTableWrapper.asyncClose()");
     Log.trace("asyncClose()");
     if (this.closeResultFuture != null) {
       return this.closeResultFuture;
@@ -142,14 +143,19 @@ public class AsyncTableWrapper implements ListenableCloseable {
             new Runnable() {
               @Override
               public void run() {
-                try {
+                try (Scope scope = span.secondaryOperationsScope()) {
+                  Span synchronizationSpan =
+                      MirroringSpan.secondaryOperationsSynchronizationWithoutParent();
                   synchronized (table) {
+                    synchronizationSpan.end();
                     Log.trace("performing close()");
                     table.close();
                   }
                   AsyncTableWrapper.this.closeResultFuture.set(null);
+                  span.end();
                 } catch (IOException e) {
                   AsyncTableWrapper.this.closeResultFuture.setException(e);
+                  span.endWithError();
                 } finally {
                   Log.trace("asyncClose() completed");
                 }
@@ -168,11 +174,25 @@ public class AsyncTableWrapper implements ListenableCloseable {
     return result;
   }
 
-  public <T> Supplier<ListenableFuture<T>> createSubmitTaskSupplier(final Callable<T> task) {
+  public <T> Supplier<ListenableFuture<T>> createSubmitTaskSupplier(
+      final Callable<T> task, final MirroringSpan span) {
     return new Supplier<ListenableFuture<T>>() {
       @Override
       public ListenableFuture<T> get() {
-        return submitTask(task);
+        return submitTask(
+            new Callable<T>() {
+              @Override
+              public T call() throws Exception {
+                try (Scope scope = span.secondaryOperationsScope()) {
+                  Span synchronizationSpan =
+                      MirroringSpan.secondaryOperationsSynchronizationWithoutParent();
+                  synchronized (table) {
+                    synchronizationSpan.end();
+                    return task.call();
+                  }
+                }
+              }
+            });
       }
     };
   }
@@ -183,95 +203,91 @@ public class AsyncTableWrapper implements ListenableCloseable {
     return future;
   }
 
-  public Supplier<ListenableFuture<Void>> put(final Put put) {
+  public Supplier<ListenableFuture<Void>> put(final Put put, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            synchronized (table) {
-              Log.trace("put(Put)");
-              table.put(put);
-            }
+            Log.trace("put(Put)");
+            table.put(put);
             return null;
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<Void>> append(final Append append) {
+  public Supplier<ListenableFuture<Void>> append(final Append append, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            synchronized (table) {
-              Log.trace("append(Append)");
-              table.append(append);
-            }
+            Log.trace("append(Append)");
+            table.append(append);
             return null;
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<Void>> increment(final Increment increment) {
+  public Supplier<ListenableFuture<Void>> increment(
+      final Increment increment, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            synchronized (table) {
-              Log.trace("increment(Increment)");
-              table.increment(increment);
-            }
+            Log.trace("increment(Increment)");
+            table.increment(increment);
             return null;
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<Void>> mutateRow(final RowMutations rowMutations) {
+  public Supplier<ListenableFuture<Void>> mutateRow(
+      final RowMutations rowMutations, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            synchronized (table) {
-              Log.trace("mutateRow(RowMutations)");
-              table.mutateRow(rowMutations);
-            }
+            Log.trace("mutateRow(RowMutations)");
+            table.mutateRow(rowMutations);
             return null;
           }
-        });
+        },
+        span);
   }
 
-  public Supplier<ListenableFuture<Void>> delete(final Delete delete) {
+  public Supplier<ListenableFuture<Void>> delete(final Delete delete, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            synchronized (table) {
-              Log.trace("delete(Delete)");
-              table.delete(delete);
-            }
+            Log.trace("delete(Delete)");
+            table.delete(delete);
             return null;
           }
-        });
+        },
+        span);
   }
 
   public Supplier<ListenableFuture<Void>> batch(
-      final List<? extends Row> operations, final Object[] results) {
+      final List<? extends Row> operations, final Object[] results, final MirroringSpan span) {
     return createSubmitTaskSupplier(
         new Callable<Void>() {
           @Override
           public Void call() throws IOException {
-            synchronized (table) {
-              try {
-                Log.trace("batch(List<Row>, Object[])");
-                table.batch(operations, results);
-              } catch (InterruptedException e) {
-                IOException exception = new InterruptedIOException();
-                exception.initCause(e);
-                throw exception;
-              }
+            try {
+              Log.trace("batch(List<Row>, Object[])");
+              table.batch(operations, results);
+            } catch (InterruptedException e) {
+              IOException exception = new InterruptedIOException();
+              exception.initCause(e);
+              throw exception;
             }
             return null;
           }
-        });
+        },
+        span);
   }
 
   @Override

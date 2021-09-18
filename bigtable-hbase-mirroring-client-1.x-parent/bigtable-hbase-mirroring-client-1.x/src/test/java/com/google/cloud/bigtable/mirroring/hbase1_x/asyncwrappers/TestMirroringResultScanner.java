@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.AsyncScannerVerificationPayload;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringSpan;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.util.concurrent.FutureCallback;
@@ -299,12 +300,14 @@ public class TestMirroringResultScanner {
 
     final List<ScannerRequestContext> calls = new ArrayList<>();
 
-    ScannerRequestContext c1 = new ScannerRequestContext(null, null, 1);
-    ScannerRequestContext c2 = new ScannerRequestContext(null, null, 2);
-    ScannerRequestContext c3 = new ScannerRequestContext(null, null, 3);
-    ScannerRequestContext c4 = new ScannerRequestContext(null, null, 4);
-    ScannerRequestContext c5 = new ScannerRequestContext(null, null, 5);
-    ScannerRequestContext c6 = new ScannerRequestContext(null, null, 6);
+    MirroringSpan span = new MirroringSpan("test");
+
+    ScannerRequestContext c1 = new ScannerRequestContext(null, null, 1, span);
+    ScannerRequestContext c2 = new ScannerRequestContext(null, null, 2, span);
+    ScannerRequestContext c3 = new ScannerRequestContext(null, null, 3, span);
+    ScannerRequestContext c4 = new ScannerRequestContext(null, null, 4, span);
+    ScannerRequestContext c5 = new ScannerRequestContext(null, null, 5, span);
+    ScannerRequestContext c6 = new ScannerRequestContext(null, null, 6, span);
 
     catchResult(asyncResultScannerWrapper.next(c1).get(), calls);
     catchResult(asyncResultScannerWrapper.next(c2).get(), calls);

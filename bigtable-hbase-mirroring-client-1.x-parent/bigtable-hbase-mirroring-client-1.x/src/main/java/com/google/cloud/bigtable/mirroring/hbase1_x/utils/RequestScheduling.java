@@ -25,6 +25,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import io.opencensus.common.Scope;
 import java.util.concurrent.ExecutionException;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
@@ -39,13 +40,17 @@ public class RequestScheduling {
       final RequestResourcesDescription requestResourcesDescription,
       final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
       final FutureCallback<T> verificationCallback,
-      final FlowController flowController) {
+      final FlowController flowController,
+      final MirroringSpan span) {
     final SettableFuture<Void> verificationCompletedFuture = SettableFuture.create();
 
     final ListenableFuture<ResourceReservation> reservationRequest =
         flowController.asyncRequestResource(requestResourcesDescription);
     try {
-      final ResourceReservation reservation = reservationRequest.get();
+      final ResourceReservation reservation;
+      try (Scope scope = span.flowControlScope()) {
+        reservation = reservationRequest.get();
+      }
       Futures.addCallback(
           secondaryResultFutureSupplier.get(),
           new FutureCallback<T>() {
@@ -53,21 +58,27 @@ public class RequestScheduling {
             public void onSuccess(@NullableDecl T t) {
               try {
                 Log.trace("starting verification %s", t);
-                verificationCallback.onSuccess(t);
+                try (Scope scope = span.postprocessingScope()) {
+                  verificationCallback.onSuccess(t);
+                }
                 Log.trace("verification done %s", t);
               } finally {
                 reservation.release();
                 verificationCompletedFuture.set(null);
+                span.end();
               }
             }
 
             @Override
             public void onFailure(Throwable throwable) {
               try {
-                verificationCallback.onFailure(throwable);
+                try (Scope scope = span.postprocessingScope()) {
+                  verificationCallback.onFailure(throwable);
+                }
               } finally {
                 reservation.release();
                 verificationCompletedFuture.set(null);
+                span.end();
               }
             }
           },

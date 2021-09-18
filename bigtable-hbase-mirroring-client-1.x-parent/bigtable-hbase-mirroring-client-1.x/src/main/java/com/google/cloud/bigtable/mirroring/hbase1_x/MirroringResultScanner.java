@@ -19,8 +19,10 @@ import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringSpan;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
@@ -83,29 +85,52 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
 
   @Override
   public Result next() throws IOException {
-    Result result = this.primaryResultScanner.next();
+    MirroringSpan span = new MirroringSpan("MirroringResultScanner.next()");
+
+    Result result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Result>() {
+              @Override
+              public Result call() throws IOException {
+                return MirroringResultScanner.this.primaryResultScanner.next();
+              }
+            });
+
     int startingIndex = this.readEntries;
     this.readEntries += 1;
     ScannerRequestContext context =
-        new ScannerRequestContext(this.originalScan, result, startingIndex);
+        new ScannerRequestContext(this.originalScan, result, startingIndex, span);
+
     this.scheduleRequest(
         new RequestResourcesDescription(result),
         this.secondaryResultScannerWrapper.next(context),
-        this.verificationContinuationFactory.scannerNext());
+        this.verificationContinuationFactory.scannerNext(),
+        span);
     return result;
   }
 
   @Override
-  public Result[] next(int entriesToRead) throws IOException {
-    Result[] results = this.primaryResultScanner.next(entriesToRead);
+  public Result[] next(final int entriesToRead) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringResultScanner.next()");
+
+    Result[] results =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Result[]>() {
+              @Override
+              public Result[] call() throws IOException {
+                return MirroringResultScanner.this.primaryResultScanner.next(entriesToRead);
+              }
+            });
+
     int startingIndex = this.readEntries;
     this.readEntries += entriesToRead;
     ScannerRequestContext context =
-        new ScannerRequestContext(this.originalScan, results, startingIndex, entriesToRead);
+        new ScannerRequestContext(this.originalScan, results, startingIndex, entriesToRead, span);
     this.scheduleRequest(
         new RequestResourcesDescription(results),
         this.secondaryResultScannerWrapper.next(context),
-        this.verificationContinuationFactory.scannerNext());
+        this.verificationContinuationFactory.scannerNext(),
+        span);
     return results;
   }
 
@@ -178,10 +203,15 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
   private <T> void scheduleRequest(
       RequestResourcesDescription requestResourcesDescription,
       Supplier<ListenableFuture<T>> nextSupplier,
-      FutureCallback<T> scannerNext) {
+      FutureCallback<T> scannerNext,
+      MirroringSpan span) {
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-            requestResourcesDescription, nextSupplier, scannerNext, this.flowController));
+            requestResourcesDescription,
+            nextSupplier,
+            span.wrapVerificationCallback(scannerNext),
+            this.flowController,
+            span));
   }
 
   @Override

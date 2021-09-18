@@ -17,10 +17,13 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringSpan;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RunnableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -29,6 +32,7 @@ import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.opencensus.common.Scope;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
@@ -121,36 +125,66 @@ public class MirroringTable implements Table, ListenableCloseable {
   }
 
   @Override
-  public boolean exists(Get get) throws IOException {
+  public boolean exists(final Get get) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.exists(Get)");
     Log.trace("[%s] exists(get=%s)", this.getName(), get);
-    boolean result = this.primaryTable.exists(get);
+
+    boolean result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Boolean>() {
+              @Override
+              public Boolean call() throws IOException {
+                return MirroringTable.this.primaryTable.exists(get);
+              }
+            });
+
     scheduleVerificationAndRequestWithFlowControl(
         new RequestResourcesDescription(result),
-        this.secondaryAsyncWrapper.exists(get),
-        this.verificationContinuationFactory.exists(get, result));
+        this.secondaryAsyncWrapper.exists(get, span),
+        this.verificationContinuationFactory.exists(get, result),
+        span);
     return result;
   }
 
   @Override
-  public boolean[] existsAll(List<Get> list) throws IOException {
+  public boolean[] existsAll(final List<Get> list) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.existsAll(List<Get>)");
     Log.trace("[%s] existsAll(gets=%s)", this.getName(), list);
-    boolean[] result = this.primaryTable.existsAll(list);
+
+    boolean[] result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<boolean[]>() {
+              @Override
+              public boolean[] call() throws IOException {
+                return MirroringTable.this.primaryTable.existsAll(list);
+              }
+            });
+
     scheduleVerificationAndRequestWithFlowControl(
         new RequestResourcesDescription(result),
-        this.secondaryAsyncWrapper.existsAll(list),
-        this.verificationContinuationFactory.existsAll(list, result));
+        this.secondaryAsyncWrapper.existsAll(list, span),
+        this.verificationContinuationFactory.existsAll(list, result),
+        span);
     return result;
   }
 
-  @Override
-  public void batch(List<? extends Row> operations, Object[] results)
+  private void batchWithSpan(
+      final List<? extends Row> operations, final Object[] results, MirroringSpan span)
       throws IOException, InterruptedException {
     Log.trace("[%s] batch(operations=%s, results)", this.getName(), operations);
     try {
       this.primaryTable.batch(operations, results);
     } finally {
-      BatchHelpers.scheduleSecondaryWriteBatchOperations(operations, results, this);
+      // An exception indicates operation that failed at least partially.
+      BatchHelpers.scheduleSecondaryWriteBatchOperations(operations, results, this, span);
     }
+  }
+
+  @Override
+  public void batch(List<? extends Row> operations, Object[] results)
+      throws IOException, InterruptedException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.batch(List<Row>, Object[]))");
+    batchWithSpan(operations, results, span);
   }
 
   @Override
@@ -165,13 +199,14 @@ public class MirroringTable implements Table, ListenableCloseable {
   public <R> void batchCallback(
       List<? extends Row> operations, Object[] results, Callback<R> callback)
       throws IOException, InterruptedException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.batchCallback()");
     Log.trace(
         "[%s] batchCallback(operations=%s, results, callback=%s)",
         this.getName(), operations, callback);
     try {
       this.primaryTable.batchCallback(operations, results, callback);
     } finally {
-      BatchHelpers.scheduleSecondaryWriteBatchOperations(operations, results, this);
+      BatchHelpers.scheduleSecondaryWriteBatchOperations(operations, results, this, span);
     }
   }
 
@@ -186,41 +221,70 @@ public class MirroringTable implements Table, ListenableCloseable {
   }
 
   @Override
-  public Result get(Get get) throws IOException {
+  public Result get(final Get get) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.get(Get)");
     Log.trace("[%s] get(get=%s)", this.getName(), get);
-    Result result = this.primaryTable.get(get);
+
+    Result result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Result>() {
+              @Override
+              public Result call() throws IOException {
+                return MirroringTable.this.primaryTable.get(get);
+              }
+            });
+
     scheduleVerificationAndRequestWithFlowControl(
         new RequestResourcesDescription(result),
-        this.secondaryAsyncWrapper.get(get),
-        this.verificationContinuationFactory.get(get, result));
+        this.secondaryAsyncWrapper.get(get, span),
+        this.verificationContinuationFactory.get(get, result),
+        span);
 
     return result;
   }
 
   @Override
-  public Result[] get(List<Get> list) throws IOException {
+  public Result[] get(final List<Get> list) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.get(List<Get>)");
     Log.trace("[%s] get(gets=%s)", this.getName(), list);
-    Result[] result = this.primaryTable.get(list);
+
+    Result[] result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Result[]>() {
+              @Override
+              public Result[] call() throws IOException {
+                return MirroringTable.this.primaryTable.get(list);
+              }
+            });
+
     scheduleVerificationAndRequestWithFlowControl(
         new RequestResourcesDescription(result),
-        this.secondaryAsyncWrapper.get(list),
-        this.verificationContinuationFactory.get(list, result));
+        this.secondaryAsyncWrapper.get(list, span),
+        this.verificationContinuationFactory.get(list, result),
+        span);
 
     return result;
   }
 
   @Override
   public ResultScanner getScanner(Scan scan) throws IOException {
-    Log.trace("[%s] getScanner(scan=%s)", this.getName(), scan);
-    MirroringResultScanner scanner =
-        new MirroringResultScanner(
-            scan,
-            this.primaryTable.getScanner(scan),
-            this.secondaryAsyncWrapper,
-            this.verificationContinuationFactory,
-            this.flowController);
-    this.referenceCounter.holdReferenceUntilClosing(scanner);
-    return scanner;
+    MirroringSpan span = new MirroringSpan("MirroringTable.getScanner(Scan)");
+    try {
+      Log.trace("[%s] getScanner(scan=%s)", this.getName(), scan);
+      MirroringResultScanner scanner =
+          new MirroringResultScanner(
+              scan,
+              this.primaryTable.getScanner(scan),
+              this.secondaryAsyncWrapper,
+              this.verificationContinuationFactory,
+              this.flowController);
+      this.referenceCounter.holdReferenceUntilClosing(scanner);
+      span.end();
+      return scanner;
+    } catch (Exception e) {
+      span.endWithError();
+      throw e;
+    }
   }
 
   @Override
@@ -239,10 +303,18 @@ public class MirroringTable implements Table, ListenableCloseable {
    */
   @Override
   public void close() throws IOException {
-    this.asyncClose();
+    MirroringSpan span = new MirroringSpan("MirroringTable.close()");
+    try {
+      this.asyncClose();
+      span.end();
+    } catch (Exception e) {
+      span.endWithError();
+      throw e;
+    }
   }
 
   public synchronized ListenableFuture<Void> asyncClose() throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.asyncClose()");
     Log.trace("[%s] asyncClose()", this.getName());
     if (closed) {
       return this.referenceCounter.getOnLastReferenceClosed();
@@ -253,14 +325,23 @@ public class MirroringTable implements Table, ListenableCloseable {
 
     IOException primaryException = null;
     try {
-      this.primaryTable.close();
+      span.wrapPrimaryOperation(
+          new RunnableThrowingIOException() {
+            @Override
+            public void run() throws IOException {
+              MirroringTable.this.primaryTable.close();
+            }
+          });
     } catch (IOException e) {
       primaryException = e;
     }
 
     try {
-      this.secondaryAsyncWrapper.asyncClose();
+      try (Scope scope = span.secondaryOperationsScope()) {
+        this.secondaryAsyncWrapper.asyncClose();
+      }
     } catch (RuntimeException e) {
+      span.endWithError();
       if (primaryException != null) {
         primaryException.addSuppressed(e);
         throw primaryException;
@@ -272,23 +353,36 @@ public class MirroringTable implements Table, ListenableCloseable {
     if (primaryException != null) {
       throw primaryException;
     }
+    span.endWhenCompleted(this.referenceCounter.getOnLastReferenceClosed());
     return this.referenceCounter.getOnLastReferenceClosed();
   }
 
   @Override
-  public void put(Put put) throws IOException {
+  public void put(final Put put) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.put(Put)");
     Log.trace("[%s] put(put=%s)", this.getName(), put);
-    this.primaryTable.put(put);
+
+    span.wrapPrimaryOperation(
+        new RunnableThrowingIOException() {
+          @Override
+          public void run() throws IOException {
+            MirroringTable.this.primaryTable.put(put);
+          }
+        });
     scheduleWriteWithControlFlow(
-        new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put), this.flowController);
+        new WriteOperationInfo(put),
+        this.secondaryAsyncWrapper.put(put, span),
+        this.flowController,
+        span);
   }
 
   @Override
   public void put(List<Put> puts) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.put(List<Put>)");
     Log.trace("[%s] put(puts=%s)", this.getName(), puts);
-    Object[] results = new Object[puts.size()];
     try {
-      this.batch(puts, results);
+      Object[] results = new Object[puts.size()];
+      this.batchWithSpan(puts, results, span);
     } catch (InterruptedException e) {
       IOException e2 = new InterruptedIOException();
       e2.initCause(e);
@@ -309,31 +403,41 @@ public class MirroringTable implements Table, ListenableCloseable {
   public boolean checkAndPut(
       byte[] row, byte[] family, byte[] qualifier, CompareOp compareOp, byte[] value, Put put)
       throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.checkAndPut()");
     Log.trace(
         "[%s] checkAndPut(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, put=%s)",
         this.getName(), row, family, qualifier, compareOp, value, put);
     RowMutations mutations = new RowMutations(row);
     mutations.add(put);
-    return this.checkAndMutate(row, family, qualifier, compareOp, value, mutations);
+    return this.checkAndMutateWithSpan(row, family, qualifier, compareOp, value, mutations, span);
   }
 
   @Override
-  public void delete(Delete delete) throws IOException {
+  public void delete(final Delete delete) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.delete(Delete)");
     Log.trace("[%s] delete(delete=%s)", this.getName(), delete);
-    this.primaryTable.delete(delete);
+    span.wrapPrimaryOperation(
+        new RunnableThrowingIOException() {
+          @Override
+          public void run() throws IOException {
+            MirroringTable.this.primaryTable.delete(delete);
+          }
+        });
     scheduleWriteWithControlFlow(
         new WriteOperationInfo(delete),
-        this.secondaryAsyncWrapper.delete(delete),
-        this.flowController);
+        this.secondaryAsyncWrapper.delete(delete, span),
+        this.flowController,
+        span);
   }
 
   @Override
   public void delete(List<Delete> deletes) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.delete(List<Delete>)");
     Log.trace("[%s] delete(deletes=%s)", this.getName(), deletes);
     // Delete should remove successfully deleted rows from input list.
     Object[] results = new Object[deletes.size()];
     try {
-      this.batch(deletes, results);
+      this.batchWithSpan(deletes, results, span);
       deletes.clear();
     } catch (InterruptedException e) {
       final BatchHelpers.SplitBatchResponse<Delete> splitResponse =
@@ -361,43 +465,76 @@ public class MirroringTable implements Table, ListenableCloseable {
   public boolean checkAndDelete(
       byte[] row, byte[] family, byte[] qualifier, CompareOp compareOp, byte[] value, Delete delete)
       throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.checkAndDelete()");
     Log.trace(
         "[%s] checkAndDelete(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, delete=%s)",
         this.getName(), row, family, qualifier, compareOp, value, delete);
     RowMutations mutations = new RowMutations(row);
     mutations.add(delete);
-    return this.checkAndMutate(row, family, qualifier, compareOp, value, mutations);
+    return this.checkAndMutateWithSpan(row, family, qualifier, compareOp, value, mutations, span);
   }
 
   @Override
-  public void mutateRow(RowMutations rowMutations) throws IOException {
+  public void mutateRow(final RowMutations rowMutations) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.mutateRow(RowMutation)");
     Log.trace("[%s] mutateRow(rowMutations=%s)", this.getName(), rowMutations);
-    this.primaryTable.mutateRow(rowMutations);
+
+    span.wrapPrimaryOperation(
+        new RunnableThrowingIOException() {
+          @Override
+          public void run() throws IOException {
+            MirroringTable.this.primaryTable.mutateRow(rowMutations);
+          }
+        });
+
     scheduleWriteWithControlFlow(
         new WriteOperationInfo(rowMutations),
-        this.secondaryAsyncWrapper.mutateRow(rowMutations),
-        this.flowController);
+        this.secondaryAsyncWrapper.mutateRow(rowMutations, span),
+        this.flowController,
+        span);
   }
 
   @Override
-  public Result append(Append append) throws IOException {
+  public Result append(final Append append) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.append(Append)");
     Log.trace("[%s] append(append=%s)", this.getName(), append);
-    Result result = this.primaryTable.append(append);
+
+    Result result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Result>() {
+              @Override
+              public Result call() throws IOException {
+                return MirroringTable.this.primaryTable.append(append);
+              }
+            });
+
     scheduleWriteWithControlFlow(
         new WriteOperationInfo(append),
-        this.secondaryAsyncWrapper.append(append),
-        this.flowController);
+        this.secondaryAsyncWrapper.append(append, span),
+        this.flowController,
+        span);
     return result;
   }
 
   @Override
-  public Result increment(Increment increment) throws IOException {
+  public Result increment(final Increment increment) throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.increment(Increment)");
     Log.trace("[%s] increment(increment=%s)", this.getName(), increment);
-    Result result = this.primaryTable.increment(increment);
+
+    Result result =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Result>() {
+              @Override
+              public Result call() throws IOException {
+                return MirroringTable.this.primaryTable.increment(increment);
+              }
+            });
+
     scheduleWriteWithControlFlow(
         new WriteOperationInfo(increment),
-        this.secondaryAsyncWrapper.increment(increment),
-        this.flowController);
+        this.secondaryAsyncWrapper.increment(increment, span),
+        this.flowController,
+        span);
     return result;
   }
 
@@ -475,6 +612,35 @@ public class MirroringTable implements Table, ListenableCloseable {
     throw new UnsupportedOperationException();
   }
 
+  private boolean checkAndMutateWithSpan(
+      final byte[] row,
+      final byte[] family,
+      final byte[] qualifier,
+      final CompareOp compareOp,
+      final byte[] value,
+      final RowMutations rowMutations,
+      MirroringSpan span)
+      throws IOException {
+    boolean wereMutationsApplied =
+        span.wrapPrimaryOperation(
+            new CallableThrowingIOException<Boolean>() {
+              @Override
+              public Boolean call() throws IOException {
+                return MirroringTable.this.primaryTable.checkAndMutate(
+                    row, family, qualifier, compareOp, value, rowMutations);
+              }
+            });
+
+    if (wereMutationsApplied) {
+      scheduleWriteWithControlFlow(
+          new WriteOperationInfo(rowMutations),
+          this.secondaryAsyncWrapper.mutateRow(rowMutations, span),
+          this.flowController,
+          span);
+    }
+    return wereMutationsApplied;
+  }
+
   @Override
   public boolean checkAndMutate(
       byte[] row,
@@ -484,27 +650,21 @@ public class MirroringTable implements Table, ListenableCloseable {
       byte[] value,
       RowMutations rowMutations)
       throws IOException {
+    MirroringSpan span = new MirroringSpan("MirroringTable.checkAndMutate()");
     Log.trace(
         "[%s] checkAndMutate(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, rowMutations=%s)",
         this.getName(), row, family, qualifier, compareOp, value, rowMutations);
-    boolean wereMutationsApplied =
-        this.primaryTable.checkAndMutate(row, family, qualifier, compareOp, value, rowMutations);
-    if (wereMutationsApplied) {
-      scheduleWriteWithControlFlow(
-          new WriteOperationInfo(rowMutations),
-          this.secondaryAsyncWrapper.mutateRow(rowMutations),
-          this.flowController);
-    }
-    return wereMutationsApplied;
-  }
 
-  @Override
-  public void setOperationTimeout(int i) {
-    throw new UnsupportedOperationException();
+    return checkAndMutateWithSpan(row, family, qualifier, compareOp, value, rowMutations, span);
   }
 
   @Override
   public int getOperationTimeout() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void setOperationTimeout(int i) {
     throw new UnsupportedOperationException();
   }
 
@@ -548,30 +708,41 @@ public class MirroringTable implements Table, ListenableCloseable {
   private <T> void scheduleVerificationAndRequestWithFlowControl(
       final RequestResourcesDescription resultInfo,
       final Supplier<ListenableFuture<T>> secondaryGetFutureSupplier,
-      final FutureCallback<T> verificationCallback) {
+      final FutureCallback<T> verificationCallback,
+      MirroringSpan span) {
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-            resultInfo, secondaryGetFutureSupplier, verificationCallback, this.flowController));
+            resultInfo,
+            secondaryGetFutureSupplier,
+            span.wrapVerificationCallback(verificationCallback),
+            this.flowController,
+            span));
   }
 
   public <T> void scheduleWriteWithControlFlow(
       final WriteOperationInfo writeOperationInfo,
       final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
-      final FlowController flowController) {
+      final FlowController flowController,
+      MirroringSpan span) {
+    WriteOperationFutureCallback<T> writeErrorCallback =
+        new WriteOperationFutureCallback<T>() {
+          @Override
+          public void onFailure(Throwable throwable) {
+            handleFailedOperations(writeOperationInfo.operations);
+          }
+        };
+
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
             writeOperationInfo.requestResourcesDescription,
             secondaryResultFutureSupplier,
-            new FutureCallback<T>() {
-              @Override
-              public void onSuccess(@NullableDecl T t) {}
+            span.wrapWriteOperationCallback(writeErrorCallback),
+            flowController,
+            span));
+  }
 
-              @Override
-              public void onFailure(Throwable throwable) {
-                handleFailedOperations(writeOperationInfo.operations);
-              }
-            },
-            flowController));
+  public void handleFailedOperations(List<? extends Row> operations) {
+    // TODO(mwalkiewicz): call write error handler.
   }
 
   public static class WriteOperationInfo {
@@ -612,13 +783,12 @@ public class MirroringTable implements Table, ListenableCloseable {
     }
   }
 
-  public void handleFailedOperations(List<? extends Row> operations) {
-    // TODO(mwalkiewicz): call write error handler.
-  }
-
   static class BatchHelpers {
     private static void scheduleSecondaryWriteBatchOperations(
-        final List<? extends Row> operations, final Object[] results, MirroringTable table) {
+        final List<? extends Row> operations,
+        final Object[] results,
+        MirroringTable table,
+        MirroringSpan span) {
 
       final SplitBatchResponse<?> primarySplitResponse =
           new SplitBatchResponse<>(operations, results);
@@ -635,21 +805,24 @@ public class MirroringTable implements Table, ListenableCloseable {
               primarySplitResponse,
               resultsSecondary,
               table.verificationContinuationFactory.getMismatchDetector(),
-              table);
+              table,
+              span);
 
       RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
           new WriteOperationInfo(primarySplitResponse).requestResourcesDescription,
           table.secondaryAsyncWrapper.batch(
-              primarySplitResponse.allSuccessfulOperations, resultsSecondary),
+              primarySplitResponse.allSuccessfulOperations, resultsSecondary, span),
           verificationFuture,
-          table.flowController);
+          table.flowController,
+          span);
     }
 
     private static FutureCallback<Void> createBatchVerificationCallback(
         final SplitBatchResponse<?> primarySplitResponse,
         final Object[] secondaryResults,
         final MismatchDetector mismatchDetector,
-        final MirroringTable table) {
+        final MirroringTable table,
+        final MirroringSpan span) {
       return new FutureCallback<Void>() {
         @Override
         public void onSuccess(@NullableDecl Void t) {
@@ -660,10 +833,12 @@ public class MirroringTable implements Table, ListenableCloseable {
               new SplitBatchResponse<>(secondaryOperations, secondaryResults);
 
           if (secondarySplitResponse.successfulReads.size() > 0) {
-            mismatchDetector.batch(
-                secondarySplitResponse.successfulReads,
-                primarySplitResponse.successfulReadsResults,
-                secondarySplitResponse.successfulReadsResults);
+            try (Scope scope = span.verificationScope()) {
+              mismatchDetector.batch(
+                  secondarySplitResponse.successfulReads,
+                  primarySplitResponse.successfulReadsResults,
+                  secondarySplitResponse.successfulReadsResults);
+            }
           }
         }
 
@@ -676,7 +851,9 @@ public class MirroringTable implements Table, ListenableCloseable {
               new SplitBatchResponse<>(secondaryOperations, secondaryResults);
 
           if (secondarySplitResponse.failedWrites.size() > 0) {
-            table.handleFailedOperations(secondarySplitResponse.failedWrites);
+            try (Scope scope = span.writeErrorScope()) {
+              table.handleFailedOperations(secondarySplitResponse.failedWrites);
+            }
           }
 
           if (secondarySplitResponse.allReads.size() > 0) {
@@ -693,40 +870,19 @@ public class MirroringTable implements Table, ListenableCloseable {
                     primarySplitResponse.allSuccessfulResults,
                     secondaryResults);
 
-            mismatchDetector.batch(
-                secondarySplitResponse.successfulReads,
-                matchingSuccessfulReads.primaryResults,
-                matchingSuccessfulReads.secondaryResults);
+            try (Scope scope = span.verificationScope()) {
+              mismatchDetector.batch(
+                  secondarySplitResponse.successfulReads,
+                  matchingSuccessfulReads.primaryResults,
+                  matchingSuccessfulReads.secondaryResults);
 
-            if (!matchingSuccessfulReads.failedReads.isEmpty()) {
-              mismatchDetector.batch(matchingSuccessfulReads.failedReads, throwable);
+              if (!matchingSuccessfulReads.failedReads.isEmpty()) {
+                mismatchDetector.batch(matchingSuccessfulReads.failedReads, throwable);
+              }
             }
           }
         }
       };
-    }
-
-    /**
-     * Helper class that facilitates analysing results of partially completed batch operation
-     * containing {@link Get}s. Contains matching results from first and secondary databases, Get
-     * operations that produced those results, and Gets that failed on secondary.
-     */
-    private static class MatchingSuccessfulReadsResults {
-      final Result[] primaryResults;
-      final Result[] secondaryResults;
-      final List<Get> failedReads;
-      final List<Get> successfulReads;
-
-      private MatchingSuccessfulReadsResults(
-          Result[] primaryResults,
-          Result[] secondaryResults,
-          List<Get> failedReads,
-          List<Get> successfulReads) {
-        this.primaryResults = primaryResults;
-        this.secondaryResults = secondaryResults;
-        this.failedReads = failedReads;
-        this.successfulReads = successfulReads;
-      }
     }
 
     /**
@@ -767,6 +923,29 @@ public class MirroringTable implements Table, ListenableCloseable {
           secondaryMatchingReads.toArray(new Result[0]),
           failedReads,
           successfulReads);
+    }
+
+    /**
+     * Helper class that facilitates analysing results of partially completed batch operation
+     * containing {@link Get}s. Contains matching results from first and secondary databases, Get
+     * operations that produced those results, and Gets that failed on secondary.
+     */
+    private static class MatchingSuccessfulReadsResults {
+      final Result[] primaryResults;
+      final Result[] secondaryResults;
+      final List<Get> failedReads;
+      final List<Get> successfulReads;
+
+      private MatchingSuccessfulReadsResults(
+          Result[] primaryResults,
+          Result[] secondaryResults,
+          List<Get> failedReads,
+          List<Get> successfulReads) {
+        this.primaryResults = primaryResults;
+        this.secondaryResults = secondaryResults;
+        this.failedReads = failedReads;
+        this.successfulReads = successfulReads;
+      }
     }
 
     /**
