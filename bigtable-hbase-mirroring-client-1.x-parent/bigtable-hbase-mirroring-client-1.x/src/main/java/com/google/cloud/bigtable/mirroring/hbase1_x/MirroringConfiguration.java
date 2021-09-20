@@ -48,7 +48,7 @@ public class MirroringConfiguration extends Configuration {
           MirroringConfigurationHelper.MIRRORING_PRIMARY_CONNECTION_CLASS_KEY,
           MirroringConfigurationHelper.MIRRORING_SECONDARY_CONNECTION_CLASS_KEY);
 
-      Configuration primaryConfiguration =
+      final Configuration primaryConfiguration =
           MirroringConfigurationHelper.extractPrefixedConfig(
               MirroringConfigurationHelper.MIRRORING_PRIMARY_CONFIG_PREFIX_KEY, conf);
       MirroringConfigurationHelper.fillConnectionConfigWithClassImplementation(
@@ -58,7 +58,7 @@ public class MirroringConfiguration extends Configuration {
           "hbase.client.connection.impl");
       this.primaryConfiguration = primaryConfiguration;
 
-      Configuration secondaryConfiguration =
+      final Configuration secondaryConfiguration =
           MirroringConfigurationHelper.extractPrefixedConfig(
               MirroringConfigurationHelper.MIRRORING_SECONDARY_CONFIG_PREFIX_KEY, conf);
       MirroringConfigurationHelper.fillConnectionConfigWithClassImplementation(

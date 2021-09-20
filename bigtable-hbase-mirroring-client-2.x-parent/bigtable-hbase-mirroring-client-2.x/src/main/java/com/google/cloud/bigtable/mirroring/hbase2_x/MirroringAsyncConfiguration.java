@@ -57,7 +57,7 @@ public class MirroringAsyncConfiguration extends Configuration {
           MirroringConfigurationHelper.MIRRORING_PRIMARY_ASYNC_CONNECTION_CLASS_KEY,
           MirroringConfigurationHelper.MIRRORING_SECONDARY_ASYNC_CONNECTION_CLASS_KEY);
 
-      Configuration primaryConfiguration =
+      final Configuration primaryConfiguration =
           MirroringConfigurationHelper.extractPrefixedConfig(
               MirroringConfigurationHelper.MIRRORING_PRIMARY_CONFIG_PREFIX_KEY, conf);
       MirroringConfigurationHelper.fillConnectionConfigWithClassImplementation(
@@ -72,7 +72,7 @@ public class MirroringAsyncConfiguration extends Configuration {
           "hbase.client.async.connection.impl");
       this.primaryConfiguration = primaryConfiguration;
 
-      Configuration secondaryConfiguration =
+      final Configuration secondaryConfiguration =
           MirroringConfigurationHelper.extractPrefixedConfig(
               MirroringConfigurationHelper.MIRRORING_SECONDARY_CONFIG_PREFIX_KEY, conf);
       MirroringConfigurationHelper.fillConnectionConfigWithClassImplementation(
