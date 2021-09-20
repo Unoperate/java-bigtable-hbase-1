@@ -201,4 +201,18 @@ public class TestMirroringConfiguration {
     assertThat(configuration.secondaryConfiguration.get("hbase.client.connection.impl"))
         .isEqualTo("test2");
   }
+
+  @Test
+  public void testDefaultImplClass() {
+    Configuration testConfiguration = new Configuration(false);
+    testConfiguration.set(
+        MirroringConfigurationHelper.MIRRORING_PRIMARY_CONNECTION_CLASS_KEY,
+        TestConnection.class.getCanonicalName());
+    testConfiguration.set(
+        MirroringConfigurationHelper.MIRRORING_SECONDARY_CONNECTION_CLASS_KEY, "default");
+    MirroringConfiguration configuration = new MirroringConfiguration(testConfiguration);
+
+    assertThat(configuration.secondaryConfiguration.get("hbase.client.connection.impl"))
+        .isEqualTo(null);
+  }
 }
