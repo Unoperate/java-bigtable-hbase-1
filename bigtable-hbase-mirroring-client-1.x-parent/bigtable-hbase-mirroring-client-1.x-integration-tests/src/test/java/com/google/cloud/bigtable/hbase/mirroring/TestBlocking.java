@@ -92,7 +92,7 @@ public class TestBlocking {
   }
 
   @Test
-  public void testSlowSecondaryConnection() throws IOException {
+  public void testSlowVerification() throws IOException {
     Configuration config = ConfigurationHelper.newConfiguration();
     config.set(MIRRORING_MISMATCH_DETECTOR_CLASS, SlowMismatchDetector.class.getCanonicalName());
     SlowMismatchDetector.sleepTime = 100;
@@ -137,7 +137,7 @@ public class TestBlocking {
     // 1000 requests * 100 ms / 50 concurrent requests
     assertThat(duration).isGreaterThan(2000);
 
-    config.set(MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS, "1000");
+    config.set(MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS, "10000");
     try (MirroringConnection connection = executorServiceRule.createConnection(config)) {
       startTime = System.currentTimeMillis();
       try (Table table = connection.getTable(tableName)) {
@@ -148,7 +148,8 @@ public class TestBlocking {
     }
     endTime = System.currentTimeMillis();
     duration = endTime - startTime;
-    // 1000 requests * 100 ms / 1000 concurrent requests
-    assertThat(duration).isLessThan(1000);
+    // Duration of single operation turns out to be significant, we just expect to be faster than
+    // scenario with flowControl limit = 50.
+    assertThat(duration).isLessThan(1500);
   }
 }

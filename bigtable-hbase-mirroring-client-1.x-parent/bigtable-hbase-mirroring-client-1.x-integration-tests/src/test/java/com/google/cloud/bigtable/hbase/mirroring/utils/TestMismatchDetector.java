@@ -28,7 +28,7 @@ public class TestMismatchDetector implements MismatchDetector {
   public TestMismatchDetector() {}
 
   public void onError(String operation, String errorType, String details) {
-    System.out.printf("onError: %s: %s, %s", operation, errorType, details);
+    System.out.printf("onError: %s: %s, %s\n", operation, errorType, details);
     mismatchCounter.reportError(operation, errorType, details);
   }
 
