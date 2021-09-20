@@ -36,7 +36,7 @@ public class MirroringOptions {
   public final long bufferedMutatorBytesToFlush;
   public final String writeErrorConsumerClass;
 
-  MirroringOptions(Configuration configuration) {
+  public MirroringOptions(Configuration configuration) {
     this.mismatchDetectorClass =
         configuration.get(
             MIRRORING_MISMATCH_DETECTOR_CLASS, DefaultMismatchDetector.class.getCanonicalName());
