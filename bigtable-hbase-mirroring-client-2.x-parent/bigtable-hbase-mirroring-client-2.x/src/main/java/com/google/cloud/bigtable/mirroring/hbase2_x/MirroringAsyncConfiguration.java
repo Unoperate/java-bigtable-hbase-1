@@ -16,8 +16,8 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper;
 import org.apache.hadoop.conf.Configuration;
 
 public class MirroringAsyncConfiguration extends Configuration {

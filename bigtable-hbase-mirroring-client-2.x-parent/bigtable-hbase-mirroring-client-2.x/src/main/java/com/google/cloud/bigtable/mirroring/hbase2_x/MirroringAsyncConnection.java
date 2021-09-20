@@ -15,5 +15,4 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-public class MirroringAsyncConnection {
-}
+public class MirroringAsyncConnection {}

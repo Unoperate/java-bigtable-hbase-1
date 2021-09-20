@@ -1,14 +1,14 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
+
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConfiguration;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.Test;
 import org.junit.function.ThrowingRunnable;
-
-import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
 
 public class TestMirroringAsyncConfiguration {
   private Exception assertInvalidConfiguration(final Configuration test) {
