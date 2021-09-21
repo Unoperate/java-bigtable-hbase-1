@@ -19,6 +19,9 @@ import com.google.api.core.InternalApi;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
 /**
  * FlowController limits the number of concurrently performed requests to the secondary database.
  * Call to {@link #asyncRequestResource(RequestResourcesDescription)} returns object with a future
@@ -40,6 +43,19 @@ public class FlowController {
   public ListenableFuture<ResourceReservation> asyncRequestResource(
       RequestResourcesDescription resourcesDescription) {
     return this.flowControlStrategy.asyncRequestResourceReservation(resourcesDescription);
+  }
+
+  public static void releaseResourceWhenExceptionThrown(
+      Future<ResourceReservation> resourceReservationFuture) {
+    if (!resourceReservationFuture.cancel(true)) {
+      try {
+        resourceReservationFuture.get().release();
+      } catch (InterruptedException | ExecutionException ex) {
+        // If we couldn't cancel the request, it must have already been set, we assume
+        // that we will get the reservation without problems
+        assert false;
+      }
+    }
   }
 
   /**
