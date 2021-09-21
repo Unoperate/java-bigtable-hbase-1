@@ -201,7 +201,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             })
         .exceptionally(
             t -> {
-              FlowController.releaseResourceWhenExceptionThrown(reservationFuture);
+              FlowController.cancelRequest(reservationFuture);
               resultFuture.completeExceptionally(t);
               return null;
             });

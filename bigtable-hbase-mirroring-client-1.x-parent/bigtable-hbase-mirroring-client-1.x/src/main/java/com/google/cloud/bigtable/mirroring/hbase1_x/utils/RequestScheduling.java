@@ -73,7 +73,7 @@ public class RequestScheduling {
           },
           MoreExecutors.directExecutor());
     } catch (InterruptedException e) {
-      FlowController.releaseResourceWhenExceptionThrown(reservationRequest);
+      FlowController.cancelRequest(reservationRequest);
       verificationCompletedFuture.set(null);
       Thread.currentThread().interrupt();
     } catch (ExecutionException e) {
