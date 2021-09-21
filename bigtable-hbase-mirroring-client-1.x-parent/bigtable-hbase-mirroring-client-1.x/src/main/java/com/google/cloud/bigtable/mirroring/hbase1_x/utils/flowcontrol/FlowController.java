@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol;
 import com.google.api.core.InternalApi;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
