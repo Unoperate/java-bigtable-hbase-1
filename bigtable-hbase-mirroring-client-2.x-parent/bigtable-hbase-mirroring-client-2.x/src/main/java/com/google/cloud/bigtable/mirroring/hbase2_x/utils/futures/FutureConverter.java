@@ -16,6 +16,7 @@
 
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures;
 
+// TODO(aczajkowski): remove those temporary dependencies (also from pom.xml)
 import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toCompletableFuture;
 import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toListenableFuture;
 
