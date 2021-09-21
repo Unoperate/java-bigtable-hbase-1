@@ -46,7 +46,6 @@ import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.junit.Assume;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -779,7 +778,6 @@ public class TestMirroringTable {
   }
 
   @Test
-  @Ignore("Test fails because we are not able to manually set timestamps when using Increment.")
   public void testIncrement() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -809,15 +807,13 @@ public class TestMirroringTable {
   }
 
   @Test
-  @Ignore("Test fails because we are not able to manually set timestamps when using Increment.")
   public void testIncrementPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
     int databaseEntriesCount = 1000;
 
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
-    databaseHelpers.fillTable(
-        tableName1, databaseEntriesCount, columnFamily1, qualifier1);
+    databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
@@ -843,7 +839,6 @@ public class TestMirroringTable {
   }
 
   @Test
-  @Ignore("Test fails because we are not able to manually set timestamps when using Increment.")
   public void testIncrementSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -870,7 +865,6 @@ public class TestMirroringTable {
   }
 
   @Test
-  @Ignore("Test fails because we are not able to manually set timestamps when using Append.")
   public void testAppend() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -893,8 +887,8 @@ public class TestMirroringTable {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
           Result r = table.get(Helpers.createGet(rowKey, columnFamily1, qualifier1));
-          byte[] expectedValue = new byte[] {0, 0, 0, 0, 1};
-          System.arraycopy(rowKey, 0, expectedValue, 0, 4);
+          byte[] expectedValue = new byte[] {0, 0, 0, 0, 0, 0, 0, 0, 1};
+          System.arraycopy(rowKey, 0, expectedValue, 0, 8);
           assertThat(r.getValue(columnFamily1, qualifier1)).isEqualTo(expectedValue);
         }
       }
@@ -902,15 +896,13 @@ public class TestMirroringTable {
   }
 
   @Test
-  @Ignore("Test fails because we are not able to manually set timestamps when using Append.")
   public void testAppendPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
     int databaseEntriesCount = 1000;
 
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
-    databaseHelpers.fillTable(
-        tableName1, databaseEntriesCount, columnFamily1, qualifier1);
+    databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
@@ -935,7 +927,6 @@ public class TestMirroringTable {
   }
 
   @Test
-  @Ignore("Test fails because we are not able to manually set timestamps when using Append.")
   public void testAppendSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
