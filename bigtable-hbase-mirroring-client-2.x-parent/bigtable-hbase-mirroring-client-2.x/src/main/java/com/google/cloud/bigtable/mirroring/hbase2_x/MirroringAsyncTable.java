@@ -24,7 +24,6 @@ import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverte
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
