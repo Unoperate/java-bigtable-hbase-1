@@ -138,23 +138,23 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         (primaryResult, primaryError) -> {
           if (primaryError != null) {
             resultFuture.completeExceptionally(primaryError);
-          } else {
-            RequestResourcesDescription resourcesDescription =
-                resourcesDescriptionCreator.apply(primaryResult);
-            CompletableFuture<FlowController.ResourceReservation> resourceReservationFuture =
-                FutureConverter.toCompletable(
-                    this.flowController.asyncRequestResource(resourcesDescription));
-            reserveFlowControlResourcesThenScheduleSecondary(
-                    resourceReservationFuture,
-                    primaryFuture,
-                    secondaryFutureSupplier,
-                    verificationCallbackCreator)
-                .handle(
-                    (ignoredResult, ignoredError) -> {
-                      resultFuture.complete(primaryResult);
-                      return null;
-                    });
+            return null;
           }
+          RequestResourcesDescription resourcesDescription =
+              resourcesDescriptionCreator.apply(primaryResult);
+          CompletableFuture<FlowController.ResourceReservation> resourceReservationFuture =
+              FutureConverter.toCompletable(
+                  this.flowController.asyncRequestResource(resourcesDescription));
+          reserveFlowControlResourcesThenScheduleSecondary(
+                  resourceReservationFuture,
+                  primaryFuture,
+                  secondaryFutureSupplier,
+                  verificationCallbackCreator)
+              .handle(
+                  (ignoredResult, ignoredError) -> {
+                    resultFuture.complete(primaryResult);
+                    return null;
+                  });
           return null;
         });
 
