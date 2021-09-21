@@ -571,7 +571,7 @@ public class MirroringTable implements Table, ListenableCloseable {
 
               @Override
               public void onFailure(Throwable throwable) {
-                handleWriteError(writeOperationInfo.operations);
+                secondaryWriteErrorConsumer.consume(writeOperationInfo.operations);
               }
             },
             flowController));
@@ -613,10 +613,6 @@ public class MirroringTable implements Table, ListenableCloseable {
       this.requestResourcesDescription = requestResourcesDescription;
       this.operations = Collections.singletonList(operation);
     }
-  }
-
-  public void handleWriteError(List<? extends Row> operations) {
-    this.secondaryWriteErrorConsumer.consume(operations);
   }
 
   static class BatchHelpers {
@@ -679,7 +675,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new SplitBatchResponse<>(secondaryOperations, secondaryResults);
 
           if (secondarySplitResponse.failedWrites.size() > 0) {
-            table.handleWriteError(secondarySplitResponse.failedWrites);
+            table.secondaryWriteErrorConsumer.consume(secondarySplitResponse.failedWrites);
           }
 
           if (secondarySplitResponse.allReads.size() > 0) {

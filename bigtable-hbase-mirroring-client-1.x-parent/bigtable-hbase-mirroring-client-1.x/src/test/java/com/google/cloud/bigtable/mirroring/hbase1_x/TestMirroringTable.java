@@ -642,7 +642,7 @@ public class TestMirroringTable {
     verify(secondaryTable, times(1)).put(put);
 
     ArgumentCaptor<List<Row>> argument = ArgumentCaptor.forClass(List.class);
-    verify(mirroringTable, times(1)).handleWriteError(argument.capture());
+    verify(secondaryWriteErrorConsumer, times(1)).consume(argument.capture());
     assertThat(argument.getValue().size()).isEqualTo(1);
     assertThat(argument.getValue().get(0)).isEqualTo(put);
   }
@@ -770,7 +770,7 @@ public class TestMirroringTable {
     assertThat(argument.getValue().length).isEqualTo(4);
 
     // failed secondary writes were reported
-    verify(mirroringTable, times(1)).handleWriteError(Arrays.asList(put1));
+    verify(secondaryWriteErrorConsumer, times(1)).consume(Arrays.asList(put1));
 
     // successful secondary reads were reported
     verify(mismatchDetector, times(1))
