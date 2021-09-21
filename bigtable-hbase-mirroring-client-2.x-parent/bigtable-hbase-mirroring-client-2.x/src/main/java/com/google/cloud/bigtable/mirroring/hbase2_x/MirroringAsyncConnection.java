@@ -44,7 +44,7 @@ import org.apache.hadoop.hbase.client.ScanResultConsumer;
 import org.apache.hadoop.hbase.security.User;
 
 public class MirroringAsyncConnection implements AsyncConnection {
-  private MirroringConfiguration configuration;
+  private MirroringAsyncConfiguration configuration;
   private AsyncConnection primaryConnection;
   private AsyncConnection secondaryConnection;
   private final ExecutorService executorService;
