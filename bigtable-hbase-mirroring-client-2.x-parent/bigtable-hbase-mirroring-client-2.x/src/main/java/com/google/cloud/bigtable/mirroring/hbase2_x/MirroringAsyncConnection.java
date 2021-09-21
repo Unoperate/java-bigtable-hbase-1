@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
@@ -46,26 +45,26 @@ public class MirroringAsyncConnection implements AsyncConnection {
   private MirroringAsyncConfiguration configuration;
   private AsyncConnection primaryConnection;
   private AsyncConnection secondaryConnection;
-  private final ExecutorService executorService;
   private final MismatchDetector mismatchDetector;
   private final FlowController flowController;
 
+  /**
+   * The constructor called from {@link
+   * org.apache.hadoop.hbase.client.ConnectionFactory#createAsyncConnection(Configuration)} and in
+   * its many forms via reflection with this specific signature.
+   *
+   * <p>Parameters are passed down to ConnectionFactory#createAsyncConnection method, connection
+   * errors are passed back to the user (wrapped in a CompletableFuture).
+   */
   public MirroringAsyncConnection(
       Configuration conf,
       /**
-       * The constructor is passed an AsyncRegion, which is a private interface in
-       * org.apache.hadoop.hbase.client. It points the client to appropriate ZooKeeper instances.
-       * It's not needed here but as we use ConnectionFactory#createAsyncConnection which will pass
-       * it to constructors of underlying connections, we must have this argument.
+       * The constructor is passed a ConnectionRegistry, which is a private interface in
+       * org.apache.hadoop.hbase.client.
        */
-      Object o,
-      String clusterId,
+      Object ignoredRegistry,
+      String ignoredClusterId,
       User user)
-      throws ExecutionException, InterruptedException {
-    this(conf, null, user);
-  }
-
-  public MirroringAsyncConnection(Configuration conf, ExecutorService pool, User user)
       throws ExecutionException, InterruptedException {
     this.configuration = new MirroringAsyncConfiguration(conf);
 
@@ -76,11 +75,6 @@ public class MirroringAsyncConnection implements AsyncConnection {
         ConnectionFactory.createAsyncConnection(this.configuration.secondaryConfiguration, user)
             .get();
 
-    if (pool == null) {
-      this.executorService = Executors.newCachedThreadPool();
-    } else {
-      this.executorService = pool;
-    }
     this.flowController =
         new FlowController(
             this.<FlowControlStrategy>construct(
