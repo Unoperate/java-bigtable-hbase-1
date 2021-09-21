@@ -142,11 +142,11 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
           } else {
             RequestResourcesDescription resourcesDescription =
                 resourcesDescriptionCreator.apply(primaryResult);
-            CompletableFuture<FlowController.ResourceReservation> resourceFuture =
+            CompletableFuture<FlowController.ResourceReservation> resourceReservationFuture =
                 FutureConverter.toCompletable(
                     this.flowController.asyncRequestResource(resourcesDescription));
-            reserveControlFlowResourcesThenScheduleSecondary(
-                    resourceFuture,
+            reserveFlowControlResourcesThenScheduleSecondary(
+                    resourceReservationFuture,
                     primaryFuture,
                     secondaryFutureSupplier,
                     verificationCallbackCreator)
@@ -166,7 +166,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       final MirroringTable.WriteOperationInfo writeOperationInfo,
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier) {
-    return reserveControlFlowResourcesThenScheduleSecondary(
+    return reserveFlowControlResourcesThenScheduleSecondary(
         FutureConverter.toCompletable(
             this.flowController.asyncRequestResource(
                 writeOperationInfo.requestResourcesDescription)),
@@ -184,7 +184,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             });
   }
 
-  private <T> CompletableFuture<T> reserveControlFlowResourcesThenScheduleSecondary(
+  private <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
       CompletableFuture<FlowController.ResourceReservation> reservationFuture,
       CompletableFuture<T> primaryFuture,
       Supplier<CompletableFuture<T>> secondaryFutureSupplier,
