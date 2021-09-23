@@ -30,6 +30,29 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 /**
+ * Objects of this class should write log entries somewhere.
+ *
+ * <p>Implementations should be thread-safe.
+ */
+public abstract class Appender implements AutoCloseable {
+  abstract void append(byte[] data) throws InterruptedException;
+
+  /**
+   * Create a default {@link Appender}.
+   *
+   * <p>The default implementation writes log entries to files on disk asynchronously.
+   *
+   * <p>Most of the time, appending data to this {@link Appender} should be non-blocking. Writing to
+   * disk is performed by a separate thread. Refer to {@link DefaultAppender}'s documentation for
+   * details.
+   */
+  public static Appender CreateDefault(String pathPrefix, int maxBufferSize, boolean dropOnOverflow)
+      throws IOException {
+    return new DefaultAppender(pathPrefix, maxBufferSize, dropOnOverflow);
+  }
+}
+
+/**
  * Write log entries asynchronously.
  *
  * <p>Objects of this class log arbitrary byte sequences to files.
@@ -37,7 +60,7 @@ import org.apache.commons.logging.LogFactory;
  * <p>Most of the time, appending data to this `Appender` should be non-blocking. Writing to disk is
  * performed by a separate thread, which objects of this class create.
  */
-public class Appender implements AutoCloseable {
+class DefaultAppender extends Appender {
   protected static final Log LOG = LogFactory.getLog(Appender.class);
   private final LogBuffer buffer;
   private final Writer writer;
@@ -59,7 +82,8 @@ public class Appender implements AutoCloseable {
    *     keeping up or to block until it catches up
    * @throws IOException when writing the log file fails
    */
-  public Appender(String pathPrefix, int maxBufferSize, boolean dropOnOverflow) throws IOException {
+  public DefaultAppender(String pathPrefix, int maxBufferSize, boolean dropOnOverflow)
+      throws IOException {
     // In case of an unclean shutdown the end of the log file may contain partially written log
     // entries. In order to simplify reading the log files, we assume that everything following an
     // incomplete entry is to be discarded. In order to satisfy that assumption, we should not
@@ -93,6 +117,7 @@ public class Appender implements AutoCloseable {
    * @param data the data to be appended
    * @throws InterruptedException in case the thread is interrupted
    */
+  @Override
   public void append(byte[] data) throws InterruptedException {
     if (!buffer.append(data)) {
       LOG.error("Failed mutation log overflow, discarded an entry.");
