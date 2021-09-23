@@ -48,6 +48,25 @@ public class JsonSerializer {
   }
 
   /**
+   * A caching wrapper around {@link
+   * #translateFile(org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor)}
+   *
+   * @param fileDescriptor the file descriptor of the shaded, generated protobuf message
+   * @return the translated file descriptor
+   */
+  private synchronized Descriptors.FileDescriptor translateFileCached(
+      org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor
+          fileDescriptor) {
+    Descriptors.FileDescriptor translated = translatedFileCache.get(fileDescriptor.getName());
+    if (translated != null) {
+      return translated;
+    }
+    translated = translateFile(fileDescriptor);
+    translatedFileCache.put(fileDescriptor.getName(), translated);
+    return translated;
+  }
+
+  /**
    * Translate a protobuf file descriptor from the shaded HBase message to an unshaded protobuf
    * descriptor.
    *
@@ -60,23 +79,17 @@ public class JsonSerializer {
   private synchronized Descriptors.FileDescriptor translateFile(
       org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor
           fileDescriptor) {
-    Descriptors.FileDescriptor translated = translatedFileCache.get(fileDescriptor.getName());
-    if (translated != null) {
-      return translated;
-    }
     ArrayList<Descriptors.FileDescriptor> deps = new ArrayList<>();
     for (org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.FileDescriptor sourceDep :
         fileDescriptor.getDependencies()) {
-      deps.add(translateFile(sourceDep));
+      deps.add(translateFileCached(sourceDep));
     }
     Descriptors.FileDescriptor[] depsArray = new Descriptors.FileDescriptor[deps.size()];
     depsArray = deps.toArray(depsArray);
     try {
-      translated =
-          Descriptors.FileDescriptor.buildFrom(
-              DescriptorProtos.FileDescriptorProto.parseFrom(
-                  fileDescriptor.toProto().toByteArray()),
-              depsArray);
+      return Descriptors.FileDescriptor.buildFrom(
+          DescriptorProtos.FileDescriptorProto.parseFrom(fileDescriptor.toProto().toByteArray()),
+          depsArray);
     } catch (Descriptors.DescriptorValidationException | InvalidProtocolBufferException e) {
       // This would be an exceptional situation even among exceptional situations, so let's not
       // force the user to handle it. It's unclear if and when it can happen, but if it does, the
@@ -84,8 +97,6 @@ public class JsonSerializer {
       throw new RuntimeException(
           "Failed to translate HBase proto description " + fileDescriptor.getName(), e);
     }
-    translatedFileCache.put(fileDescriptor.getName(), translated);
-    return translated;
   }
 
   /**
@@ -98,12 +109,11 @@ public class JsonSerializer {
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor descriptor =
         message.getDescriptorForType();
     String typeName = descriptor.getName();
-    Descriptors.FileDescriptor translatedFileDescriptor = translateFile(descriptor.getFile());
+    Descriptors.FileDescriptor translatedFileDescriptor = translateFileCached(descriptor.getFile());
     Descriptors.Descriptor translatedMessageDescriptor =
         translatedFileDescriptor.findMessageTypeByName(typeName);
-    DynamicMessage translatedMessage = null;
     try {
-      translatedMessage =
+      DynamicMessage translatedMessage =
           DynamicMessage.parseFrom(translatedMessageDescriptor, message.toByteArray());
       return printer.print(translatedMessage);
     } catch (InvalidProtocolBufferException e) {
@@ -128,7 +138,7 @@ public class JsonSerializer {
     org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor descriptor =
         messagePrototype.getDescriptorForType();
     String typeName = descriptor.getName();
-    Descriptors.FileDescriptor translatedFileDescriptor = translateFile(descriptor.getFile());
+    Descriptors.FileDescriptor translatedFileDescriptor = translateFileCached(descriptor.getFile());
     Descriptors.Descriptor translatedMessageDescriptor =
         translatedFileDescriptor.findMessageTypeByName(typeName);
 

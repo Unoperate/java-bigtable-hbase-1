@@ -15,9 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,7 +28,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellScanner;
-import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.Append;
+import org.apache.hadoop.hbase.client.Delete;
+import org.apache.hadoop.hbase.client.Durability;
+import org.apache.hadoop.hbase.client.Increment;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.protobuf.ProtobufUtil;
 import org.apache.hadoop.hbase.protobuf.generated.ClientProtos;
 import org.apache.hadoop.hbase.security.access.Permission;
@@ -52,7 +54,7 @@ class FakeCellScanner implements CellScanner {
 }
 
 @RunWith(JUnit4.class)
-public class SerializerTest {
+public class DefaultSerializerTest {
   private ClientProtos.MutationProto verifyAndExtractMutation(
       Date beforeTest, String expectedRowKey, String expectedMutationType, String jsonText)
       throws InvalidProtocolBufferException, JsonProcessingException {
@@ -68,12 +70,11 @@ public class SerializerTest {
     Date afterTest = new Date();
     assertTrue(beforeTest.compareTo(timestamp) <= 0);
     assertTrue(afterTest.compareTo(timestamp) >= 0);
-    assertThat(cause, equalTo("OMG!"));
-    assertThat(stackTrace, containsString(this.getClass().getName()));
-    assertThat(
-        BaseEncoding.base64().decode(rowKey),
-        equalTo(expectedRowKey.getBytes(StandardCharsets.UTF_8)));
-    assertThat(mutationType, equalTo(expectedMutationType));
+    assertThat(cause).isEqualTo("OMG!");
+    assertThat(stackTrace).contains(this.getClass().getName());
+    assertThat(BaseEncoding.base64().decode(rowKey))
+        .isEqualTo(expectedRowKey.getBytes(StandardCharsets.UTF_8));
+    assertThat(mutationType).isEqualTo(expectedMutationType);
     ClientProtos.MutationProto mutationProto = ClientProtos.MutationProto.newBuilder().build();
     return JsonSerializer.getInstance().deserialize(mutationProto, mutation);
   }
@@ -81,7 +82,7 @@ public class SerializerTest {
   @Test
   public void put() throws IOException, InterruptedException {
     Date beforeTest = new Date();
-    Serializer serializer = Serializer.CreateDefault();
+    Serializer serializer = new DefaultSerializer();
     Put put = new Put(new byte[] {'r'});
 
     for (int i = 0; i < 2; i++) {
@@ -106,13 +107,13 @@ public class SerializerTest {
         verifyAndExtractMutation(beforeTest, "r", "PUT", serialized);
     Put recreatedPut = ProtobufUtil.toPut(mutationProto, new FakeCellScanner());
 
-    assertThat(recreatedPut.toJSON(), equalTo(put.toJSON()));
+    assertThat(recreatedPut.toJSON()).isEqualTo(put.toJSON());
   }
 
   @Test
   public void delete() throws IOException, InterruptedException {
     Date beforeTest = new Date();
-    Serializer serializer = Serializer.CreateDefault();
+    Serializer serializer = new DefaultSerializer();
     Delete delete = new Delete(new byte[] {'r'});
 
     for (int i = 0; i < 2; i++) {
@@ -133,13 +134,13 @@ public class SerializerTest {
         verifyAndExtractMutation(beforeTest, "r", "DELETE", serialized);
     Delete recreateDelete = ProtobufUtil.toDelete(mutationProto, new FakeCellScanner());
 
-    assertThat(recreateDelete.toJSON(), equalTo(delete.toJSON()));
+    assertThat(recreateDelete.toJSON()).isEqualTo(delete.toJSON());
   }
 
   @Test
   public void increment() throws IOException, InterruptedException {
     Date beforeTest = new Date();
-    Serializer serializer = Serializer.CreateDefault();
+    Serializer serializer = new DefaultSerializer();
     Increment increment = new Increment(new byte[] {'r'});
 
     for (int i = 0; i < 2; i++) {
@@ -165,13 +166,13 @@ public class SerializerTest {
     // We can't compare the whole increments because of an HBase idiosyncrasy - even though
     // timestamp is not used in increments, it has different values when it's created via its
     // constructor and when it is deserialized. There is no way to change that.
-    assertThat(recreatedIncrement.getRow(), equalTo(increment.getRow()));
+    assertThat(recreatedIncrement.getRow()).isEqualTo(increment.getRow());
   }
 
   @Test
   public void append() throws IOException, InterruptedException {
     Date beforeTest = new Date();
-    Serializer serializer = Serializer.CreateDefault();
+    Serializer serializer = new DefaultSerializer();
     Append append = new Append(new byte[] {'r'});
 
     for (int i = 0; i < 2; i++) {
@@ -189,12 +190,13 @@ public class SerializerTest {
       throw new RuntimeException("OMG!");
     } catch (Throwable throwable) {
       serialized = new String(serializer.serialize(append, throwable));
+      System.out.println(serialized);
     }
 
     ClientProtos.MutationProto mutationProto =
         verifyAndExtractMutation(beforeTest, "r", "APPEND", serialized);
     Append recreatedAppend = ProtobufUtil.toAppend(mutationProto, new FakeCellScanner());
 
-    assertThat(recreatedAppend.toJSON(), equalTo(append.toJSON()));
+    assertThat(recreatedAppend.toJSON()).isEqualTo(append.toJSON());
   }
 }
