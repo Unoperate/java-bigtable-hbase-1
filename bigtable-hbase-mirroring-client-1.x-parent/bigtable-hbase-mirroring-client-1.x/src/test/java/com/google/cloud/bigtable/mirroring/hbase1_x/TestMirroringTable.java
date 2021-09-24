@@ -1121,4 +1121,27 @@ public class TestMirroringTable {
     verify(primaryTable, times(1)).batchCallback(eq(mutations), any(Object[].class), eq(callback));
     verify(secondaryTable, never()).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
   }
+
+  @Test
+  public void testFlowControllerExceptionPreventsSecondaryOperation() throws IOException {
+    SettableFuture<ResourceReservation> resourceReservationFuture = SettableFuture.create();
+    resourceReservationFuture.setException(new Exception("test"));
+
+    doReturn(resourceReservationFuture)
+        .when(flowController)
+        .asyncRequestResource(any(RequestResourcesDescription.class));
+
+    Get request = createGet("test");
+    Result expectedResult = createResult("test", "value");
+
+    when(primaryTable.get(request)).thenReturn(expectedResult);
+
+    Result result = mirroringTable.get(request);
+    executorServiceRule.waitForExecutor();
+
+    assertThat(result).isEqualTo(expectedResult);
+
+    verify(primaryTable, times(1)).get(request);
+    verify(secondaryTable, never()).get(any(Get.class));
+  }
 }
