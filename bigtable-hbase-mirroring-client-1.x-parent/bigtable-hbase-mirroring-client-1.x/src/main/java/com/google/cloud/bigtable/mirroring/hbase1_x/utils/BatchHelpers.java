@@ -30,24 +30,6 @@ public class BatchHelpers {
       final SplitBatchResponse<?> primarySplitResponse,
       final Object[] secondaryResults,
       final MismatchDetector mismatchDetector,
-      final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer) {
-    return createBatchVerificationCallback(
-        primarySplitResponse,
-        secondaryResults,
-        mismatchDetector,
-        secondaryWriteErrorConsumer,
-        new Predicate<Object>() {
-          @Override
-          public boolean apply(Object o) {
-            return o == null;
-          }
-        });
-  }
-
-  public static FutureCallback<Void> createBatchVerificationCallback(
-      final SplitBatchResponse<?> primarySplitResponse,
-      final Object[] secondaryResults,
-      final MismatchDetector mismatchDetector,
       final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer,
       final Predicate<Object> resultIsFaultyPredicate) {
     return new FutureCallback<Void>() {
@@ -191,20 +173,8 @@ public class BatchHelpers {
     public final Result[] allReadsResults;
     public final Object[] allSuccessfulResults;
 
-    public SplitBatchResponse(List<T> operations, Object[] results) {
-      this(
-          operations,
-          results,
-          new Predicate<Object>() {
-            @Override
-            public boolean apply(Object o) {
-              return o == null || o instanceof Throwable;
-            }
-          });
-    }
-
     public SplitBatchResponse(
-        List<T> operations, Object[] results, Predicate<Object> isFailedPredicate) {
+        List<T> operations, Object[] results, Predicate<Object> resultIsFaultyPredicate) {
       final List<Result> successfulReadsResults = new ArrayList<>();
       final List<Result> allReadsResults = new ArrayList<>();
       final List<Object> allSuccessfulResultsList = new ArrayList<>();
@@ -212,7 +182,7 @@ public class BatchHelpers {
       for (int i = 0; i < operations.size(); i++) {
         T operation = operations.get(i);
         boolean isRead = operation instanceof Get;
-        boolean isFailed = isFailedPredicate.apply(results[i]);
+        boolean isFailed = resultIsFaultyPredicate.apply(results[i]);
         if (isFailed) {
           if (isRead) {
             this.allReads.add((Get) operation);
