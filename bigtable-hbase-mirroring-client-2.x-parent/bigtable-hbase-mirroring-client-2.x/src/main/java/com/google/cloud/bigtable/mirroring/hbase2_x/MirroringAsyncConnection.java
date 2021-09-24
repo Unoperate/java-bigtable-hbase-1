@@ -15,14 +15,12 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowControlStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.reflection.ReflectionConstructor;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -47,6 +45,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
   private AsyncConnection secondaryConnection;
   private final MismatchDetector mismatchDetector;
   private final FlowController flowController;
+  private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
 
   /**
    * The constructor called from {@link
@@ -77,35 +76,14 @@ public class MirroringAsyncConnection implements AsyncConnection {
 
     this.flowController =
         new FlowController(
-            this.<FlowControlStrategy>construct(
+            ReflectionConstructor.<FlowControlStrategy>construct(
                 this.configuration.mirroringOptions.flowControllerStrategyClass,
                 this.configuration.mirroringOptions));
-
-    this.mismatchDetector = construct(this.configuration.mirroringOptions.mismatchDetectorClass);
-  }
-
-  private <T> T construct(String className, Object... params) {
-    List<Class<?>> constructorArgs = new ArrayList<>();
-    for (Object param : params) {
-      constructorArgs.add(param.getClass());
-    }
-    Constructor<T> constructor =
-        getConstructor(className, constructorArgs.toArray(new Class<?>[0]));
-    try {
-      return constructor.newInstance(params);
-    } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private <T> Constructor<T> getConstructor(String className, Class<?>... parameterTypes) {
-    try {
-      @SuppressWarnings("unchecked")
-      Class<T> c = (Class<T>) Class.forName(className);
-      return c.getDeclaredConstructor(parameterTypes);
-    } catch (ClassNotFoundException | ClassCastException | NoSuchMethodException e) {
-      throw new RuntimeException(e);
-    }
+    this.mismatchDetector =
+        ReflectionConstructor.construct(this.configuration.mirroringOptions.mismatchDetectorClass);
+    this.secondaryWriteErrorConsumer =
+        ReflectionConstructor.construct(
+            this.configuration.mirroringOptions.writeErrorConsumerClass);
   }
 
   @Override
@@ -120,7 +98,8 @@ public class MirroringAsyncConnection implements AsyncConnection {
         this.primaryConnection.getTable(tableName),
         this.secondaryConnection.getTable(tableName),
         this.mismatchDetector,
-        this.flowController);
+        this.flowController,
+        this.secondaryWriteErrorConsumer);
   }
 
   @Override

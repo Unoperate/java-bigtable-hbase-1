@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -50,16 +51,19 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private final AsyncTable<C> secondaryTable;
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final FlowController flowController;
+  private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
 
   public MirroringAsyncTable(
       AsyncTable<C> primaryTable,
       AsyncTable<C> secondaryTable,
       MismatchDetector mismatchDetector,
-      FlowController flowController) {
+      FlowController flowController,
+      SecondaryWriteErrorConsumer secondaryWriteErrorConsumer) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
     this.verificationContinuationFactory = new VerificationContinuationFactory(mismatchDetector);
     this.flowController = flowController;
+    this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
   }
 
   @Override
@@ -178,7 +182,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
               @Override
               public void onFailure(Throwable throwable) {
-                handleFailedOperations(writeOperationInfo.operations);
+                secondaryWriteErrorConsumer.consume(writeOperationInfo.operations);
               }
             });
   }
@@ -225,10 +229,6 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             reservation.release();
           }
         });
-  }
-
-  public void handleFailedOperations(List<? extends Row> operations) {
-    // TODO(aczajkowski): call write error handler.
   }
 
   @Override

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -68,6 +69,7 @@ public class TestMirroringAsyncTable {
   @Mock AsyncTable secondaryTable;
   @Mock MismatchDetector mismatchDetector;
   @Mock FlowController flowController;
+  @Mock SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
 
@@ -76,7 +78,11 @@ public class TestMirroringAsyncTable {
     this.mirroringTable =
         spy(
             new MirroringAsyncTable<ScanResultConsumerBase>(
-                primaryTable, secondaryTable, mismatchDetector, flowController));
+                primaryTable,
+                secondaryTable,
+                mismatchDetector,
+                flowController,
+                secondaryWriteErrorConsumer));
   }
 
   private void mockFlowController() {
@@ -267,7 +273,7 @@ public class TestMirroringAsyncTable {
     verify(secondaryTable, times(1)).put(put);
 
     ArgumentCaptor<List<Row>> argument = ArgumentCaptor.forClass(List.class);
-    verify(mirroringTable, times(1)).handleFailedOperations(argument.capture());
+    verify(secondaryWriteErrorConsumer, times(1)).consume(argument.capture());
     assertThat(argument.getValue().size()).isEqualTo(1);
     assertThat(argument.getValue().get(0)).isEqualTo(put);
   }
