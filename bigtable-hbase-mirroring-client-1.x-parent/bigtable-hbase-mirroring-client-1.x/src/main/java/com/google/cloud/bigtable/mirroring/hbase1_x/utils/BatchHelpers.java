@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,25 @@ public class BatchHelpers {
       final Object[] secondaryResults,
       final MismatchDetector mismatchDetector,
       final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer) {
+    return createBatchVerificationCallback(
+        primarySplitResponse,
+        secondaryResults,
+        mismatchDetector,
+        secondaryWriteErrorConsumer,
+        new Predicate<Object>() {
+          @Override
+          public boolean apply(Object o) {
+            return o == null;
+          }
+        });
+  }
+
+  public static FutureCallback<Void> createBatchVerificationCallback(
+      final SplitBatchResponse<?> primarySplitResponse,
+      final Object[] secondaryResults,
+      final MismatchDetector mismatchDetector,
+      final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer,
+      final Predicate<Object> resultIsFaultyPredicate) {
     return new FutureCallback<Void>() {
       @Override
       public void onSuccess(@NullableDecl Void t) {
@@ -37,7 +57,8 @@ public class BatchHelpers {
         List<? extends Row> secondaryOperations = primarySplitResponse.allSuccessfulOperations;
 
         final SplitBatchResponse<?> secondarySplitResponse =
-            new SplitBatchResponse<>(secondaryOperations, secondaryResults);
+            new SplitBatchResponse<>(
+                secondaryOperations, secondaryResults, resultIsFaultyPredicate);
 
         if (secondarySplitResponse.successfulReads.size() > 0) {
           mismatchDetector.batch(
@@ -53,7 +74,8 @@ public class BatchHelpers {
         List<? extends Row> secondaryOperations = primarySplitResponse.allSuccessfulOperations;
 
         final SplitBatchResponse<?> secondarySplitResponse =
-            new SplitBatchResponse<>(secondaryOperations, secondaryResults);
+            new SplitBatchResponse<>(
+                secondaryOperations, secondaryResults, resultIsFaultyPredicate);
 
         if (secondarySplitResponse.failedWrites.size() > 0) {
           secondaryWriteErrorConsumer.consume(secondarySplitResponse.failedWrites);
@@ -69,12 +91,17 @@ public class BatchHelpers {
           // We also gather failed gets to pass them to `batchGetFailure`.
           MatchingSuccessfulReadsResults matchingSuccessfulReads =
               selectMatchingSuccessfulReads(
-                  secondaryOperations, primarySplitResponse.allSuccessfulResults, secondaryResults);
+                  secondaryOperations,
+                  primarySplitResponse.allSuccessfulResults,
+                  secondaryResults,
+                  resultIsFaultyPredicate);
 
-          mismatchDetector.batch(
-              secondarySplitResponse.successfulReads,
-              matchingSuccessfulReads.primaryResults,
-              matchingSuccessfulReads.secondaryResults);
+          if (!matchingSuccessfulReads.successfulReads.isEmpty()) {
+            mismatchDetector.batch(
+                secondarySplitResponse.successfulReads,
+                matchingSuccessfulReads.primaryResults,
+                matchingSuccessfulReads.secondaryResults);
+          }
 
           if (!matchingSuccessfulReads.failedReads.isEmpty()) {
             mismatchDetector.batch(matchingSuccessfulReads.failedReads, throwable);
@@ -115,7 +142,10 @@ public class BatchHelpers {
    * case the Get operation is placed on failed operations list.
    */
   private static MatchingSuccessfulReadsResults selectMatchingSuccessfulReads(
-      List<? extends Row> operations, Object[] primaryResults, Object[] secondaryResults) {
+      List<? extends Row> operations,
+      Object[] primaryResults,
+      Object[] secondaryResults,
+      Predicate<Object> resultIsFaultyPredicate) {
     assert operations.size() == secondaryResults.length;
     assert primaryResults.length == secondaryResults.length;
 
@@ -130,8 +160,8 @@ public class BatchHelpers {
         continue;
       }
 
-      // We are sure casts are correct, and non-null results to Gets are always Results.
-      if (secondaryResults[i] == null) {
+      // We are sure casts are correct, and non-failed results to Gets are always Results.
+      if (resultIsFaultyPredicate.apply(secondaryResults[i])) {
         failedReads.add((Get) operations.get(i));
       } else {
         primaryMatchingReads.add((Result) primaryResults[i]);
@@ -162,6 +192,19 @@ public class BatchHelpers {
     public final Object[] allSuccessfulResults;
 
     public SplitBatchResponse(List<T> operations, Object[] results) {
+      this(
+          operations,
+          results,
+          new Predicate<Object>() {
+            @Override
+            public boolean apply(Object o) {
+              return o == null || o instanceof Throwable;
+            }
+          });
+    }
+
+    public SplitBatchResponse(
+        List<T> operations, Object[] results, Predicate<Object> isFailedPredicate) {
       final List<Result> successfulReadsResults = new ArrayList<>();
       final List<Result> allReadsResults = new ArrayList<>();
       final List<Object> allSuccessfulResultsList = new ArrayList<>();
@@ -169,7 +212,7 @@ public class BatchHelpers {
       for (int i = 0; i < operations.size(); i++) {
         T operation = operations.get(i);
         boolean isRead = operation instanceof Get;
-        boolean isFailed = results[i] == null || results[i] instanceof Throwable;
+        boolean isFailed = isFailedPredicate.apply(results[i]);
         if (isFailed) {
           if (isRead) {
             this.allReads.add((Get) operation);
