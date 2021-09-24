@@ -46,7 +46,7 @@ public class FlowController {
 
   public static void cancelRequest(Future<ResourceReservation> resourceReservationFuture) {
     // The cancellation may fail - then the resources have already been allocated by FlowController.
-    // Then we must release them - the user wouldn't be able to do it on his own.
+    // Then we must release them - the user wouldn't be able to do it on their own.
     if (!resourceReservationFuture.cancel(true)) {
       try {
         resourceReservationFuture.get().release();
