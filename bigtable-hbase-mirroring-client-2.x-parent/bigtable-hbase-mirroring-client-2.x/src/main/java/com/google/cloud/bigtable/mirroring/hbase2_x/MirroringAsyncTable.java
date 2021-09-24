@@ -25,6 +25,7 @@ import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverte
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -187,7 +188,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             });
   }
 
-  private <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
+  <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
       CompletableFuture<FlowController.ResourceReservation> reservationFuture,
       CompletableFuture<T> primaryFuture,
       Supplier<CompletableFuture<T>> secondaryFutureSupplier,
@@ -205,8 +206,15 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             })
         .exceptionally(
             t -> {
+              // We assume that reservationFuture never returns an exceptional future
               FlowController.cancelRequest(reservationFuture);
-              resultFuture.completeExceptionally(t);
+              if (t instanceof CompletionException) {
+                resultFuture.completeExceptionally(t.getCause());
+              } else {
+                // An exception in something other than primaryFuture
+                assert false;
+                resultFuture.completeExceptionally(t);
+              }
               return null;
             });
     return resultFuture;
