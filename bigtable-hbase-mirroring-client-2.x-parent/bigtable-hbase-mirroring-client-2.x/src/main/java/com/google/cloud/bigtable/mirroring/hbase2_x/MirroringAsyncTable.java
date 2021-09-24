@@ -204,7 +204,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             })
         .exceptionally(
             t -> {
-              // We assume that reservationFuture never returns an exceptional future
+              // We assume that reservationFuture never is an exceptional future
               FlowController.cancelRequest(reservationFuture);
               if (t instanceof CompletionException) {
                 resultFuture.completeExceptionally(t.getCause());
