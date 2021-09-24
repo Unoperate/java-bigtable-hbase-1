@@ -139,11 +139,11 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       final Function<T, FutureCallback<T>> verificationCallbackCreator) {
     CompletableFuture<T> resultFuture = new CompletableFuture<T>();
 
-    primaryFuture.handle(
+    primaryFuture.whenComplete(
         (primaryResult, primaryError) -> {
           if (primaryError != null) {
             resultFuture.completeExceptionally(primaryError);
-            return null;
+            return;
           }
           RequestResourcesDescription resourcesDescription =
               resourcesDescriptionCreator.apply(primaryResult);
@@ -155,12 +155,10 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                   primaryFuture,
                   secondaryFutureSupplier,
                   verificationCallbackCreator)
-              .handle(
+              .whenComplete(
                   (ignoredResult, ignoredError) -> {
                     resultFuture.complete(primaryResult);
-                    return null;
                   });
-          return null;
         });
 
     return resultFuture;
@@ -224,7 +222,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       FlowController.ResourceReservation reservation,
       CompletableFuture<T> secondaryFuture,
       FutureCallback<T> verificationCallback) {
-    secondaryFuture.handle(
+    secondaryFuture.whenComplete(
         (secondaryResult, secondaryError) -> {
           try {
             if (secondaryError != null) {
@@ -232,7 +230,6 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             } else {
               verificationCallback.onSuccess(secondaryResult);
             }
-            return null;
           } finally {
             reservation.release();
           }
