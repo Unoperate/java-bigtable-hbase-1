@@ -27,6 +27,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
+import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -76,6 +77,13 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 @InternalApi("For internal usage only")
 public class MirroringTable implements Table, ListenableCloseable {
   private static final Logger Log = new Logger(MirroringTable.class);
+  private static final Predicate<Object> resultIsFaultyPredicate =
+      new Predicate<Object>() {
+        @Override
+        public boolean apply(@NullableDecl Object o) {
+          return o == null || o instanceof Throwable;
+        }
+      };
 
   Table primaryTable;
   Table secondaryTable;
@@ -364,7 +372,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       throw e2;
     } finally {
       final BatchHelpers.SplitBatchResponse<Delete> splitResponse =
-          new BatchHelpers.SplitBatchResponse<>(deletes, results);
+          new BatchHelpers.SplitBatchResponse<>(deletes, results, resultIsFaultyPredicate);
 
       deletes.clear();
       deletes.addAll(splitResponse.failedWrites);
@@ -601,7 +609,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       final List<? extends Row> operations, final Object[] results) {
 
     final BatchHelpers.SplitBatchResponse<?> primarySplitResponse =
-        new BatchHelpers.SplitBatchResponse<>(operations, results);
+        new BatchHelpers.SplitBatchResponse<>(operations, results, resultIsFaultyPredicate);
 
     if (primarySplitResponse.allSuccessfulOperations.size() == 0) {
       return;
@@ -615,7 +623,8 @@ public class MirroringTable implements Table, ListenableCloseable {
             primarySplitResponse,
             resultsSecondary,
             verificationContinuationFactory.getMismatchDetector(),
-            this.secondaryWriteErrorConsumer);
+            this.secondaryWriteErrorConsumer,
+            resultIsFaultyPredicate);
 
     RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
         new MirroringTable.WriteOperationInfo(primarySplitResponse).requestResourcesDescription,
