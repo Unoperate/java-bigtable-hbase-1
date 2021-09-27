@@ -16,6 +16,8 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -23,28 +25,38 @@ import java.util.function.Supplier;
 
 public class AsyncRequestScheduling {
   public static <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
-      final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
       final CompletableFuture<T> primaryFuture,
+      final RequestResourcesDescription requestResourcesDescription,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      final Function<T, FutureCallback<T>> verificationCreator) {
+      final Function<T, FutureCallback<T>> verificationCreator,
+      final FlowController flowController) {
     return reserveFlowControlResourcesThenScheduleSecondary(
-        reservationFuture, primaryFuture, secondaryFutureSupplier, verificationCreator, () -> {});
+        primaryFuture,
+        requestResourcesDescription,
+        secondaryFutureSupplier,
+        verificationCreator,
+        flowController,
+        () -> {});
   }
 
   public static <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
-      final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
       final CompletableFuture<T> primaryFuture,
+      final RequestResourcesDescription requestResourcesDescription,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
       final Function<T, FutureCallback<T>> verificationCreator,
+      final FlowController flowController,
       final Runnable flowControlReservationErrorHandler) {
     CompletableFuture<T> resultFuture = new CompletableFuture<T>();
     primaryFuture.whenComplete(
         (primaryResult, primaryError) -> {
           if (primaryError != null) {
-            FlowController.cancelRequest(reservationFuture);
             resultFuture.completeExceptionally(primaryError);
             return;
           }
+          CompletableFuture<FlowController.ResourceReservation> reservationFuture =
+              FutureConverter.toCompletable(
+                  flowController.asyncRequestResource(requestResourcesDescription));
+
           reservationFuture.whenComplete(
               (reservation, reservationError) -> {
                 resultFuture.complete(primaryResult);

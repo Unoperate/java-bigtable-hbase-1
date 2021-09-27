@@ -23,7 +23,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
-import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -151,16 +150,12 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             resultFuture.completeExceptionally(primaryError);
             return;
           }
-          RequestResourcesDescription resourcesDescription =
-              resourcesDescriptionCreator.apply(primaryResult);
-          CompletableFuture<FlowController.ResourceReservation> resourceReservationFuture =
-              FutureConverter.toCompletable(
-                  this.flowController.asyncRequestResource(resourcesDescription));
           reserveFlowControlResourcesThenScheduleSecondary(
-                  resourceReservationFuture,
                   primaryFuture,
+                  resourcesDescriptionCreator.apply(primaryResult),
                   secondaryFutureSupplier,
-                  verificationCallbackCreator)
+                  verificationCallbackCreator,
+                  this.flowController)
               .whenComplete(
                   (ignoredResult, ignoredError) -> {
                     resultFuture.complete(primaryResult);
@@ -176,10 +171,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
       final Runnable controlFlowReservationErrorHandler) {
     return reserveFlowControlResourcesThenScheduleSecondary(
-        FutureConverter.toCompletable(
-            this.flowController.asyncRequestResource(
-                writeOperationInfo.requestResourcesDescription)),
         primaryFuture,
+        writeOperationInfo.requestResourcesDescription,
         secondaryFutureSupplier,
         (ignoredSecondaryResult) ->
             new FutureCallback<T>() {
@@ -191,7 +184,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 secondaryWriteErrorConsumer.consume(writeOperationInfo.operations);
               }
             },
-        () -> controlFlowReservationErrorHandler.run());
+        this.flowController,
+        controlFlowReservationErrorHandler);
   }
 
   @Override
