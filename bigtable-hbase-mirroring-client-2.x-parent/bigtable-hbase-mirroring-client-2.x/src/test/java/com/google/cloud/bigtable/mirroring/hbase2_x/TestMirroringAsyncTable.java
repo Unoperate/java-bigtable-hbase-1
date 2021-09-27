@@ -30,15 +30,12 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.primitives.Longs;
-import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.KeyValue;
@@ -365,63 +362,5 @@ public class TestMirroringAsyncTable {
     mirroringTable.append(append).get();
 
     verify(secondaryTable, times(1)).append(append);
-  }
-
-  @Test
-  public void testErrorHandlingInScheduler() throws ExecutionException, InterruptedException {
-    CompletableFuture<Void> exceptionalFuture = new CompletableFuture<>();
-    IOException ioe = new IOException("expected");
-    exceptionalFuture.completeExceptionally(ioe);
-
-    FlowController.ResourceReservation resourceReservation =
-        spy(
-            new FlowController.ResourceReservation() {
-              @Override
-              public void release() {}
-            });
-    CompletableFuture<FlowController.ResourceReservation> resourceReservationFuture =
-        CompletableFuture.completedFuture(resourceReservation);
-
-    Supplier<CompletableFuture<Void>> secondaryFutureSupplier =
-        spy(
-            new Supplier<CompletableFuture<Void>>() {
-              @Override
-              public CompletableFuture<Void> get() {
-                return null;
-              }
-            });
-    Function<Void, FutureCallback<Void>> verificationCreator =
-        spy(
-            new Function<Void, FutureCallback<Void>>() {
-              @Override
-              public FutureCallback<Void> apply(Void unused) {
-                return null;
-              }
-            });
-
-    CompletableFuture<Void> resultFuture =
-        mirroringTable.reserveFlowControlResourcesThenScheduleSecondary(
-            resourceReservationFuture,
-            exceptionalFuture,
-            secondaryFutureSupplier,
-            verificationCreator);
-
-    final List<Throwable> resultFutureThrowableList = new ArrayList<>();
-    resultFuture
-        .exceptionally(
-            t -> {
-              resultFutureThrowableList.add(t);
-              return null;
-            })
-        .get();
-
-    assertThat(resultFutureThrowableList.size()).isEqualTo(1);
-    assertThat(resultFutureThrowableList.get(0)).isEqualTo(ioe);
-
-    verify(resourceReservation, times(1)).release();
-    verify(verificationCreator, never()).apply((Void) any());
-    verify(secondaryFutureSupplier, never()).get();
-
-    assertThat(resourceReservationFuture.isCancelled());
   }
 }

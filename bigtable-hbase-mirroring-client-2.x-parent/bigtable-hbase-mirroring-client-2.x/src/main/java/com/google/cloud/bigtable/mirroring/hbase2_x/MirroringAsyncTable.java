@@ -15,6 +15,8 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import static com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.reserveFlowControlResourcesThenScheduleSecondary;
+
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -26,7 +28,6 @@ import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.hadoop.conf.Configuration;
@@ -184,55 +185,6 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 secondaryWriteErrorConsumer.consume(writeOperationInfo.operations);
               }
             });
-  }
-
-  <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
-      final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
-      final CompletableFuture<T> primaryFuture,
-      final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      final Function<T, FutureCallback<T>> verificationCreator) {
-    CompletableFuture<T> resultFuture = new CompletableFuture<T>();
-    primaryFuture.whenComplete(
-        (primaryResult, primaryError) -> {
-          if (primaryError != null) {
-            FlowController.cancelRequest(reservationFuture);
-            resultFuture.completeExceptionally(primaryError);
-            return;
-          }
-
-          reservationFuture.whenComplete(
-              (reservation, reservationError) -> {
-                if (reservationError != null) {
-                  verificationCreator.apply(primaryResult).onFailure(reservationError);
-                  return;
-                }
-
-                resultFuture.complete(primaryResult);
-                sendSecondaryRequestAndVerify(
-                    reservation,
-                    secondaryFutureSupplier.get(),
-                    verificationCreator.apply(primaryResult));
-              });
-        });
-    return resultFuture;
-  }
-
-  private <T> void sendSecondaryRequestAndVerify(
-      final FlowController.ResourceReservation reservation,
-      final CompletableFuture<T> secondaryFuture,
-      final FutureCallback<T> verificationCallback) {
-    secondaryFuture.whenComplete(
-        (secondaryResult, secondaryError) -> {
-          try {
-            if (secondaryError != null) {
-              verificationCallback.onFailure(secondaryError);
-            } else {
-              verificationCallback.onSuccess(secondaryResult);
-            }
-          } finally {
-            reservation.release();
-          }
-        });
   }
 
   @Override
