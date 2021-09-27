@@ -16,8 +16,8 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -220,12 +220,7 @@ public class TestFlowController {
 
   @Test
   public void testCancellingGrantedReservationFuture() {
-    ResourceReservation reservation =
-        spy(
-            new ResourceReservation() {
-              @Override
-              public void release() {}
-            });
+    ResourceReservation reservation = mock(ResourceReservation.class);
     SettableFuture<ResourceReservation> grantedFuture = SettableFuture.create();
     grantedFuture.set(reservation);
 
@@ -235,12 +230,7 @@ public class TestFlowController {
 
   @Test
   public void testCancellingPendingReservationFuture() {
-    ResourceReservation reservation =
-        spy(
-            new ResourceReservation() {
-              @Override
-              public void release() {}
-            });
+    ResourceReservation reservation = mock(ResourceReservation.class);
     SettableFuture<ResourceReservation> grantedFuture = SettableFuture.create();
 
     FlowController.cancelRequest(grantedFuture);
