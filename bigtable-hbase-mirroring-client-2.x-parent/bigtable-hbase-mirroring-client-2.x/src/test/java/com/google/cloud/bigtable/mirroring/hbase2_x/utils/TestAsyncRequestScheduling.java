@@ -18,8 +18,8 @@ package com.google.cloud.bigtable.mirroring.hbase2_x.utils;
 import static com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.reserveFlowControlResourcesThenScheduleSecondary;
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -42,37 +42,21 @@ public class TestAsyncRequestScheduling {
     exceptionalFuture.completeExceptionally(ioe);
 
     FlowController.ResourceReservation resourceReservation =
-        spy(
-            new FlowController.ResourceReservation() {
-              @Override
-              public void release() {}
-            });
+        mock(FlowController.ResourceReservation.class);
     CompletableFuture<FlowController.ResourceReservation> resourceReservationFuture =
         CompletableFuture.completedFuture(resourceReservation);
 
-    Supplier<CompletableFuture<Void>> secondaryFutureSupplier =
-        spy(
-            new Supplier<CompletableFuture<Void>>() {
-              @Override
-              public CompletableFuture<Void> get() {
-                return null;
-              }
-            });
-    Function<Void, FutureCallback<Void>> verificationCreator =
-        spy(
-            new Function<Void, FutureCallback<Void>>() {
-              @Override
-              public FutureCallback<Void> apply(Void unused) {
-                return null;
-              }
-            });
+    Supplier<CompletableFuture<Void>> secondaryFutureSupplier = mock(Supplier.class);
+    Function<Void, FutureCallback<Void>> verificationCreator = mock(Function.class);
+    Runnable flowControlReservationErrorHandler = mock(Runnable.class);
 
     CompletableFuture<Void> resultFuture =
         reserveFlowControlResourcesThenScheduleSecondary(
             resourceReservationFuture,
             exceptionalFuture,
             secondaryFutureSupplier,
-            verificationCreator);
+            verificationCreator,
+            flowControlReservationErrorHandler);
 
     final List<Throwable> resultFutureThrowableList = new ArrayList<>();
     resultFuture
@@ -89,6 +73,7 @@ public class TestAsyncRequestScheduling {
     verify(resourceReservation, times(1)).release();
     verify(verificationCreator, never()).apply((Void) any());
     verify(secondaryFutureSupplier, never()).get();
+    verify(flowControlReservationErrorHandler, never()).run();
 
     assertThat(resourceReservationFuture.isCancelled());
   }
@@ -101,37 +86,22 @@ public class TestAsyncRequestScheduling {
     IOException ioe = new IOException("expected");
     exceptionalFuture.completeExceptionally(ioe);
 
-    Supplier<CompletableFuture<Void>> secondaryFutureSupplier =
-        spy(
-            new Supplier<CompletableFuture<Void>>() {
-              @Override
-              public CompletableFuture<Void> get() {
-                return null;
-              }
-            });
-    Function<Void, FutureCallback<Void>> verificationCreator =
-        spy(
-            new Function<Void, FutureCallback<Void>>() {
-              @Override
-              public FutureCallback<Void> apply(Void unused) {
-                return null;
-              }
-            });
+    Supplier<CompletableFuture<Void>> secondaryFutureSupplier = mock(Supplier.class);
+    Function<Void, FutureCallback<Void>> verificationCreator = mock(Function.class);
+    Runnable flowControlReservationErrorHandler = mock(Runnable.class);
 
-    final List<Throwable> resultFutureThrowableList = new ArrayList<>();
     CompletableFuture<Void> resultFuture =
         reserveFlowControlResourcesThenScheduleSecondary(
             exceptionalFuture,
             primaryFuture,
             secondaryFutureSupplier,
             verificationCreator,
-            (t) -> resultFutureThrowableList.add(t));
+            flowControlReservationErrorHandler::run);
 
     Void result = resultFuture.get();
-    assertThat(resultFutureThrowableList.size()).isEqualTo(1);
-    assertThat(resultFutureThrowableList.get(0)).isEqualTo(ioe);
 
     verify(verificationCreator, never()).apply((Void) any());
     verify(secondaryFutureSupplier, never()).get();
+    verify(flowControlReservationErrorHandler, times(1)).run();
   }
 }
