@@ -25,8 +25,8 @@ import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverte
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.hadoop.conf.Configuration;
@@ -187,41 +187,40 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   }
 
   <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
-      CompletableFuture<FlowController.ResourceReservation> reservationFuture,
-      CompletableFuture<T> primaryFuture,
-      Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      Function<T, FutureCallback<T>> verificationCreator) {
+      final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
+      final CompletableFuture<T> primaryFuture,
+      final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
+      final Function<T, FutureCallback<T>> verificationCreator) {
     CompletableFuture<T> resultFuture = new CompletableFuture<T>();
-    primaryFuture
-        .thenAcceptBoth(
-            reservationFuture,
-            (primaryResult, reservation) -> {
-              resultFuture.complete(primaryResult);
-              sendSecondaryRequestAndVerify(
-                  reservation,
-                  secondaryFutureSupplier.get(),
-                  verificationCreator.apply(primaryResult));
-            })
-        .exceptionally(
-            t -> {
-              // We assume that reservationFuture never is an exceptional future
-              FlowController.cancelRequest(reservationFuture);
-              if (t instanceof CompletionException) {
-                resultFuture.completeExceptionally(t.getCause());
-              } else {
-                // An exception in something other than primaryFuture
-                assert false;
-                resultFuture.completeExceptionally(t);
-              }
-              return null;
-            });
+    primaryFuture.whenComplete(
+        (primaryResult, primaryError) -> {
+          if (primaryError != null) {
+            FlowController.cancelRequest(reservationFuture);
+            resultFuture.completeExceptionally(primaryError);
+            return;
+          }
+
+          reservationFuture.whenComplete(
+              (reservation, reservationError) -> {
+                if (reservationError != null) {
+                  verificationCreator.apply(primaryResult).onFailure(reservationError);
+                  return;
+                }
+
+                resultFuture.complete(primaryResult);
+                sendSecondaryRequestAndVerify(
+                    reservation,
+                    secondaryFutureSupplier.get(),
+                    verificationCreator.apply(primaryResult));
+              });
+        });
     return resultFuture;
   }
 
   private <T> void sendSecondaryRequestAndVerify(
-      FlowController.ResourceReservation reservation,
-      CompletableFuture<T> secondaryFuture,
-      FutureCallback<T> verificationCallback) {
+      final FlowController.ResourceReservation reservation,
+      final CompletableFuture<T> secondaryFuture,
+      final FutureCallback<T> verificationCallback) {
     secondaryFuture.whenComplete(
         (secondaryResult, secondaryError) -> {
           try {
