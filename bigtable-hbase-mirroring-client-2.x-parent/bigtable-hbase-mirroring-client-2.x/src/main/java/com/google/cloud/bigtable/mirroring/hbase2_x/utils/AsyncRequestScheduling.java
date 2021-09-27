@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.hbase2_x.utils;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -29,11 +28,7 @@ public class AsyncRequestScheduling {
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
       final Function<T, FutureCallback<T>> verificationCreator) {
     return reserveFlowControlResourcesThenScheduleSecondary(
-        reservationFuture,
-        primaryFuture,
-        secondaryFutureSupplier,
-        verificationCreator,
-        (throwable) -> {});
+        reservationFuture, primaryFuture, secondaryFutureSupplier, verificationCreator, () -> {});
   }
 
   public static <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
@@ -41,7 +36,7 @@ public class AsyncRequestScheduling {
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
       final Function<T, FutureCallback<T>> verificationCreator,
-      final Consumer<Throwable> flowControlReservationErrorConsumer) {
+      final Runnable flowControlReservationErrorHandler) {
     CompletableFuture<T> resultFuture = new CompletableFuture<T>();
     primaryFuture.whenComplete(
         (primaryResult, primaryError) -> {
@@ -54,7 +49,7 @@ public class AsyncRequestScheduling {
               (reservation, reservationError) -> {
                 resultFuture.complete(primaryResult);
                 if (reservationError != null) {
-                  flowControlReservationErrorConsumer.accept(reservationError);
+                  flowControlReservationErrorHandler.run();
                   return;
                 }
 

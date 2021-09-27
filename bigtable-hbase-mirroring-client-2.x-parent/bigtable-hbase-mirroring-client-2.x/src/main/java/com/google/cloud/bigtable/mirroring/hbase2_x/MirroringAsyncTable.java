@@ -28,7 +28,6 @@ import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.hadoop.conf.Configuration;
@@ -96,7 +95,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(put),
         primaryFuture,
         () -> this.secondaryTable.put(put),
-        throwable -> this.secondaryWriteErrorConsumer.consume(put));
+        () -> this.secondaryWriteErrorConsumer.consume(put));
   }
 
   @Override
@@ -106,7 +105,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(delete),
         primaryFuture,
         () -> this.secondaryTable.delete(delete),
-        throwable -> this.secondaryWriteErrorConsumer.consume(delete));
+        () -> this.secondaryWriteErrorConsumer.consume(delete));
   }
 
   @Override
@@ -116,7 +115,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(append),
         primaryFuture,
         () -> this.secondaryTable.append(append),
-        throwable -> this.secondaryWriteErrorConsumer.consume(append));
+        () -> this.secondaryWriteErrorConsumer.consume(append));
   }
 
   @Override
@@ -126,7 +125,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(increment),
         primaryFuture,
         () -> this.secondaryTable.increment(increment),
-        throwable -> this.secondaryWriteErrorConsumer.consume(increment));
+        () -> this.secondaryWriteErrorConsumer.consume(increment));
   }
 
   @Override
@@ -136,7 +135,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(rowMutations),
         primaryFuture,
         () -> this.secondaryTable.mutateRow(rowMutations),
-        throwable -> this.secondaryWriteErrorConsumer.consume(rowMutations));
+        () -> this.secondaryWriteErrorConsumer.consume(rowMutations));
   }
 
   private <T> CompletableFuture<T> readWithVerificationAndFlowControl(
@@ -175,7 +174,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       final MirroringTable.WriteOperationInfo writeOperationInfo,
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      final Consumer<Throwable> controlFlowReservationErrorConsumer) {
+      final Runnable controlFlowReservationErrorHandler) {
     return reserveFlowControlResourcesThenScheduleSecondary(
         FutureConverter.toCompletable(
             this.flowController.asyncRequestResource(
@@ -192,7 +191,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 secondaryWriteErrorConsumer.consume(writeOperationInfo.operations);
               }
             },
-        (throwable) -> controlFlowReservationErrorConsumer.accept(throwable));
+        () -> controlFlowReservationErrorHandler.run());
   }
 
   @Override
