@@ -73,7 +73,15 @@ public class RequestScheduling {
           },
           MoreExecutors.directExecutor());
     } catch (InterruptedException e) {
-      FlowController.cancelRequest(reservationRequest);
+      if (!reservationRequest.cancel(true)) {
+        try {
+          reservationRequest.get().release();
+        } catch (InterruptedException | ExecutionException ex) {
+          // If we couldn't cancel the request, it must have already been set, we assume that we
+          // will get the reservation without problems
+          assert false;
+        }
+      }
       verificationCompletedFuture.set(null);
       Thread.currentThread().interrupt();
     } catch (ExecutionException e) {
