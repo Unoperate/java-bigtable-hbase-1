@@ -65,7 +65,7 @@ public class AsyncRequestScheduling {
                   return;
                 }
 
-                sendSecondaryRequestAndVerify(
+                scheduleVerificationAfterSecondaryOperation(
                     reservation,
                     secondaryFutureSupplier.get(),
                     verificationCreator.apply(primaryResult));
@@ -74,7 +74,7 @@ public class AsyncRequestScheduling {
     return resultFuture;
   }
 
-  private static <T> void sendSecondaryRequestAndVerify(
+  private static <T> void scheduleVerificationAfterSecondaryOperation(
       final FlowController.ResourceReservation reservation,
       final CompletableFuture<T> secondaryFuture,
       final FutureCallback<T> verificationCallback) {
