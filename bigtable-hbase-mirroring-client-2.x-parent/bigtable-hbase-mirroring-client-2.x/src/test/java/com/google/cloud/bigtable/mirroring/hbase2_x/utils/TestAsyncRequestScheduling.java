@@ -36,7 +36,7 @@ import org.junit.Test;
 
 public class TestAsyncRequestScheduling {
   @Test
-  public void testErrorHandlingInScheduler() throws ExecutionException, InterruptedException {
+  public void testExceptionalPrimaryFuture() throws ExecutionException, InterruptedException {
     CompletableFuture<Void> exceptionalFuture = new CompletableFuture<>();
     IOException ioe = new IOException("expected");
     exceptionalFuture.completeExceptionally(ioe);
@@ -91,5 +91,47 @@ public class TestAsyncRequestScheduling {
     verify(secondaryFutureSupplier, never()).get();
 
     assertThat(resourceReservationFuture.isCancelled());
+  }
+
+  @Test
+  public void testExceptionalReservationFuture() throws ExecutionException, InterruptedException {
+    CompletableFuture<Void> primaryFuture = CompletableFuture.completedFuture(null);
+    CompletableFuture<FlowController.ResourceReservation> exceptionalFuture =
+        new CompletableFuture<>();
+    IOException ioe = new IOException("expected");
+    exceptionalFuture.completeExceptionally(ioe);
+
+    Supplier<CompletableFuture<Void>> secondaryFutureSupplier =
+        spy(
+            new Supplier<CompletableFuture<Void>>() {
+              @Override
+              public CompletableFuture<Void> get() {
+                return null;
+              }
+            });
+    Function<Void, FutureCallback<Void>> verificationCreator =
+        spy(
+            new Function<Void, FutureCallback<Void>>() {
+              @Override
+              public FutureCallback<Void> apply(Void unused) {
+                return null;
+              }
+            });
+
+    final List<Throwable> resultFutureThrowableList = new ArrayList<>();
+    CompletableFuture<Void> resultFuture =
+        reserveFlowControlResourcesThenScheduleSecondary(
+            exceptionalFuture,
+            primaryFuture,
+            secondaryFutureSupplier,
+            verificationCreator,
+            (t) -> resultFutureThrowableList.add(t));
+
+    Void result = resultFuture.get();
+    assertThat(resultFutureThrowableList.size()).isEqualTo(1);
+    assertThat(resultFutureThrowableList.get(0)).isEqualTo(ioe);
+
+    verify(verificationCreator, never()).apply((Void) any());
+    verify(secondaryFutureSupplier, never()).get();
   }
 }
