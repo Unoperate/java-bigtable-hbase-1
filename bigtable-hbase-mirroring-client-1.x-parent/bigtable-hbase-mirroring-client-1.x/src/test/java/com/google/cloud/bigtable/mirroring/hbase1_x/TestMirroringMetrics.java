@@ -46,6 +46,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanFactory;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.AlwaysReadSamplingStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.DefaultMismatchDetector;
 import com.google.common.util.concurrent.SettableFuture;
 import io.opencensus.trace.Tracing;
@@ -105,7 +106,8 @@ public class TestMirroringMetrics {
                 flowController,
                 new SecondaryWriteErrorConsumerWithMetrics(
                     tracer, mock(SecondaryWriteErrorConsumer.class)),
-                tracer));
+                tracer,
+                new AlwaysReadSamplingStrategy()));
   }
 
   private void mockFlowController() {

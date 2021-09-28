@@ -15,6 +15,9 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.Helpers.createGet;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.Helpers.createGets;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.Helpers.createResult;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
@@ -39,6 +42,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.AlwaysReadSamplingStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
@@ -110,7 +114,8 @@ public class TestMirroringTable {
                 mismatchDetector,
                 flowController,
                 secondaryWriteErrorConsumer,
-                new MirroringTracer()));
+                new MirroringTracer(),
+                new AlwaysReadSamplingStrategy()));
   }
 
   private void mockFlowController() {
@@ -122,26 +127,6 @@ public class TestMirroringTable {
     doReturn(resourceReservationFuture)
         .when(flowController)
         .asyncRequestResource(any(RequestResourcesDescription.class));
-  }
-
-  private Result createResult(String key, String... values) {
-    ArrayList<Cell> cells = new ArrayList<>();
-    for (int i = 0; i < values.length; i++) {
-      cells.add(CellUtil.createCell(key.getBytes(), values[i].getBytes()));
-    }
-    return Result.create(cells);
-  }
-
-  private Get createGet(String key) {
-    return new Get(key.getBytes());
-  }
-
-  private List<Get> createGets(String... keys) {
-    List<Get> result = new ArrayList<>();
-    for (String key : keys) {
-      result.add(createGet(key));
-    }
-    return result;
   }
 
   private void waitForMirroringScanner(ResultScanner mirroringScanner)

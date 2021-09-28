@@ -44,7 +44,7 @@ public class BatchHelpers {
 
         final SplitBatchResponse<?> secondarySplitResponse =
             new SplitBatchResponse<>(
-                secondaryOperations, secondaryResults, resultIsFaultyPredicate);
+                secondaryOperations, secondaryResults, resultIsFaultyPredicate, false);
 
         if (secondarySplitResponse.successfulReads.size() > 0) {
           try (Scope scope = mirroringTracer.spanFactory.verificationScope()) {
@@ -184,6 +184,14 @@ public class BatchHelpers {
 
     public SplitBatchResponse(
         List<T> operations, Object[] results, Predicate<Object> resultIsFaultyPredicate) {
+      this(operations, results, resultIsFaultyPredicate, false);
+    }
+
+    public SplitBatchResponse(
+        List<T> operations,
+        Object[] results,
+        Predicate<Object> resultIsFaultyPredicate,
+        boolean skipReads) {
       final List<Result> successfulReadsResults = new ArrayList<>();
       final List<Result> allReadsResults = new ArrayList<>();
       final List<Object> allSuccessfulResultsList = new ArrayList<>();
@@ -193,24 +201,28 @@ public class BatchHelpers {
         boolean isRead = operation instanceof Get;
         boolean isFailed = resultIsFaultyPredicate.apply(results[i]);
         if (isFailed) {
-          if (isRead) {
+          if (isRead && !skipReads) {
             this.allReads.add((Get) operation);
             allReadsResults.add(null);
-          } else {
+          }
+          if (!isRead) {
             this.failedWrites.add(operation);
           }
         } else {
-          if (isRead) {
+          if (isRead && !skipReads) {
             this.successfulReads.add((Get) operation);
             successfulReadsResults.add((Result) results[i]);
 
             this.allReads.add((Get) operation);
             allReadsResults.add((Result) results[i]);
-          } else {
+          }
+          if (!isRead) {
             this.successfulWrites.add(operation);
           }
-          this.allSuccessfulOperations.add(operation);
-          allSuccessfulResultsList.add(results[i]);
+          if (!isRead || !skipReads) {
+            this.allSuccessfulOperations.add(operation);
+            allSuccessfulResultsList.add(results[i]);
+          }
         }
       }
       this.successfulReadsResults = successfulReadsResults.toArray(new Result[0]);

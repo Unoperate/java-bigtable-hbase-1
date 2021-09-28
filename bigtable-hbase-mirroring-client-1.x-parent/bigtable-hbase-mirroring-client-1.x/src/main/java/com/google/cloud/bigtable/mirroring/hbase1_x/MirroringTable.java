@@ -18,6 +18,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.SplitBatchResponse;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOAndInterruptedException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
@@ -29,6 +30,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.ReadSamplingStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.base.Predicate;
@@ -101,6 +103,8 @@ public class MirroringTable implements Table, ListenableCloseable {
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
 
+  private final ReadSamplingStrategy readSamplingStrategy;
+
   /**
    * @param executorService ExecutorService is used to perform operations on secondaryTable and
    *     verification tasks.
@@ -115,10 +119,12 @@ public class MirroringTable implements Table, ListenableCloseable {
       MismatchDetector mismatchDetector,
       FlowController flowController,
       SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer,
-      MirroringTracer mirroringTracer) {
+      MirroringTracer mirroringTracer,
+      ReadSamplingStrategy readSamplingStrategy) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
     this.verificationContinuationFactory = new VerificationContinuationFactory(mismatchDetector);
+    this.readSamplingStrategy = readSamplingStrategy;
     this.secondaryAsyncWrapper =
         new AsyncTableWrapper(
             this.secondaryTable,
@@ -179,10 +185,12 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.EXISTS);
 
-      scheduleVerificationAndRequestWithFlowControl(
-          new RequestResourcesDescription(result),
-          this.secondaryAsyncWrapper.exists(get),
-          this.verificationContinuationFactory.exists(get, result));
+      if (this.readSamplingStrategy.shouldNextReadOperationBeSampled()) {
+        scheduleVerificationAndRequestWithFlowControl(
+            new RequestResourcesDescription(result),
+            this.secondaryAsyncWrapper.exists(get),
+            this.verificationContinuationFactory.exists(get, result));
+      }
       return result;
     }
   }
@@ -202,10 +210,12 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.EXISTS_ALL);
 
-      scheduleVerificationAndRequestWithFlowControl(
-          new RequestResourcesDescription(result),
-          this.secondaryAsyncWrapper.existsAll(list),
-          this.verificationContinuationFactory.existsAll(list, result));
+      if (this.readSamplingStrategy.shouldNextReadOperationBeSampled()) {
+        scheduleVerificationAndRequestWithFlowControl(
+            new RequestResourcesDescription(result),
+            this.secondaryAsyncWrapper.existsAll(list),
+            this.verificationContinuationFactory.existsAll(list, result));
+      }
       return result;
     }
   }
@@ -286,10 +296,12 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.GET);
 
-      scheduleVerificationAndRequestWithFlowControl(
-          new RequestResourcesDescription(result),
-          this.secondaryAsyncWrapper.get(get),
-          this.verificationContinuationFactory.get(get, result));
+      if (this.readSamplingStrategy.shouldNextReadOperationBeSampled()) {
+        scheduleVerificationAndRequestWithFlowControl(
+            new RequestResourcesDescription(result),
+            this.secondaryAsyncWrapper.get(get),
+            this.verificationContinuationFactory.get(get, result));
+      }
 
       return result;
     }
@@ -310,11 +322,12 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.GET_LIST);
 
-      scheduleVerificationAndRequestWithFlowControl(
-          new RequestResourcesDescription(result),
-          this.secondaryAsyncWrapper.get(list),
-          this.verificationContinuationFactory.get(list, result));
-
+      if (this.readSamplingStrategy.shouldNextReadOperationBeSampled()) {
+        scheduleVerificationAndRequestWithFlowControl(
+            new RequestResourcesDescription(result),
+            this.secondaryAsyncWrapper.get(list),
+            this.verificationContinuationFactory.get(list, result));
+      }
       return result;
     }
   }
@@ -331,7 +344,8 @@ public class MirroringTable implements Table, ListenableCloseable {
               this.secondaryAsyncWrapper,
               this.verificationContinuationFactory,
               this.flowController,
-              this.mirroringTracer);
+              this.mirroringTracer,
+              this.readSamplingStrategy.shouldNextReadOperationBeSampled());
       this.referenceCounter.holdReferenceUntilClosing(scanner);
       return scanner;
     }
@@ -815,8 +829,11 @@ public class MirroringTable implements Table, ListenableCloseable {
   private void scheduleSecondaryWriteBatchOperations(
       final List<? extends Row> operations, final Object[] results) {
 
+    boolean skipReads = !this.readSamplingStrategy.shouldNextReadOperationBeSampled();
+
     final BatchHelpers.SplitBatchResponse<?> primarySplitResponse =
-        new BatchHelpers.SplitBatchResponse<>(operations, results, resultIsFaultyPredicate);
+        new BatchHelpers.SplitBatchResponse<>(
+            operations, results, resultIsFaultyPredicate, skipReads);
 
     if (primarySplitResponse.allSuccessfulOperations.size() == 0) {
       return;
@@ -826,28 +843,43 @@ public class MirroringTable implements Table, ListenableCloseable {
         new Object[primarySplitResponse.allSuccessfulOperations.size()];
 
     FutureCallback<Void> verificationFuture =
-        BatchHelpers.createBatchVerificationCallback(
-            primarySplitResponse,
-            resultsSecondary,
-            verificationContinuationFactory.getMismatchDetector(),
-            this.secondaryWriteErrorConsumer,
-            resultIsFaultyPredicate,
-            this.mirroringTracer);
+        createBatchVerificationFuture(primarySplitResponse, resultsSecondary);
+
+    WriteOperationInfo writeOperationInfo = new WriteOperationInfo(primarySplitResponse);
+
+    Runnable flowControlReservationErrorHandler =
+        createBatchFlowControlReservationErrorHandler(primarySplitResponse);
 
     RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-        new MirroringTable.WriteOperationInfo(primarySplitResponse).requestResourcesDescription,
+        writeOperationInfo.requestResourcesDescription,
         this.secondaryAsyncWrapper.batch(
             primarySplitResponse.allSuccessfulOperations, resultsSecondary),
         verificationFuture,
         this.flowController,
         this.mirroringTracer,
-        new Runnable() {
-          @Override
-          public void run() {
-            secondaryWriteErrorConsumer.consume(
-                HBaseOperation.BATCH, primarySplitResponse.successfulWrites);
-          }
-        });
+        flowControlReservationErrorHandler);
+  }
+
+  private FutureCallback<Void> createBatchVerificationFuture(
+      SplitBatchResponse<?> primarySplitResponse, Object[] resultsSecondary) {
+    return BatchHelpers.createBatchVerificationCallback(
+        primarySplitResponse,
+        resultsSecondary,
+        verificationContinuationFactory.getMismatchDetector(),
+        this.secondaryWriteErrorConsumer,
+        resultIsFaultyPredicate,
+        this.mirroringTracer);
+  }
+
+  private Runnable createBatchFlowControlReservationErrorHandler(
+      final SplitBatchResponse<?> primarySplitResponse) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        secondaryWriteErrorConsumer.consume(
+            HBaseOperation.BATCH, primarySplitResponse.successfulWrites);
+      }
+    };
   }
 
   public static class WriteOperationInfo {

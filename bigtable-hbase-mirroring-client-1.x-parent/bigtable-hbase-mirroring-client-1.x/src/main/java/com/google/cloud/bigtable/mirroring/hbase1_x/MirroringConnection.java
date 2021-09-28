@@ -24,6 +24,10 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.AlwaysReadSamplingStrategy;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.DisabledReadSamplingStrategy;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.PartialReadSamplingStrategy;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.ReadSamplingStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.reflection.ReflectionConstructor;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import io.opencensus.common.Scope;
@@ -53,6 +57,7 @@ public class MirroringConnection implements Connection {
   private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumerWithMetrics;
+  private final ReadSamplingStrategy readSamplingStrategy;
   private MirroringConfiguration configuration;
   private Connection primaryConnection;
   private Connection secondaryConnection;
@@ -99,6 +104,18 @@ public class MirroringConnection implements Connection {
     this.secondaryWriteErrorConsumerWithMetrics =
         new SecondaryWriteErrorConsumerWithMetrics(
             this.mirroringTracer, this.secondaryWriteErrorConsumer);
+    this.readSamplingStrategy =
+        getReadSamplingStrategy(this.configuration.mirroringOptions.readSamplingRate);
+  }
+
+  private ReadSamplingStrategy getReadSamplingStrategy(float readSamplingRate) {
+    if (readSamplingRate == 0) {
+      return new DisabledReadSamplingStrategy();
+    }
+    if (readSamplingRate == 1) {
+      return new AlwaysReadSamplingStrategy();
+    }
+    return new PartialReadSamplingStrategy(this.configuration.mirroringOptions.readSamplingRate);
   }
 
   @Override
@@ -135,7 +152,8 @@ public class MirroringConnection implements Connection {
               this.mismatchDetector,
               this.flowController,
               this.secondaryWriteErrorConsumerWithMetrics,
-              this.mirroringTracer);
+              this.mirroringTracer,
+              this.readSamplingStrategy);
       this.referenceCounter.holdReferenceUntilClosing(table);
       return table;
     }
