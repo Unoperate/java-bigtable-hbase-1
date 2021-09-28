@@ -105,6 +105,7 @@ public class TestMirroringTable {
 
   @Before
   public void setUp() {
+    Helpers.mockFlowController(flowController);
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -118,17 +119,6 @@ public class TestMirroringTable {
                 new AlwaysReadSamplingStrategy()));
   }
 
-  private void mockFlowController() {
-    ResourceReservation resourceReservationMock = mock(ResourceReservation.class);
-
-    SettableFuture<ResourceReservation> resourceReservationFuture = SettableFuture.create();
-    resourceReservationFuture.set(resourceReservationMock);
-
-    doReturn(resourceReservationFuture)
-        .when(flowController)
-        .asyncRequestResource(any(RequestResourcesDescription.class));
-  }
-
   private void waitForMirroringScanner(ResultScanner mirroringScanner)
       throws InterruptedException, ExecutionException, TimeoutException {
     ((MirroringResultScanner) mirroringScanner).asyncClose().get(3, TimeUnit.SECONDS);
@@ -136,7 +126,6 @@ public class TestMirroringTable {
 
   @Test
   public void testMismatchDetectorIsCalledOnGetSingle() throws IOException {
-    mockFlowController();
     Get get = createGets("test").get(0);
     Result expectedResult = createResult("test", "value");
 
@@ -157,7 +146,6 @@ public class TestMirroringTable {
   @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnSingleGet()
       throws IOException {
-    mockFlowController();
     Get request = createGet("test");
     Result expectedResult = createResult("test", "value");
 
@@ -175,7 +163,6 @@ public class TestMirroringTable {
 
   @Test
   public void testMismatchDetectorIsCalledOnGetMultiple() throws IOException {
-    mockFlowController();
     List<Get> get = Arrays.asList(createGets("test").get(0));
     Result[] expectedResult = new Result[] {createResult("test", "value")};
 
@@ -195,7 +182,6 @@ public class TestMirroringTable {
   @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnGetMultiple()
       throws IOException {
-    mockFlowController();
     List<Get> request = createGets("test1", "test2");
     Result[] expectedResult =
         new Result[] {createResult("test1", "value1"), createResult("test2", "value2")};
@@ -214,7 +200,6 @@ public class TestMirroringTable {
 
   @Test
   public void testMismatchDetectorIsCalledOnExists() throws IOException {
-    mockFlowController();
     Get get = createGet("test");
     boolean expectedResult = true;
 
@@ -232,7 +217,6 @@ public class TestMirroringTable {
 
   @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnExists() throws IOException {
-    mockFlowController();
     Get request = createGet("test");
     boolean expectedResult = true;
 
@@ -250,7 +234,6 @@ public class TestMirroringTable {
 
   @Test
   public void testMismatchDetectorIsCalledOnExistsAll() throws IOException {
-    mockFlowController();
     List<Get> get = Arrays.asList(createGets("test").get(0));
     boolean[] expectedResult = new boolean[] {true, false};
 
@@ -269,7 +252,6 @@ public class TestMirroringTable {
   @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnExistsAll()
       throws IOException {
-    mockFlowController();
     List<Get> request = createGets("test1", "test2");
     boolean[] expectedResult = new boolean[] {true, false};
 
@@ -288,7 +270,6 @@ public class TestMirroringTable {
   @Test
   public void testMismatchDetectorIsCalledOnScannerNextOne()
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    mockFlowController();
     Result expected1 = createResult("test1", "value1");
     Result expected2 = createResult("test2", "value2");
 
@@ -324,7 +305,6 @@ public class TestMirroringTable {
   @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnScannerNextOne()
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    mockFlowController();
     Result expected1 = createResult("test1", "value1");
     Result expected2 = createResult("test2", "value2");
 
@@ -364,7 +344,6 @@ public class TestMirroringTable {
   @Test
   public void testMismatchDetectorIsCalledOnScannerNextMultiple()
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    mockFlowController();
     Result[] expected =
         new Result[] {createResult("test1", "value1"), createResult("test2", "value2")};
 
@@ -392,7 +371,6 @@ public class TestMirroringTable {
   @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnScannerNextMultiple()
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    mockFlowController();
     Result[] expected =
         new Result[] {createResult("test1", "value1"), createResult("test2", "value2")};
 
@@ -567,7 +545,6 @@ public class TestMirroringTable {
 
   @Test
   public void testPutIsMirrored() throws IOException, InterruptedException {
-    mockFlowController();
     Put put = createPut("test", "f1", "q1", "v1");
     List<Put> puts = Arrays.asList(put);
 
@@ -620,7 +597,6 @@ public class TestMirroringTable {
 
   @Test
   public void testPutWithSecondaryErrorCallsErrorHandler() throws IOException {
-    mockFlowController();
     Put put = createPut("test", "f1", "q1", "v1");
     doThrow(new IOException("test exception")).when(secondaryTable).put(put);
     doNothing().when(primaryTable).put(put);
@@ -643,7 +619,6 @@ public class TestMirroringTable {
   @Test
   public void testBatchGetAndPutGetsAreVerifiedOnSuccess()
       throws IOException, InterruptedException {
-    mockFlowController();
     Put put1 = createPut("test1", "f1", "q1", "v1");
     Get get1 = createGet("get1");
 
@@ -695,7 +670,6 @@ public class TestMirroringTable {
 
   @Test
   public void testBatchGetAndPut() throws IOException, InterruptedException {
-    mockFlowController();
     Put put1 = createPut("test1", "f1", "q1", "v1");
     Put put2 = createPut("test2", "f2", "q2", "v2");
     Put put3 = createPut("test3", "f3", "q3", "v3");
@@ -776,7 +750,6 @@ public class TestMirroringTable {
 
   @Test
   public void testBatchGetsPrimaryFailsSecondaryOk() throws IOException, InterruptedException {
-    mockFlowController();
     Get get1 = createGet("get1");
     Get get2 = createGet("get2");
 
@@ -837,7 +810,6 @@ public class TestMirroringTable {
 
   @Test
   public void testConditionalWriteHappensWhenConditionIsMet() throws IOException {
-    mockFlowController();
     Put put = new Put("r1".getBytes());
     when(primaryTable.checkAndMutate(
             any(byte[].class),
@@ -879,7 +851,6 @@ public class TestMirroringTable {
 
   @Test
   public void testCheckAndPut() throws IOException {
-    mockFlowController();
     Put put = new Put("r1".getBytes());
     when(primaryTable.checkAndMutate(
             any(byte[].class),
@@ -904,7 +875,6 @@ public class TestMirroringTable {
 
   @Test
   public void testCheckAndDelete() throws IOException {
-    mockFlowController();
     Delete delete = new Delete("r1".getBytes());
     when(primaryTable.checkAndMutate(
             any(byte[].class),
@@ -932,7 +902,6 @@ public class TestMirroringTable {
 
   @Test
   public void testCheckAndMutate() throws IOException {
-    mockFlowController();
     RowMutations mutations = new RowMutations("r1".getBytes());
     when(primaryTable.checkAndMutate(
             any(byte[].class),
@@ -957,7 +926,6 @@ public class TestMirroringTable {
 
   @Test
   public void testDelete() throws IOException, InterruptedException {
-    mockFlowController();
     Delete delete = new Delete("r1".getBytes());
     mirroringTable.delete(delete);
 
@@ -987,7 +955,6 @@ public class TestMirroringTable {
 
   @Test
   public void testMutateRow() throws IOException {
-    mockFlowController();
     RowMutations mutations = new RowMutations("r1".getBytes());
     mirroringTable.mutateRow(mutations);
     executorServiceRule.waitForExecutor();
@@ -996,8 +963,6 @@ public class TestMirroringTable {
 
   @Test
   public void testIncrement() throws IOException {
-    mockFlowController();
-
     byte[] row = "r1".getBytes();
     byte[] family = "f1".getBytes();
     byte[] qualifier = "q1".getBytes();
@@ -1030,8 +995,6 @@ public class TestMirroringTable {
 
   @Test
   public void testAppend() throws IOException {
-    mockFlowController();
-
     byte[] row = "r1".getBytes();
     byte[] family = "f1".getBytes();
     byte[] qualifier = "q1".getBytes();
@@ -1075,7 +1038,6 @@ public class TestMirroringTable {
 
   @Test
   public void testBatchWithCallback() throws IOException, InterruptedException {
-    mockFlowController();
     List<Get> mutations = Arrays.asList(createGet("get1"));
     Object[] results = new Object[] {createResult("test")};
     Callback<?> callback = mock(Callback.class);

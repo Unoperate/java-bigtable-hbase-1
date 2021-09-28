@@ -28,7 +28,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,15 +39,12 @@ import static org.mockito.Mockito.when;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController.ResourceReservation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringMetricsRecorder;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanFactory;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.readsampling.AlwaysReadSamplingStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.DefaultMismatchDetector;
-import com.google.common.util.concurrent.SettableFuture;
 import io.opencensus.trace.Tracing;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -93,6 +89,7 @@ public class TestMirroringMetrics {
 
   @Before
   public void setUp() {
+    Helpers.mockFlowController(flowController);
     MirroringSpanFactory mirroringSpanFactory =
         new MirroringSpanFactory(Tracing.getTracer(), mirroringMetricsRecorder);
     MirroringTracer tracer = new MirroringTracer(mirroringSpanFactory, mirroringMetricsRecorder);
@@ -110,17 +107,6 @@ public class TestMirroringMetrics {
                 new AlwaysReadSamplingStrategy()));
   }
 
-  private void mockFlowController() {
-    ResourceReservation resourceReservationMock = mock(ResourceReservation.class);
-
-    SettableFuture<ResourceReservation> resourceReservationFuture = SettableFuture.create();
-    resourceReservationFuture.set(resourceReservationMock);
-
-    doReturn(resourceReservationFuture)
-        .when(flowController)
-        .asyncRequestResource(any(RequestResourcesDescription.class));
-  }
-
   private Result createResult(String key, String... values) {
     ArrayList<Cell> cells = new ArrayList<>();
     for (int i = 0; i < values.length; i++) {
@@ -135,7 +121,6 @@ public class TestMirroringMetrics {
 
   @Test
   public void testOperationLatenciesAreRecorded() throws IOException {
-    mockFlowController();
     Get get = createGet("test");
     Result result1 = createResult("test", "value");
 
@@ -172,7 +157,6 @@ public class TestMirroringMetrics {
 
   @Test
   public void testReadMismatchIsRecorded() throws IOException {
-    mockFlowController();
     Get get = createGet("test");
     Result result1 = createResult("test", "value1");
     Result result2 = createResult("test", "value2");
@@ -190,7 +174,6 @@ public class TestMirroringMetrics {
 
   @Test
   public void testPrimaryErrorMetricIsRecorded() throws IOException {
-    mockFlowController();
     Get request = createGet("test");
     Result expectedResult = createResult("test", "value");
 
@@ -228,7 +211,6 @@ public class TestMirroringMetrics {
 
   @Test
   public void testSecondaryErrorMetricIsRecorded() throws IOException {
-    mockFlowController();
     Get request = createGet("test");
     Result expectedResult = createResult("test", "value");
 
@@ -272,7 +254,6 @@ public class TestMirroringMetrics {
 
   @Test
   public void testSingleWriteErrorMetricIsRecorded() throws IOException {
-    mockFlowController();
     Put put = createPut("test", "f1", "q1", "v1");
 
     doNothing().when(primaryTable).put(put);
@@ -307,7 +288,6 @@ public class TestMirroringMetrics {
 
   @Test
   public void testMultipleWriteErrorMetricIsRecorded() throws IOException, InterruptedException {
-    mockFlowController();
     Put put1 = createPut("test", "f1", "q1", "v1");
     Put put2 = createPut("test", "f1", "q1", "v1");
     Put put3 = createPut("test", "f1", "q1", "v1");
