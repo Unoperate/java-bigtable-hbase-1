@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.SplitBatchResponse;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOAndInterruptedException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
@@ -843,43 +842,28 @@ public class MirroringTable implements Table, ListenableCloseable {
         new Object[primarySplitResponse.allSuccessfulOperations.size()];
 
     FutureCallback<Void> verificationFuture =
-        createBatchVerificationFuture(primarySplitResponse, resultsSecondary);
-
-    WriteOperationInfo writeOperationInfo = new WriteOperationInfo(primarySplitResponse);
-
-    Runnable flowControlReservationErrorHandler =
-        createBatchFlowControlReservationErrorHandler(primarySplitResponse);
+        BatchHelpers.createBatchVerificationCallback(
+            primarySplitResponse,
+            resultsSecondary,
+            verificationContinuationFactory.getMismatchDetector(),
+            this.secondaryWriteErrorConsumer,
+            resultIsFaultyPredicate,
+            this.mirroringTracer);
 
     RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-        writeOperationInfo.requestResourcesDescription,
+        new MirroringTable.WriteOperationInfo(primarySplitResponse).requestResourcesDescription,
         this.secondaryAsyncWrapper.batch(
             primarySplitResponse.allSuccessfulOperations, resultsSecondary),
         verificationFuture,
         this.flowController,
         this.mirroringTracer,
-        flowControlReservationErrorHandler);
-  }
-
-  private FutureCallback<Void> createBatchVerificationFuture(
-      SplitBatchResponse<?> primarySplitResponse, Object[] resultsSecondary) {
-    return BatchHelpers.createBatchVerificationCallback(
-        primarySplitResponse,
-        resultsSecondary,
-        verificationContinuationFactory.getMismatchDetector(),
-        this.secondaryWriteErrorConsumer,
-        resultIsFaultyPredicate,
-        this.mirroringTracer);
-  }
-
-  private Runnable createBatchFlowControlReservationErrorHandler(
-      final SplitBatchResponse<?> primarySplitResponse) {
-    return new Runnable() {
-      @Override
-      public void run() {
-        secondaryWriteErrorConsumer.consume(
-            HBaseOperation.BATCH, primarySplitResponse.successfulWrites);
-      }
-    };
+        new Runnable() {
+          @Override
+          public void run() {
+            secondaryWriteErrorConsumer.consume(
+                HBaseOperation.BATCH, primarySplitResponse.successfulWrites);
+          }
+        });
   }
 
   public static class WriteOperationInfo {
