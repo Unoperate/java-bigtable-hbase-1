@@ -177,7 +177,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     final List<CompletableFuture<T>> resultFutures =
         Stream.generate(() -> new CompletableFuture<T>())
             .limit(numActions)
-            .collect(Collectors.toList());
+            .collect(Collectors.toCollection(ArrayList::new));
 
     final List<CompletableFuture<T>> primaryFutures = this.primaryTable.batch(actions);
     // Unfortunately, we cannot create T[].
