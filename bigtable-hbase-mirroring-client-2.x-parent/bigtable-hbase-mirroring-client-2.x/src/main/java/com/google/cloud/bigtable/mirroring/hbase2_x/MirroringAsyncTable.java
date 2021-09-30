@@ -253,10 +253,10 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       BiConsumer<Integer, Throwable> errorHandler,
       Object[] results) {
     int numFutures = futures.size();
-    List<CompletableFuture<Void>> handledFutures = new ArrayList<>(numFutures);
     for (int i = 0; i < numFutures; i++) {
       final int futureIdx = i;
-      handledFutures.add(
+      futures.set(
+          i,
           futures
               .get(futureIdx)
               .handle(
@@ -270,7 +270,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                     return null;
                   }));
     }
-    return CompletableFuture.allOf(handledFutures.toArray(new CompletableFuture[0]));
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
   }
 
   private <T> CompletableFuture<T> readWithVerificationAndFlowControl(
