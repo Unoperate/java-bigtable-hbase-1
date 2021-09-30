@@ -1,0 +1,21 @@
+<configuration>
+  <property>
+    <name>hbase.zookeeper.quorum</name>
+    <value>ZOOKEEPER_QUORUM</value>
+  </property>
+
+  <property>
+    <name>hbase.zookeeper.property.clientPort</name>
+    <value>ZOOKEEPER_PORT</value>
+  </property>
+
+  <property>
+    <name>google.bigtable.use.gcj.client</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>hbase.client.retries.number</name>
+    <value>2</value>
+  </property>
+</configuration>

@@ -1,0 +1,27 @@
+version: "3"
+
+services:
+        hbase:
+                image: dajobe/hbase
+                ports:
+                        - 2181:2182
+        bigtable:
+                image: shopify/bigtable-emulator
+                ports:
+                        - 9035:9035
+        test:
+                build: .
+                entrypoint: "/perftest.sh"
+                depends_on:
+                        - hbase
+                        - bigtable
+                environment:
+                        - ZOOKEEPER_QUORUM=hbase
+                        - ZOOKEEPER_PORT=2181
+                        - BIGTABLE_PROJECT_ID=project-id
+                        - BIGTABLE_INSTANCE_ID=instance-id
+                        - BIGTABLE_CREDENTIALS_FILE=  # the file should be copied into a subdirectory mounted as a volume
+                        - BIGTABLE_EMULATOR_HOST=bigtable:9035
+                          # - JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64
+                volumes:
+                        - ./results:/results

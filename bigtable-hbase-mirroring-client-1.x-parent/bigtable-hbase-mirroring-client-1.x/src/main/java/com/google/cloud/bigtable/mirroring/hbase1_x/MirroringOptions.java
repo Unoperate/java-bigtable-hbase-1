@@ -59,6 +59,6 @@ public class MirroringOptions {
             MIRRORING_WRITE_ERROR_CONSUMER_CLASS,
             DefaultSecondaryWriteErrorConsumer.class.getCanonicalName());
     this.readSamplingRate =
-        Float.parseFloat(configuration.get(MIRRORING_READ_VERIFICATION_RATE, "1.0"));
+        Float.parseFloat(configuration.get(MIRRORING_READ_VERIFICATION_RATE, "0.05"));
   }
 }
