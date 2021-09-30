@@ -256,7 +256,7 @@ public class MirroringSpanFactory {
       mirroringMetricsRecorder.recordOperation(
           operationName,
           latencyMeasure,
-          stopwatch.elapsed(TimeUnit.MILLISECONDS),
+          stopwatch.elapsed(TimeUnit.MICROSECONDS) / 100,
           errorMeasure,
           operationFailed);
     }
@@ -290,7 +290,7 @@ public class MirroringSpanFactory {
     public void close() {
       this.stopwatch.stop();
       MirroringSpanFactory.this.mirroringMetricsRecorder.recordOperation(
-          this.operation, MIRRORING_LATENCY, this.stopwatch.elapsed(TimeUnit.MILLISECONDS));
+          this.operation, MIRRORING_LATENCY, this.stopwatch.elapsed(TimeUnit.MICROSECONDS) / 100);
       this.scope.close();
     }
   }

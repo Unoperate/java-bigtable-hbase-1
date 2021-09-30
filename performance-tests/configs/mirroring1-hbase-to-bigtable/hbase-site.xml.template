@@ -1,0 +1,63 @@
+<configuration>
+  <property>
+    <name>hbase.client.connection.impl</name>
+    <value>com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection</value>
+  </property>
+  <property>
+    <name>google.bigtable.mirroring.primary-client.connection.impl</name>
+    <value>default</value>
+  </property>
+  <property>
+    <name>google.bigtable.mirroring.secondary-client.connection.impl</name>
+    <value>com.google.cloud.bigtable.hbase1_x.BigtableConnection</value>
+  </property>
+
+  <property>
+    <name>google.bigtable.project.id</name>
+    <value>BIGTABLE_PROJECT_ID</value>
+  </property>
+  <property>
+    <name>google.bigtable.instance.id</name>
+    <value>BIGTABLE_INSTANCE_ID</value>
+  </property>
+  <property>
+    <name>google.bigtable.auth.service.account.enable</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>google.bigtable.use.gcj.client</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <name>hbase.zookeeper.quorum</name>
+    <value>ZOOKEEPER_QUORUM</value>
+  </property>
+  <property>
+    <name>hbase.zookeeper.property.clientPort</name>
+    <value>ZOOKEEPER_PORT</value>
+  </property>
+  <property>
+    <name>hbase.client.retries.number</name>
+    <value>2</value>
+  </property>
+  <property>
+    <name>google.bigtable.mirroring.flow-controller.max-outstanding-requests</name>
+    <value>10000</value>
+  </property>
+
+  <property>
+    <name>google.bigtable.mirroring.write-error-log.appender.prefix-path</name>
+    <value>/tmp/write-error-log</value>
+  </property>
+
+  <property>
+    <name>google.bigtable.mirroring.write-error-log.appender.max-buffer-size</name>
+    <value>8388608</value>
+  </property>
+
+  <property>
+    <name>google.bigtable.mirroring.write-error-log.appender.drop-on-overflow</name>
+    <value>false</value>
+  </property>
+</configuration>

@@ -22,12 +22,14 @@ import static com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.Mi
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.common.base.Stopwatch;
 import io.opencensus.stats.Measure.MeasureLong;
 import io.opencensus.stats.MeasureMap;
 import io.opencensus.stats.StatsRecorder;
 import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagContextBuilder;
 import io.opencensus.tags.Tagger;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Used to record metrics related to operations (by {@link MirroringSpanFactory}) and to record read
@@ -99,5 +101,27 @@ public class MirroringMetricsRecorder {
     MeasureMap map = statsRecorder.newMeasureMap();
     map.put(latencyMeasure, latencyMs);
     map.record(tagContext);
+  }
+
+  public StopwatchScope recordTime(HBaseOperation operation, MeasureLong measure) {
+    return new StopwatchScope(operation, measure);
+  }
+
+  public class StopwatchScope implements AutoCloseable {
+    private final HBaseOperation operation;
+    private final MeasureLong measure;
+    private final Stopwatch stopwatch;
+
+    public StopwatchScope(HBaseOperation operation, MeasureLong measure) {
+      this.operation = operation;
+      this.measure = measure;
+      this.stopwatch = Stopwatch.createStarted();
+    }
+
+    @Override
+    public void close() {
+      this.stopwatch.stop();
+      recordOperation(this.operation, this.measure, stopwatch.elapsed(TimeUnit.MICROSECONDS) / 100);
+    }
   }
 }

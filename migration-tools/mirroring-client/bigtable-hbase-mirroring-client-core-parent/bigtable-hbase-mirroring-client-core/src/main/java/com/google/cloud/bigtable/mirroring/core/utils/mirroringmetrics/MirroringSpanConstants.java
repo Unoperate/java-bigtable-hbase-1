@@ -82,6 +82,17 @@ public class MirroringSpanConstants {
           "Distribution of secondary write error handling latency.",
           "ms");
 
+  public static final MeasureLong ASYNC_REQUEST_SCHEDULING =
+      MeasureLong.create(
+          "com/google/cloud/bigtable/mirroring/async_request_scheduling", "todo", "ms");
+
+  public static final MeasureLong FLOW_CONTROLLER_LATENCY =
+      MeasureLong.create(
+          "com/google/cloud/bigtable/mirroring/flow_controller_latency", "todo", "ms");
+
+  public static final MeasureLong TABLE_LOCK_LATENCY =
+      MeasureLong.create("com/google/cloud/bigtable/mirroring/table_lock_latency", "todo", "ms");
+
   public static TagKey OPERATION_KEY = TagKey.create("operation");
 
   public enum HBaseOperation {

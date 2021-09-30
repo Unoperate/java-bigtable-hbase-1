@@ -1,0 +1,29 @@
+apt-get update && apt-get install -y openjdk-8-jre openjdk-8-jdk maven sysstat curl python2 apt-transport-https ca-certificates gnupg && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install -y google-cloud-sdk google-cloud-sdk-cbt
+
+export YCSB_VERSION=0.17.0
+
+curl -q --location https://github.com/brianfrankcooper/YCSB/releases/download/${YCSB_VERSION}/ycsb-${YCSB_VERSION}.tar.gz --output ycsb.tar.gz && tar xfz ycsb.tar.gz && rm ycsb.tar.gz
+
+curl -q http://archive.apache.org/dist/hbase/1.4.13/hbase-1.4.13-bin.tar.gz --output hbase.tar.gz && tar xfz hbase.tar.gz && rm hbase.tar.gz
+
+mv ycsb-${YCSB_VERSION} ycsb
+mv hbase-1.4.13 hbase
+
+mvn -N dependency:copy -Dartifact=com.google.cloud.bigtable:bigtable-hbase-1.x-hadoop:1.25.0 -DoutputDirectory=/bigtable-deps && mvn -N dependency:copy -Dartifact=io.dropwizard.metrics:metrics-core:3.1.2 -DoutputDirectory=/bigtable-deps
+
+COPY mirroring-deps /mirroring-deps
+
+# TODO: check path on gcp
+ENV JAVA_HOME /usr/lib/jvm/java-1.8.0-openjdk-amd64
+
+# copy mirroring 1.x
+
+COPY configs /configs
+COPY workload_template /workload_template
+COPY perftest.sh /perftest.sh
+COPY create_test_table.sh /create_test_table.sh
+COPY ./create_test_table_bigtable.sh /create_test_table_bigtable.sh
+RUN ln /usr/bin/python2 /usr/bin/python
+ENTRYPOINT "/perftest.sh"
+
+RUN mkdir /creds
