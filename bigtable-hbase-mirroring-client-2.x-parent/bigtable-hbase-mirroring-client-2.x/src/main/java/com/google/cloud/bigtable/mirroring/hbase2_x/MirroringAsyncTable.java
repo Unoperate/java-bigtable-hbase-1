@@ -29,11 +29,11 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationCon
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.FutureCallback;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -248,49 +248,29 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     }
   }
 
-  // Waits for all of the futures from the list to complete and then returns an exceptional future
-  // if and only if any of them completed exceptionally.
   private <T> CompletableFuture<Void> waitForAllWithErrorHandler(
       List<CompletableFuture<T>> futures,
       BiConsumer<Integer, Throwable> errorHandler,
       Object[] results) {
     int numFutures = futures.size();
-    if (numFutures == 0) {
-      return CompletableFuture.completedFuture(null);
-    }
-    CompletableFuture<Void> resultFuture = new CompletableFuture<>();
-    AtomicInteger unfinishedFutures = new AtomicInteger(numFutures);
-    final AtomicReference<Throwable> maybeFirstError = new AtomicReference<>(null);
-
-    Runnable futureCompleter =
-        () -> {
-          Throwable firstError = maybeFirstError.get();
-          if (firstError != null) {
-            resultFuture.completeExceptionally(firstError);
-          } else {
-            resultFuture.complete(null);
-          }
-        };
-
+    List<CompletableFuture<Void>> handledFutures = new ArrayList<>(numFutures);
     for (int i = 0; i < numFutures; i++) {
       final int futureIdx = i;
-      futures
-          .get(i)
-          .whenComplete(
-              (result, error) -> {
-                if (error != null) {
-                  results[futureIdx] = error;
-                  maybeFirstError.compareAndSet(null, error);
-                  errorHandler.accept(futureIdx, error);
-                } else {
-                  results[futureIdx] = result;
-                }
-                if (unfinishedFutures.decrementAndGet() == 0) {
-                  futureCompleter.run();
-                }
-              });
+      handledFutures.add(
+          futures
+              .get(futureIdx)
+              .handle(
+                  (result, error) -> {
+                    if (error != null) {
+                      results[futureIdx] = error;
+                      errorHandler.accept(futureIdx, error);
+                      throw new CompletionException(error);
+                    }
+                    results[futureIdx] = result;
+                    return null;
+                  }));
     }
-    return resultFuture;
+    return CompletableFuture.allOf(handledFutures.toArray(new CompletableFuture[0]));
   }
 
   private <T> CompletableFuture<T> readWithVerificationAndFlowControl(

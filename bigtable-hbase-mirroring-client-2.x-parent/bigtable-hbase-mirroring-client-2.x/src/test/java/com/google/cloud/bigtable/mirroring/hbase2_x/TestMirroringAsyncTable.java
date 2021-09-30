@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
@@ -260,7 +261,10 @@ public class TestMirroringAsyncTable {
     Result result2 = resultFutures.get(1).get();
     assertThat(result2).isEqualTo(expectedResultArray[1]);
 
-    verify(mismatchDetector, times(1)).batch(get, ioe);
+    ArgumentCaptor<CompletionException> argument =
+        ArgumentCaptor.forClass(CompletionException.class);
+    verify(mismatchDetector, times(1)).batch(eq(get), argument.capture());
+    assertThat(argument.getValue().getCause()).isEqualTo(ioe);
 
     verify(mismatchDetector, never()).batch((List<Get>) any(), (Result[]) any(), (Result[]) any());
     verify(mismatchDetector, never()).get((Get) any(), (Throwable) any());
