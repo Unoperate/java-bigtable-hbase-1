@@ -173,15 +173,15 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
   @Override
   public <T> List<CompletableFuture<T>> batch(List<? extends Row> actions) {
-    final int numOperations = actions.size();
+    final int numActions = actions.size();
     final List<CompletableFuture<T>> resultFutures =
         Stream.generate(() -> new CompletableFuture<T>())
-            .limit(numOperations)
+            .limit(numActions)
             .collect(Collectors.toList());
 
     final List<CompletableFuture<T>> primaryFutures = this.primaryTable.batch(actions);
     // Unfortunately, we cannot create T[].
-    final Object[] primaryResults = new Object[numOperations];
+    final Object[] primaryResults = new Object[numActions];
 
     BiConsumer<Integer, Throwable> primaryErrorHandler =
         (idx, throwable) -> resultFutures.get(idx).completeExceptionally(throwable);
@@ -211,7 +211,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
               resourceReservationRequest.whenComplete(
                   (ignoredResourceReservation, resourceReservationError) -> {
-                    completeSuccessfulResultFutures(resultFutures, primaryResults, numOperations);
+                    completeSuccessfulResultFutures(resultFutures, primaryResults, numActions);
                     if (resourceReservationError != null) {
                       this.secondaryWriteErrorConsumer.consume(
                           HBaseOperation.BATCH, primarySplitResponse.successfulWrites);
