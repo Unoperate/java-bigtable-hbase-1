@@ -29,8 +29,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationCon
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.FutureCallback;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +37,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Append;
@@ -173,15 +173,15 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
   @Override
   public <T> List<CompletableFuture<T>> batch(List<? extends Row> actions) {
-    final int numberOfActions = actions.size();
-    final CompletableFuture<T>[] resultFuturesArray = new CompletableFuture[numberOfActions];
-    Arrays.setAll(resultFuturesArray, i -> new CompletableFuture<T>());
+    final int numOperations = actions.size();
     final List<CompletableFuture<T>> resultFutures =
-        new ArrayList<>(Arrays.asList(resultFuturesArray));
+        Stream.generate(() -> new CompletableFuture<T>())
+            .limit(numOperations)
+            .collect(Collectors.toList());
 
     final List<CompletableFuture<T>> primaryFutures = this.primaryTable.batch(actions);
     // Unfortunately, we cannot create T[].
-    final Object[] primaryResults = new Object[numberOfActions];
+    final Object[] primaryResults = new Object[numOperations];
 
     BiConsumer<Integer, Throwable> primaryErrorHandler =
         (idx, throwable) -> resultFutures.get(idx).completeExceptionally(throwable);
@@ -211,9 +211,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
               resourceReservationRequest.whenComplete(
                   (ignoredResourceReservation, resourceReservationError) -> {
-                    completeSuccessfulResultFutures(resultFutures, primaryResults, numberOfActions);
+                    completeSuccessfulResultFutures(resultFutures, primaryResults, numOperations);
                     if (resourceReservationError != null) {
-                      this.secondaryWriteErrorConsumerWithMetrics.consume(
+                      this.secondaryWriteErrorConsumer.consume(
                           HBaseOperation.BATCH, primarySplitResponse.successfulWrites);
                       return;
                     }
@@ -231,7 +231,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                                 primarySplitResponse,
                                 secondaryResults,
                                 verificationContinuationFactory.getMismatchDetector(),
-                                secondaryWriteErrorConsumerWithMetrics,
+                                secondaryWriteErrorConsumer,
                                 resultIsFaultyPredicate,
                                 mirroringTracer));
                   });
@@ -240,8 +240,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   }
 
   private <T> void completeSuccessfulResultFutures(
-      List<CompletableFuture<T>> resultFutures, Object[] primaryResults, int numberOfResults) {
-    for (int i = 0; i < numberOfResults; i++) {
+      List<CompletableFuture<T>> resultFutures, Object[] primaryResults, int numResults) {
+    for (int i = 0; i < numResults; i++) {
       if (!(resultIsFaultyPredicate.apply(primaryResults[i]))) {
         resultFutures.get(i).complete((T) primaryResults[i]);
       }
@@ -254,12 +254,12 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       List<CompletableFuture<T>> futures,
       BiConsumer<Integer, Throwable> errorHandler,
       Object[] results) {
-    int numberOfFutures = futures.size();
-    if (numberOfFutures == 0) {
+    int numFutures = futures.size();
+    if (numFutures == 0) {
       return CompletableFuture.completedFuture(null);
     }
     CompletableFuture<Void> resultFuture = new CompletableFuture<>();
-    AtomicInteger unfinishedFutures = new AtomicInteger(numberOfFutures);
+    AtomicInteger unfinishedFutures = new AtomicInteger(numFutures);
     final AtomicReference<Throwable> maybeFirstError = new AtomicReference<>(null);
 
     Runnable futureCompleter =
@@ -272,7 +272,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
           }
         };
 
-    for (int i = 0; i < numberOfFutures; i++) {
+    for (int i = 0; i < numFutures; i++) {
       final int futureIdx = i;
       futures
           .get(i)
