@@ -329,11 +329,11 @@ public class MirroringTable implements Table, ListenableCloseable {
     try (Scope scope =
         this.mirroringTracer.spanFactory.operationScope(HBaseOperation.GET_SCANNER)) {
       Log.trace("[%s] getScanner(scan=%s)", this.getName(), scan);
-      MirroringResultScanner scanner =
-          new MirroringResultScanner(
+      MirroringResultScanner<Table> scanner =
+          new MirroringResultScanner<>(
               scan,
               this.primaryTable.getScanner(scan),
-              this.secondaryAsyncWrapper,
+              this.secondaryAsyncWrapper.getScanner(scan),
               this.verificationContinuationFactory,
               this.flowController,
               this.mirroringTracer,

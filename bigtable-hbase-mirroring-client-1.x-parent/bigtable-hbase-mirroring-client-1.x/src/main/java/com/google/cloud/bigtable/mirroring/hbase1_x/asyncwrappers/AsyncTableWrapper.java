@@ -169,10 +169,10 @@ public class AsyncTableWrapper implements ListenableCloseable {
     return this.closeResultFuture;
   }
 
-  public AsyncResultScannerWrapper getScanner(Scan scan) throws IOException {
+  public AsyncResultScannerWrapper<Table> getScanner(Scan scan) throws IOException {
     Log.trace("getScanner(Scan)");
-    AsyncResultScannerWrapper result =
-        new AsyncResultScannerWrapper(
+    AsyncResultScannerWrapper<Table> result =
+        new AsyncResultScannerWrapper<>(
             this.table, this.table.getScanner(scan), this.executorService, this.mirroringTracer);
     this.pendingOperationsReferenceCounter.holdReferenceUntilClosing(result);
     return result;

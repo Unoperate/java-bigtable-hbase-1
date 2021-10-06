@@ -39,8 +39,8 @@ public class TestAsyncResultScannerWrapper {
       throws InterruptedException, ExecutionException, TimeoutException {
     Table table = mock(Table.class);
     ResultScanner resultScanner = mock(ResultScanner.class);
-    AsyncResultScannerWrapper asyncResultScannerWrapper =
-        new AsyncResultScannerWrapper(
+    AsyncResultScannerWrapper<Table> asyncResultScannerWrapper =
+        new AsyncResultScannerWrapper<>(
             table,
             resultScanner,
             MoreExecutors.listeningDecorator(MoreExecutors.newDirectExecutorService()),
@@ -62,8 +62,8 @@ public class TestAsyncResultScannerWrapper {
       throws InterruptedException, ExecutionException, TimeoutException {
     Table table = mock(Table.class);
     ResultScanner resultScanner = mock(ResultScanner.class);
-    AsyncResultScannerWrapper asyncResultScannerWrapper =
-        new AsyncResultScannerWrapper(
+    AsyncResultScannerWrapper<Table> asyncResultScannerWrapper =
+        new AsyncResultScannerWrapper<>(
             table,
             resultScanner,
             MoreExecutors.listeningDecorator(MoreExecutors.newDirectExecutorService()),

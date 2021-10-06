@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
-import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
@@ -53,13 +52,14 @@ import org.apache.hadoop.hbase.client.metrics.ScanMetrics;
  * succeeded, asynchronously on secondary `ResultScanner`.
  */
 @InternalApi("For internal usage only")
-public class MirroringResultScanner extends AbstractClientScanner implements ListenableCloseable {
+public class MirroringResultScanner<T> extends AbstractClientScanner
+    implements ListenableCloseable {
   private static final Log log = LogFactory.getLog(MirroringResultScanner.class);
   private final MirroringTracer mirroringTracer;
 
   private final Scan originalScan;
   private final ResultScanner primaryResultScanner;
-  private final AsyncResultScannerWrapper secondaryResultScannerWrapper;
+  private final AsyncResultScannerWrapper<T> secondaryResultScannerWrapper;
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final ListenableReferenceCounter listenableReferenceCounter;
   private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -75,7 +75,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
   public MirroringResultScanner(
       Scan originalScan,
       ResultScanner primaryResultScanner,
-      AsyncTableWrapper secondaryTableWrapper,
+      AsyncResultScannerWrapper<T> secondaryAsyncScannerWrapper,
       VerificationContinuationFactory verificationContinuationFactory,
       FlowController flowController,
       MirroringTracer mirroringTracer,
@@ -83,7 +83,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
       throws IOException {
     this.originalScan = originalScan;
     this.primaryResultScanner = primaryResultScanner;
-    this.secondaryResultScannerWrapper = secondaryTableWrapper.getScanner(originalScan);
+    this.secondaryResultScannerWrapper = secondaryAsyncScannerWrapper;
     this.verificationContinuationFactory = verificationContinuationFactory;
     this.listenableReferenceCounter = new ListenableReferenceCounter();
     this.flowController = flowController;
@@ -212,13 +212,10 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     throw new UnsupportedOperationException();
   }
 
-  private <T> void scheduleRequest(
+  private <U> void scheduleRequest(
       RequestResourcesDescription requestResourcesDescription,
-      Supplier<ListenableFuture<T>> nextSupplier,
-      FutureCallback<T> scannerNext) {
-    if (!this.isVerificationEnabled) {
-      return;
-    }
+      Supplier<ListenableFuture<U>> nextSupplier,
+      FutureCallback<U> scannerNext) {
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
             requestResourcesDescription,

@@ -35,7 +35,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
-import org.apache.hadoop.hbase.client.Table;
 
 /**
  * {@link MirroringResultScanner} schedules asynchronous next()s after synchronous operations to
@@ -45,8 +44,8 @@ import org.apache.hadoop.hbase.client.Table;
  * <p>Note that next() method returns a Supplier<> as its result is used only in callbacks
  */
 @InternalApi("For internal usage only")
-public class AsyncResultScannerWrapper implements ListenableCloseable {
-  private final Table table;
+public class AsyncResultScannerWrapper<T> implements ListenableCloseable {
+  private final T table;
   private final MirroringTracer mirroringTracer;
   /**
    * We use this queue to ensure that asynchronous next()s are called in the same order and with the
@@ -69,7 +68,7 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
   private ListenableReferenceCounter pendingOperationsReferenceCounter;
 
   public AsyncResultScannerWrapper(
-      Table table,
+      T table,
       ResultScanner scanner,
       ListeningExecutorService executorService,
       MirroringTracer mirroringTracer) {
@@ -189,8 +188,8 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
     return this.pendingOperationsReferenceCounter.getOnLastReferenceClosed();
   }
 
-  public <T> ListenableFuture<T> submitTask(Callable<T> task) {
-    ListenableFuture<T> future = this.executorService.submit(task);
+  public <U> ListenableFuture<U> submitTask(Callable<U> task) {
+    ListenableFuture<U> future = this.executorService.submit(task);
     this.pendingOperationsReferenceCounter.holdReferenceUntilCompletion(future);
     return future;
   }
