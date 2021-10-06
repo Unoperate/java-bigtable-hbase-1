@@ -30,11 +30,16 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.TestWriteErrorConsumer;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegion;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegionRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.DefaultAppender;
 import com.google.common.base.Predicate;
 import com.google.common.primitives.Longs;
+import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Delete;
@@ -43,6 +48,7 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
+import org.apache.hadoop.hbase.shaded.org.apache.commons.io.FileUtils;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.junit.Assume;
 import org.junit.ClassRule;
@@ -171,6 +177,8 @@ public class TestMirroringTable {
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
+
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -180,6 +188,9 @@ public class TestMirroringTable {
     }
     databaseHelpers.verifyTableConsistency(tableName1, failPredicate);
 
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
+
+    ReportedErrorsContext reportedErrorsContext2 = new ReportedErrorsContext();
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
@@ -195,6 +206,7 @@ public class TestMirroringTable {
       }
     }
     databaseHelpers.verifyTableConsistency(tableName2, failPredicate);
+    reportedErrorsContext2.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -312,8 +324,9 @@ public class TestMirroringTable {
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName2, databaseEntriesCount, columnFamily1, qualifier1);
 
-    FailingHBaseHRegion.failMutation(failPredicate, "failed");
+    FailingHBaseHRegion.failMutation(failPredicate, OperationStatusCode.BAD_FAMILY, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -325,7 +338,9 @@ public class TestMirroringTable {
     assertThat(databaseHelpers.countRows(tableName1, DatabaseSelector.PRIMARY)).isEqualTo(0);
     assertThat(databaseHelpers.countRows(tableName1, DatabaseSelector.SECONDARY))
         .isEqualTo(databaseEntriesCount / 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
 
+    ReportedErrorsContext reportedErrorsContext2 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName2)) {
         int id = 0;
@@ -344,6 +359,8 @@ public class TestMirroringTable {
     assertThat(databaseHelpers.countRows(tableName2, DatabaseSelector.PRIMARY)).isEqualTo(0);
     assertThat(databaseHelpers.countRows(tableName2, DatabaseSelector.SECONDARY))
         .isEqualTo(databaseEntriesCount / 2);
+
+    reportedErrorsContext2.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -451,6 +468,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -480,6 +498,7 @@ public class TestMirroringTable {
         .isEqualTo(databaseEntriesCount / 2);
     assertThat(databaseHelpers.countCells(tableName1, DatabaseSelector.PRIMARY))
         .isEqualTo(databaseEntriesCount * 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -605,6 +624,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -632,6 +652,7 @@ public class TestMirroringTable {
                 DatabaseSelector.SECONDARY,
                 Helpers.createScan(columnFamily1, qualifier1)))
         .isEqualTo(databaseEntriesCount / 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -746,6 +767,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -775,6 +797,7 @@ public class TestMirroringTable {
                 DatabaseSelector.SECONDARY,
                 Helpers.createScan(columnFamily1, qualifier1)))
         .isEqualTo(databaseEntriesCount / 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -850,6 +873,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -860,6 +884,7 @@ public class TestMirroringTable {
     }
 
     assertThat(TestWriteErrorConsumer.getErrorCount()).isEqualTo(databaseEntriesCount / 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -938,6 +963,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -948,6 +974,7 @@ public class TestMirroringTable {
     }
 
     assertThat(TestWriteErrorConsumer.getErrorCount()).isEqualTo(databaseEntriesCount / 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
@@ -1161,6 +1188,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
@@ -1180,6 +1208,7 @@ public class TestMirroringTable {
       }
     }
     databaseHelpers.verifyTableConsistency(tableName2, failPredicate);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   interface RunnableThrowingIO {
@@ -1197,6 +1226,56 @@ public class TestMirroringTable {
       if (!willThrow) {
         fail("shouldn't throw");
       }
+    }
+  }
+
+  private static int getSecondaryWriteErrorLogMessagesWritten() throws IOException {
+    Configuration configuration = ConfigurationHelper.newConfiguration();
+    String prefixPath = configuration.get(DefaultAppender.PREFIX_PATH_KEY);
+    String[] prefixParts = prefixPath.split("/");
+    final String fileNamePrefix = prefixParts[prefixParts.length - 1];
+    String[] directoryParts = Arrays.copyOf(prefixParts, prefixParts.length - 1);
+    StringBuilder sb = new StringBuilder();
+    for (String directoryPart : directoryParts) {
+      sb.append(directoryPart);
+      sb.append("/");
+    }
+    String directoryPath = sb.toString();
+    File dir = new File(directoryPath);
+    File[] files =
+        dir.listFiles(
+            new FileFilter() {
+              @Override
+              public boolean accept(File file) {
+                return file.getName().startsWith(fileNamePrefix);
+              }
+            });
+
+    int numberOfLines = 0;
+    for (File f : files) {
+      String fileStr = FileUtils.readFileToString(f);
+      if (!fileStr.isEmpty()) {
+        numberOfLines += fileStr.split("\n").length;
+      }
+    }
+    return numberOfLines;
+  }
+
+  static class ReportedErrorsContext {
+    final int initialErrorsConsumed;
+    final int initialErrorsWritten;
+
+    public ReportedErrorsContext() throws IOException {
+      this.initialErrorsConsumed = TestWriteErrorConsumer.getErrorCount();
+      this.initialErrorsWritten = getSecondaryWriteErrorLogMessagesWritten();
+    }
+
+    public void assertNewErrorsReported(int expectedNewErrors) throws IOException {
+      int errorsConsumed = TestWriteErrorConsumer.getErrorCount();
+      int errorsWritten = getSecondaryWriteErrorLogMessagesWritten();
+
+      assertThat(errorsConsumed - initialErrorsConsumed).isEqualTo(expectedNewErrors);
+      assertThat(errorsWritten - initialErrorsWritten).isEqualTo(expectedNewErrors);
     }
   }
 }

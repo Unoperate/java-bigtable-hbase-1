@@ -15,30 +15,47 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import java.util.List;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
 
 public class DefaultSecondaryWriteErrorConsumer implements SecondaryWriteErrorConsumer {
-  @Override
-  public void consume(Mutation r) {
-    System.out.printf("Couldn't write row to secondary database %s", new String(r.getRow()));
+  private final Logger writeErrorLogger;
+
+  public DefaultSecondaryWriteErrorConsumer(Logger writeErrorLogger) {
+    this.writeErrorLogger = writeErrorLogger;
   }
 
   @Override
-  public void consume(RowMutations r) {
-    System.out.printf(
-        "Couldn't apply row mutations to secondary database %s", new String(r.getRow()));
+  public void consume(HBaseOperation operation, Mutation r, Throwable cause) {
+    try {
+      writeErrorLogger.mutationFailed(r, cause);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   @Override
-  public void consume(List<? extends Row> operations) {
-    for (Row operation : operations) {
-      if (operation instanceof Mutation) {
-        consume((Mutation) operation);
-      } else if (operation instanceof RowMutations) {
-        consume((RowMutations) operation);
+  public void consume(HBaseOperation operation, RowMutations r, Throwable cause) {
+    for (Mutation m : r.getMutations()) {
+      try {
+        writeErrorLogger.mutationFailed(m, cause);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+
+  @Override
+  public void consume(HBaseOperation operation, List<? extends Row> operations, Throwable cause) {
+    for (Row row : operations) {
+      if (row instanceof Mutation) {
+        consume(operation, (Mutation) row, cause);
+      } else if (row instanceof RowMutations) {
+        consume(operation, (RowMutations) row, cause);
       } else {
         assert false;
         throw new IllegalArgumentException("Not a write operation");

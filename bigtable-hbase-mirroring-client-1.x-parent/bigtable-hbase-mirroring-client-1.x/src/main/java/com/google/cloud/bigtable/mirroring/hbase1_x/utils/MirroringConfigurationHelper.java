@@ -86,6 +86,11 @@ public class MirroringConfigurationHelper {
   public static final String MIRRORING_WRITE_ERROR_CONSUMER_CLASS =
       "google.bigtable.mirroring.write-error-consumer.impl";
 
+  public static final String MIRRORING_WRITE_ERROR_LOG_APPENDER_CLASS =
+      "google.bigtable.mirroring.write-error-log-appender.impl";
+  public static final String MIRRORING_WRITE_ERROR_LOG_SERIALIZER_CLASS =
+      "google.bigtable.mirroring.write-error-log-serializer.impl";
+
   /**
    * Number of bytes that {@link MirroringBufferedMutator} should buffer before flushing underlying
    * primary BufferedMutator and performing a write to secondary database.

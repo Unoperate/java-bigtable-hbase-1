@@ -24,7 +24,6 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
  * This class makes this intent explicit.
  */
 public abstract class WriteOperationFutureCallback<T> implements FutureCallback<T> {
-
   @Override
   public final void onSuccess(@NullableDecl T t) {}
 

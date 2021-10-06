@@ -16,11 +16,9 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController.ResourceReservation;
@@ -129,7 +127,8 @@ public class TestHelpers {
 
   public static <T> T blockMethodCall(
       T table, final SettableFuture<Void> secondaryOperationAllowedFuture) {
-    return doAnswer(
+    return lenient()
+        .doAnswer(
             new Answer<Object>() {
               @Override
               public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
@@ -142,7 +141,8 @@ public class TestHelpers {
 
   public static <T> SettableFuture<Void> blockMethodCall(T methodCall) {
     final SettableFuture<Void> secondaryOperationAllowedFuture = SettableFuture.create();
-    when(methodCall)
+    lenient()
+        .when(methodCall)
         .thenAnswer(
             new Answer<Object>() {
               @Override
