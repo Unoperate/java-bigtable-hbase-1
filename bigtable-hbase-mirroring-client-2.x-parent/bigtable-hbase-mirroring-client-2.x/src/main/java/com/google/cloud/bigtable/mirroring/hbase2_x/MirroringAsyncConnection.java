@@ -15,15 +15,18 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.reflection.ReflectionConstructor;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.ServerName;
 import org.apache.hadoop.hbase.TableName;
@@ -40,13 +43,15 @@ import org.apache.hadoop.hbase.client.ScanResultConsumer;
 import org.apache.hadoop.hbase.security.User;
 
 public class MirroringAsyncConnection implements AsyncConnection {
-  private MirroringAsyncConfiguration configuration;
-  private AsyncConnection primaryConnection;
-  private AsyncConnection secondaryConnection;
+  private final MirroringAsyncConfiguration configuration;
+  private final AsyncConnection primaryConnection;
+  private final AsyncConnection secondaryConnection;
   private final MismatchDetector mismatchDetector;
+  private final ListenableReferenceCounter referenceCounter;
   private final FlowController flowController;
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   /**
    * The constructor called from {@link
@@ -77,6 +82,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
         ConnectionFactory.createAsyncConnection(this.configuration.secondaryConfiguration, user)
             .get();
 
+    this.referenceCounter = new ListenableReferenceCounter();
     this.flowController =
         new FlowController(
             ReflectionConstructor.construct(
@@ -106,7 +112,33 @@ public class MirroringAsyncConnection implements AsyncConnection {
         this.mismatchDetector,
         this.flowController,
         this.secondaryWriteErrorConsumer,
-        this.mirroringTracer);
+        this.mirroringTracer,
+        this.referenceCounter);
+  }
+
+  @Override
+  public boolean isClosed() {
+    return this.closed.get();
+  }
+
+  @Override
+  public synchronized void close() throws IOException {
+    if (this.closed.getAndSet(true)) {
+      return;
+    }
+
+    this.referenceCounter.decrementReferenceCount();
+    try {
+      this.referenceCounter.getOnLastReferenceClosed().get();
+      this.primaryConnection.close();
+      this.secondaryConnection.close();
+    } catch (InterruptedException e) {
+      IOException wrapperException = new InterruptedIOException();
+      wrapperException.initCause(e);
+      throw wrapperException;
+    } catch (ExecutionException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
@@ -152,22 +184,12 @@ public class MirroringAsyncConnection implements AsyncConnection {
   }
 
   @Override
-  public boolean isClosed() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public CompletableFuture<Hbck> getHbck() {
     throw new UnsupportedOperationException();
   }
 
   @Override
   public Hbck getHbck(ServerName serverName) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void close() throws IOException {
     throw new UnsupportedOperationException();
   }
 }

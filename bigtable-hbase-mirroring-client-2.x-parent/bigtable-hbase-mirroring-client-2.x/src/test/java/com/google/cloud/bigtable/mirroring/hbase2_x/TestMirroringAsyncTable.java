@@ -31,6 +31,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
@@ -78,6 +79,7 @@ public class TestMirroringAsyncTable {
   @Mock MismatchDetector mismatchDetector;
   @Mock FlowController flowController;
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
+  @Mock ListenableReferenceCounter referenceCounter;
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
 
@@ -92,7 +94,8 @@ public class TestMirroringAsyncTable {
                 mismatchDetector,
                 flowController,
                 secondaryWriteErrorConsumer,
-                new MirroringTracer()));
+                new MirroringTracer(),
+                referenceCounter));
   }
 
   @Test
@@ -105,9 +108,13 @@ public class TestMirroringAsyncTable {
     when(primaryTable.get(get)).thenReturn(primaryFuture);
     when(secondaryTable.get(get)).thenReturn(secondaryFuture);
 
+    verify(referenceCounter, never()).incrementReferenceCount();
     CompletableFuture<Result> resultFuture = mirroringTable.get(get);
+    verify(referenceCounter, times(1)).incrementReferenceCount();
     primaryFuture.complete(expectedResult);
+    verify(referenceCounter, never()).decrementReferenceCount();
     secondaryFuture.complete(expectedResult);
+    verify(referenceCounter, times(1)).decrementReferenceCount();
     Result result = resultFuture.get();
 
     assertThat(result).isEqualTo(expectedResult);
@@ -129,9 +136,13 @@ public class TestMirroringAsyncTable {
 
     IOException expectedException = new IOException("expected");
 
+    verify(referenceCounter, never()).incrementReferenceCount();
     CompletableFuture<Result> resultFuture = mirroringTable.get(get);
+    verify(referenceCounter, times(1)).incrementReferenceCount();
     primaryFuture.complete(expectedResult);
+    verify(referenceCounter, never()).decrementReferenceCount();
     secondaryFuture.completeExceptionally(expectedException);
+    verify(referenceCounter, times(1)).decrementReferenceCount();
     Result result = resultFuture.get();
 
     assertThat(result).isEqualTo(expectedResult);
@@ -256,9 +267,13 @@ public class TestMirroringAsyncTable {
     when(primaryTable.put(put)).thenReturn(primaryFuture);
     when(secondaryTable.put(put)).thenReturn(secondaryFuture);
 
+    verify(referenceCounter, never()).incrementReferenceCount();
     CompletableFuture<Void> resultFuture = mirroringTable.put(put);
+    verify(referenceCounter, times(1)).incrementReferenceCount();
     primaryFuture.complete(null);
+    verify(referenceCounter, never()).decrementReferenceCount();
     secondaryFuture.complete(null);
+    verify(referenceCounter, times(1)).decrementReferenceCount();
     resultFuture.get();
 
     verify(primaryTable, times(1)).put(put);
@@ -271,10 +286,14 @@ public class TestMirroringAsyncTable {
     CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
     when(primaryTable.put(put)).thenReturn(primaryFuture);
 
+    verify(referenceCounter, never()).incrementReferenceCount();
     CompletableFuture<Void> resultFuture = mirroringTable.put(put);
+    verify(referenceCounter, times(1)).incrementReferenceCount();
 
     IOException expectedException = new IOException("expected");
+    verify(referenceCounter, never()).decrementReferenceCount();
     primaryFuture.completeExceptionally(expectedException);
+    verify(referenceCounter, times(1)).decrementReferenceCount();
 
     assertThat(resultFuture.isCompletedExceptionally());
 
@@ -320,7 +339,12 @@ public class TestMirroringAsyncTable {
     List<Get> requests = Collections.emptyList();
     when(primaryTable.batch(requests)).thenReturn(Collections.emptyList());
 
+    verify(referenceCounter, never()).decrementReferenceCount();
+    verify(referenceCounter, never()).incrementReferenceCount();
     List<CompletableFuture<Object>> resultFutures = mirroringTable.batch(requests);
+    verify(referenceCounter, times(1)).decrementReferenceCount();
+    verify(referenceCounter, times(1)).incrementReferenceCount();
+
     assertThat(resultFutures.size()).isEqualTo(0);
 
     verify(primaryTable, times(1)).batch(requests);
@@ -367,6 +391,46 @@ public class TestMirroringAsyncTable {
     verify(secondaryWriteErrorConsumer, never()).consume(eq(HBaseOperation.BATCH), anyList());
   }
 
+  public void testBatchAllPrimaryFailed()
+      throws IOException, InterruptedException, ExecutionException {
+    setupFlowControllerMock(flowController);
+    Put put1 = createPut("test1", "f1", "q1", "v1");
+    Get get1 = createGet("get1");
+
+    List<Row> requests = Arrays.asList(new Row[] {put1, get1});
+
+    // op   | p    | s
+    // put1 | fail | x
+    // get1 | fail | x
+
+    final Result get1Result = createResult("get1", "value1");
+
+    List<CompletableFuture<Object>> primaryFutures =
+        Arrays.asList(new CompletableFuture<>(), new CompletableFuture<>());
+
+    when(primaryTable.batch(requests)).thenReturn(primaryFutures);
+
+    verify(referenceCounter, never()).incrementReferenceCount();
+    List<CompletableFuture<Object>> resultFutures = mirroringTable.batch(requests);
+    verify(referenceCounter, times(1)).incrementReferenceCount();
+
+    IOException ioe = new IOException("expected");
+    primaryFutures.get(0).completeExceptionally(ioe);
+    verify(referenceCounter, never()).decrementReferenceCount();
+    primaryFutures.get(1).completeExceptionally(ioe);
+    verify(referenceCounter, times(1)).decrementReferenceCount();
+
+    List<Object> results = waitForAll(resultFutures);
+    assertThat(results.size()).isEqualTo(2);
+
+    verify(primaryTable, times(1)).batch(requests);
+    verify(secondaryTable, never()).batch(anyList());
+
+    verify(mismatchDetector, never()).batch(anyList(), eq(ioe));
+    verify(secondaryWriteErrorConsumer, never())
+        .consume(eq(HBaseOperation.BATCH), (List<? extends Row>) any());
+  }
+
   @Test
   public void testBatchGetAndPut() {
     Put put1 = createPut("test1", "f1", "q1", "v1");
@@ -409,7 +473,9 @@ public class TestMirroringAsyncTable {
     when(primaryTable.batch(requests)).thenReturn(primaryFutures);
     when(secondaryTable.batch(secondaryRequests)).thenReturn(secondaryFutures);
 
+    verify(referenceCounter, never()).incrementReferenceCount();
     List<CompletableFuture<Object>> resultFutures = mirroringTable.batch(requests);
+    verify(referenceCounter, times(1)).incrementReferenceCount();
     IOException ioe = new IOException("expected");
 
     primaryFutures.get(0).complete(null); // put1 - ok
@@ -422,7 +488,9 @@ public class TestMirroringAsyncTable {
     secondaryFutures.get(0).completeExceptionally(ioe); // put1 - failed
     secondaryFutures.get(1).complete(null); // put3 - ok
     secondaryFutures.get(2).completeExceptionally(ioe); // get1 - failed
+    verify(referenceCounter, never()).decrementReferenceCount();
     secondaryFutures.get(3).complete(get3Result); // get3 - ok
+    verify(referenceCounter, times(1)).decrementReferenceCount();
 
     List<Object> results = waitForAll(resultFutures);
     assertThat(results.size()).isEqualTo(primaryFutures.size());
@@ -579,7 +647,7 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void TestExceptionalFlowControllerAndWriteInBatch()
+  public void testExceptionalFlowControllerAndWriteInBatch()
       throws ExecutionException, InterruptedException {
     setupFlowControllerToRejectRequests(flowController);
     Put put1 = createPut("test1", "f1", "q1", "v1");

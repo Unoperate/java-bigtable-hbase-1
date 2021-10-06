@@ -21,6 +21,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
@@ -69,6 +70,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private final FlowController flowController;
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
+  private final ListenableReferenceCounter referenceCounter;
 
   public MirroringAsyncTable(
       AsyncTable<C> primaryTable,
@@ -76,85 +78,108 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       MismatchDetector mismatchDetector,
       FlowController flowController,
       SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer,
-      MirroringTracer mirroringTracer) {
+      MirroringTracer mirroringTracer,
+      ListenableReferenceCounter referenceCounter) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
     this.verificationContinuationFactory = new VerificationContinuationFactory(mismatchDetector);
     this.flowController = flowController;
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     this.mirroringTracer = mirroringTracer;
+    this.referenceCounter = referenceCounter;
   }
 
   @Override
   public CompletableFuture<Result> get(Get get) {
     CompletableFuture<Result> primaryFuture = this.primaryTable.get(get);
-    return readWithVerificationAndFlowControl(
-            RequestResourcesDescription::new,
-            primaryFuture,
-            () -> this.secondaryTable.get(get),
-            (result) -> this.verificationContinuationFactory.get(get, result))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Result>>
+        completionStages =
+            readWithVerificationAndFlowControl(
+                RequestResourcesDescription::new,
+                primaryFuture,
+                () -> this.secondaryTable.get(get),
+                (result) -> this.verificationContinuationFactory.get(get, result));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
   public CompletableFuture<Boolean> exists(Get get) {
     CompletableFuture<Boolean> primaryFuture = this.primaryTable.exists(get);
-    return readWithVerificationAndFlowControl(
-            RequestResourcesDescription::new,
-            primaryFuture,
-            () -> this.secondaryTable.exists(get),
-            (result) -> this.verificationContinuationFactory.exists(get, result))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Boolean>>
+        completionStages =
+            readWithVerificationAndFlowControl(
+                RequestResourcesDescription::new,
+                primaryFuture,
+                () -> this.secondaryTable.exists(get),
+                (result) -> this.verificationContinuationFactory.exists(get, result));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
   public CompletableFuture<Void> put(Put put) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.put(put);
-    return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(put),
-            primaryFuture,
-            () -> this.secondaryTable.put(put))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Void>>
+        completionStages =
+            writeWithFlowControl(
+                new MirroringTable.WriteOperationInfo(put),
+                primaryFuture,
+                () -> this.secondaryTable.put(put));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
   public CompletableFuture<Void> delete(Delete delete) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.delete(delete);
-    return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(delete),
-            primaryFuture,
-            () -> this.secondaryTable.delete(delete))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Void>>
+        completionStages =
+            writeWithFlowControl(
+                new MirroringTable.WriteOperationInfo(delete),
+                primaryFuture,
+                () -> this.secondaryTable.delete(delete));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
   public CompletableFuture<Result> append(Append append) {
     CompletableFuture<Result> primaryFuture = this.primaryTable.append(append);
-    return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(append),
-            primaryFuture,
-            () -> this.secondaryTable.append(append))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Result>>
+        completionStages =
+            writeWithFlowControl(
+                new MirroringTable.WriteOperationInfo(append),
+                primaryFuture,
+                () -> this.secondaryTable.append(append));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
   public CompletableFuture<Result> increment(Increment increment) {
     CompletableFuture<Result> primaryFuture = this.primaryTable.increment(increment);
-    return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(increment),
-            primaryFuture,
-            () -> this.secondaryTable.increment(increment))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Result>>
+        completionStages =
+            writeWithFlowControl(
+                new MirroringTable.WriteOperationInfo(increment),
+                primaryFuture,
+                () -> this.secondaryTable.increment(increment));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
   public CompletableFuture<Void> mutateRow(RowMutations rowMutations) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.mutateRow(rowMutations);
-    return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(rowMutations),
-            primaryFuture,
-            () -> this.secondaryTable.mutateRow(rowMutations))
-        .result;
+    AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<Void>>
+        completionStages =
+            writeWithFlowControl(
+                new MirroringTable.WriteOperationInfo(rowMutations),
+                primaryFuture,
+                () -> this.secondaryTable.mutateRow(rowMutations));
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
   }
 
   @Override
@@ -174,17 +199,35 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
   @Override
   public <T> List<CompletableFuture<T>> batch(List<? extends Row> actions) {
+    AsyncRequestScheduling.ResultWithVerificationCompletion<List<CompletableFuture<T>>>
+        completionStages = batchWrapper(actions);
+    keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
+    return completionStages.result;
+  }
+
+  private void keepReferenceUntilOperationCompletes(CompletableFuture<Void> future) {
+    this.referenceCounter.incrementReferenceCount();
+    future.whenComplete(
+        (ignoredResult, ignoredError) -> this.referenceCounter.decrementReferenceCount());
+  }
+
+  public <T>
+      AsyncRequestScheduling.ResultWithVerificationCompletion<List<CompletableFuture<T>>>
+          batchWrapper(List<? extends Row> actions) {
     final int numActions = actions.size();
-    final List<CompletableFuture<T>> resultFutures =
-        Stream.generate(() -> new CompletableFuture<T>())
-            .limit(numActions)
-            .collect(Collectors.toCollection(ArrayList::new));
+    final AsyncRequestScheduling.ResultWithVerificationCompletion<List<CompletableFuture<T>>>
+        returnedValue =
+            new AsyncRequestScheduling.ResultWithVerificationCompletion<>(
+                Stream.generate((Supplier<CompletableFuture<T>>) CompletableFuture::new)
+                    .limit(numActions)
+                    .collect(Collectors.toCollection(ArrayList::new)));
+
     final List<CompletableFuture<T>> primaryFutures = this.primaryTable.batch(actions);
     // Unfortunately, we cannot create T[].
     final Object[] primaryResults = new Object[numActions];
 
     BiConsumer<Integer, Throwable> primaryErrorHandler =
-        (idx, throwable) -> resultFutures.get(idx).completeExceptionally(throwable);
+        (idx, throwable) -> returnedValue.result.get(idx).completeExceptionally(throwable);
     waitForAllWithErrorHandler(primaryFutures, primaryErrorHandler, primaryResults)
         .whenComplete(
             (ignoredResult, ignoredError) -> {
@@ -195,6 +238,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 // All results were instances of Throwable, so we already completed
                 // exceptionally result futures by errorHandler passed to
                 // waitForAllWithErrorHandler.
+                returnedValue.getVerificationCompletedFuture().complete(null);
                 return;
               }
 
@@ -220,32 +264,36 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
               resourceReservationRequest.whenComplete(
                   (ignoredResourceReservation, resourceReservationError) -> {
-                    completeSuccessfulResultFutures(resultFutures, primaryResults, numActions);
+                    completeSuccessfulResultFutures(
+                        returnedValue.result, primaryResults, numActions);
                     if (resourceReservationError != null) {
                       this.secondaryWriteErrorConsumer.consume(
                           HBaseOperation.BATCH, successfulReadWriteSplit.writeOperations);
                       return;
                     }
-                    reserveFlowControlResourcesThenScheduleSecondary(
-                        CompletableFuture.completedFuture(null),
-                        resourceReservationRequest,
-                        () ->
-                            waitForAllWithErrorHandler(
-                                this.secondaryTable.batch(operationsToScheduleOnSecondary),
-                                (idx, throwable) -> {},
-                                secondaryResults),
-                        (ignoredPrimaryResult) ->
-                            BatchHelpers.createBatchVerificationCallback(
-                                failedSuccessfulSplit,
-                                successfulReadWriteSplit,
-                                secondaryResults,
-                                verificationContinuationFactory.getMismatchDetector(),
-                                secondaryWriteErrorConsumer,
-                                resultIsFaultyPredicate,
-                                mirroringTracer));
+                    FutureUtils.forwardResult(
+                        reserveFlowControlResourcesThenScheduleSecondary(
+                                CompletableFuture.completedFuture(null),
+                                resourceReservationRequest,
+                                () ->
+                                    waitForAllWithErrorHandler(
+                                        this.secondaryTable.batch(operationsToScheduleOnSecondary),
+                                        (idx, throwable) -> {},
+                                        secondaryResults),
+                                (ignoredPrimaryResult) ->
+                                    BatchHelpers.createBatchVerificationCallback(
+                                        failedSuccessfulSplit,
+                                        successfulReadWriteSplit,
+                                        secondaryResults,
+                                        verificationContinuationFactory.getMismatchDetector(),
+                                        secondaryWriteErrorConsumer,
+                                        resultIsFaultyPredicate,
+                                        mirroringTracer))
+                            .getVerificationCompletedFuture(),
+                        returnedValue.getVerificationCompletedFuture());
                   });
             });
-    return resultFutures;
+    return returnedValue;
   }
 
   private <T> void completeSuccessfulResultFutures(
