@@ -26,13 +26,14 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
+import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
@@ -101,7 +102,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   private ListenableReferenceCounter referenceCounter;
   private boolean closed = false;
 
-  private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
+  private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
 
   /**
@@ -117,7 +118,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       ExecutorService executorService,
       MismatchDetector mismatchDetector,
       FlowController flowController,
-      SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer,
+      SecondaryWriteErrorConsumer secondaryWriteErrorConsumer,
       MirroringTracer mirroringTracer) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
@@ -800,7 +801,8 @@ public class MirroringTable implements Table, ListenableCloseable {
         new WriteOperationFutureCallback<T>() {
           @Override
           public void onFailure(Throwable throwable) {
-            secondaryWriteErrorConsumer.consume(operation, writeOperationInfo.operations);
+            secondaryWriteErrorConsumer.consume(
+                operation, writeOperationInfo.operations, throwable);
           }
         };
 
@@ -811,10 +813,12 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.mirroringTracer.spanFactory.wrapWriteOperationCallback(writeErrorCallback),
             flowController,
             this.mirroringTracer,
-            new Runnable() {
+            new Function<Throwable, Void>() {
               @Override
-              public void run() {
-                secondaryWriteErrorConsumer.consume(operation, writeOperationInfo.operations);
+              public Void apply(Throwable throwable) {
+                secondaryWriteErrorConsumer.consume(
+                    operation, writeOperationInfo.operations, throwable);
+                return null;
               }
             }));
   }
@@ -854,22 +858,24 @@ public class MirroringTable implements Table, ListenableCloseable {
         new RequestResourcesDescription(
             operationsToScheduleOnSecondary, successfulReadWriteSplit.readResults);
 
-    Runnable resourceReservationFailureCallback =
-        new Runnable() {
+    Function<Throwable, Void> resourceReservationFailureCallback =
+        new Function<Throwable, Void>() {
           @Override
-          public void run() {
+          public Void apply(Throwable throwable) {
             secondaryWriteErrorConsumer.consume(
-                HBaseOperation.BATCH, successfulReadWriteSplit.writeOperations);
+                HBaseOperation.BATCH, successfulReadWriteSplit.writeOperations, throwable);
+            return null;
           }
         };
 
-    RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
-        requestResourcesDescription,
-        this.secondaryAsyncWrapper.batch(operationsToScheduleOnSecondary, resultsSecondary),
-        verificationFuture,
-        this.flowController,
-        this.mirroringTracer,
-        resourceReservationFailureCallback);
+    this.referenceCounter.holdReferenceUntilCompletion(
+        RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
+            requestResourcesDescription,
+            this.secondaryAsyncWrapper.batch(operationsToScheduleOnSecondary, resultsSecondary),
+            verificationFuture,
+            this.flowController,
+            this.mirroringTracer,
+            resourceReservationFailureCallback));
   }
 
   public static class WriteOperationInfo {

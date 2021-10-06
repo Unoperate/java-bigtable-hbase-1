@@ -24,9 +24,9 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-  TestErrorDetection.class,
-  TestBlocking.class,
-  TestBufferedMutator.class,
+  //  TestErrorDetection.class,
+  //  TestBlocking.class,
+  //  TestBufferedMutator.class,
   TestMirroringTable.class
 })
 public class IntegrationTests {

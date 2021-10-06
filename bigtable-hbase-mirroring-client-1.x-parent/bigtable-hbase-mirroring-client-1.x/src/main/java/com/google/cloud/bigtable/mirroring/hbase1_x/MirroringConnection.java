@@ -17,9 +17,11 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Appender;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Serializer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowControlStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
@@ -44,14 +46,15 @@ import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.security.User;
 
 public class MirroringConnection implements Connection {
-
-  private static final Logger Log = new Logger(MirroringConnection.class);
+  private static final com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger Log =
+      new com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger(MirroringConnection.class);
   private final FlowController flowController;
   private final ExecutorService executorService;
   private final MismatchDetector mismatchDetector;
   private final ListenableReferenceCounter referenceCounter;
   private final MirroringTracer mirroringTracer;
-  private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumerWithMetrics;
+  private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
+  private final Logger failedWritesLogger;
   private MirroringConfiguration configuration;
   private Connection primaryConnection;
   private Connection secondaryConnection;
@@ -66,6 +69,7 @@ public class MirroringConnection implements Connection {
    */
   public MirroringConnection(Configuration conf, boolean managed, ExecutorService pool, User user)
       throws IOException {
+    System.out.println("Started connection");
     assert !managed; // This is always-false legacy hbase parameter.
     this.configuration = new MirroringConfiguration(conf);
     this.mirroringTracer = new MirroringTracer();
@@ -91,11 +95,20 @@ public class MirroringConnection implements Connection {
         ReflectionConstructor.construct(
             this.configuration.mirroringOptions.mismatchDetectorClass, this.mirroringTracer);
 
+    this.failedWritesLogger =
+        new Logger(
+            ReflectionConstructor.<Appender>construct(
+                this.configuration.mirroringOptions.writeErrorLogAppenderClass,
+                Configuration.class,
+                this.configuration),
+            ReflectionConstructor.<Serializer>construct(
+                this.configuration.mirroringOptions.writeErrorLogSerializerClass));
+
     final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer =
         ReflectionConstructor.construct(
-            this.configuration.mirroringOptions.writeErrorConsumerClass);
+            this.configuration.mirroringOptions.writeErrorConsumerClass, this.failedWritesLogger);
 
-    this.secondaryWriteErrorConsumerWithMetrics =
+    this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(
             this.mirroringTracer, secondaryWriteErrorConsumer);
   }
@@ -133,7 +146,7 @@ public class MirroringConnection implements Connection {
               executorService,
               this.mismatchDetector,
               this.flowController,
-              this.secondaryWriteErrorConsumerWithMetrics,
+              this.secondaryWriteErrorConsumer,
               this.mirroringTracer);
       this.referenceCounter.holdReferenceUntilClosing(table);
       return table;
@@ -157,7 +170,7 @@ public class MirroringConnection implements Connection {
           configuration,
           flowController,
           executorService,
-          secondaryWriteErrorConsumerWithMetrics,
+          secondaryWriteErrorConsumer,
           mirroringTracer);
     }
   }
@@ -181,6 +194,7 @@ public class MirroringConnection implements Connection {
       this.referenceCounter.decrementReferenceCount();
       try {
         this.referenceCounter.getOnLastReferenceClosed().get();
+        System.out.println("Closed connection");
         Log.trace("close(): closed");
       } catch (InterruptedException e) {
         IOException wrapperException = new InterruptedIOException();
@@ -188,6 +202,13 @@ public class MirroringConnection implements Connection {
         throw wrapperException;
       } catch (ExecutionException e) {
         throw new RuntimeException(e);
+      } finally {
+        try {
+          this.failedWritesLogger.close();
+        } catch (Exception e) {
+          // TODO
+          e.printStackTrace();
+        }
       }
     }
   }

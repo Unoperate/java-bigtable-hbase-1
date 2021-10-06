@@ -37,6 +37,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -110,7 +111,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(put),
         primaryFuture,
         () -> this.secondaryTable.put(put),
-        () -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.PUT, put));
+        (error) -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.PUT, put, error));
   }
 
   @Override
@@ -120,7 +121,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(delete),
         primaryFuture,
         () -> this.secondaryTable.delete(delete),
-        () -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.DELETE, delete));
+        (error) -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.DELETE, delete, error));
   }
 
   @Override
@@ -130,7 +131,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(append),
         primaryFuture,
         () -> this.secondaryTable.append(append),
-        () -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.APPEND, append));
+        (error) -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.APPEND, append, error));
   }
 
   @Override
@@ -140,7 +141,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(increment),
         primaryFuture,
         () -> this.secondaryTable.increment(increment),
-        () -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.INCREMENT, increment));
+        (error) ->
+            this.secondaryWriteErrorConsumer.consume(HBaseOperation.INCREMENT, increment, error));
   }
 
   @Override
@@ -150,7 +152,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new MirroringTable.WriteOperationInfo(rowMutations),
         primaryFuture,
         () -> this.secondaryTable.mutateRow(rowMutations),
-        () -> this.secondaryWriteErrorConsumer.consume(HBaseOperation.MUTATE_ROW, rowMutations));
+        (error) ->
+            this.secondaryWriteErrorConsumer.consume(
+                HBaseOperation.MUTATE_ROW, rowMutations, error));
   }
 
   @Override
@@ -220,7 +224,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                     completeSuccessfulResultFutures(resultFutures, primaryResults, numActions);
                     if (resourceReservationError != null) {
                       this.secondaryWriteErrorConsumer.consume(
-                          HBaseOperation.BATCH, successfulReadWriteSplit.writeOperations);
+                          HBaseOperation.BATCH,
+                          successfulReadWriteSplit.writeOperations,
+                          resourceReservationError);
                       return;
                     }
                     reserveFlowControlResourcesThenScheduleSecondary(
@@ -312,7 +318,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       final MirroringTable.WriteOperationInfo writeOperationInfo,
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      final Runnable secondaryWriteErrorHandler) {
+      final Consumer<Throwable> controlFlowReservationErrorHandler) {
     return reserveFlowControlResourcesThenScheduleSecondary(
         primaryFuture,
         FutureConverter.toCompletable(
@@ -325,10 +331,10 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
               @Override
               public void onFailure(Throwable throwable) {
-                secondaryWriteErrorHandler.run();
+                controlFlowReservationErrorHandler.accept(throwable);
               }
             },
-        secondaryWriteErrorHandler);
+        controlFlowReservationErrorHandler);
   }
 
   @Override

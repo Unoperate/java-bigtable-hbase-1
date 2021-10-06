@@ -100,9 +100,17 @@ public class TestMirroringConnection {
   public void testConnectionFactoryCreatesMirroringConnection() throws IOException {
     Configuration testConfiguration = new Configuration();
     testConfiguration.set("hbase.client.connection.impl", TestConnection.class.getCanonicalName());
-    MirroringConfiguration configuration =
-        new MirroringConfiguration(testConfiguration, testConfiguration, testConfiguration);
-    Connection connection = ConnectionFactory.createConnection(configuration);
-    assertTrue(connection instanceof MirroringConnection);
+    testConfiguration.set(
+        "google.bigtable.mirroring.primary-client.connection.impl",
+        MirroringConnection.class.getCanonicalName());
+    testConfiguration.set(
+        "google.bigtable.mirroring.secondary-client.connection.impl",
+        MirroringConnection.class.getCanonicalName());
+    testConfiguration.set("google.bigtable.mirroring.primary-client.prefix", "prefix");
+    testConfiguration.set("google.bigtable.mirroring.appender.prefix-path", "/tmp/test-");
+    testConfiguration.set("google.bigtable.mirroring.appender.max-buffer-size", "1024");
+    testConfiguration.set("google.bigtable.mirroring.appender.drop-on-overflow", "false");
+    Connection connection = ConnectionFactory.createConnection(testConfiguration);
+    assertTrue(connection instanceof TestConnection);
   }
 }

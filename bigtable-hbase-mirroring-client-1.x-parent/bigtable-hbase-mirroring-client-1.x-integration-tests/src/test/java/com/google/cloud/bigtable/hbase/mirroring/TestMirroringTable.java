@@ -30,11 +30,16 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.TestWriteErrorConsumer;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegion;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegionRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.DefaultAppender;
 import com.google.common.base.Predicate;
 import com.google.common.primitives.Longs;
+import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Delete;
@@ -43,9 +48,11 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
+import org.apache.hadoop.hbase.shaded.org.apache.commons.io.FileUtils;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.junit.Assume;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -166,11 +173,14 @@ public class TestMirroringTable {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
 
-    int databaseEntriesCount = 1000;
+    int databaseEntriesCount = 20000;
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
+
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
+    System.out.println("start c1");
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -178,9 +188,14 @@ public class TestMirroringTable {
         }
       }
     }
+    System.out.println("end c1");
     databaseHelpers.verifyTableConsistency(tableName1, failPredicate);
 
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
+
+    ReportedErrorsContext reportedErrorsContext2 = new ReportedErrorsContext();
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
+    System.out.println("start c2");
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
         int id = 0;
@@ -194,10 +209,13 @@ public class TestMirroringTable {
         }
       }
     }
+    System.out.println("end c2");
     databaseHelpers.verifyTableConsistency(tableName2, failPredicate);
+    reportedErrorsContext2.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
+  @Ignore
   public void testDelete() throws IOException {
     int databaseEntriesCount = 1000;
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
@@ -233,6 +251,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testDeleteWithPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -314,6 +333,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failPredicate, "failed");
 
+    ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
@@ -325,7 +345,9 @@ public class TestMirroringTable {
     assertThat(databaseHelpers.countRows(tableName1, DatabaseSelector.PRIMARY)).isEqualTo(0);
     assertThat(databaseHelpers.countRows(tableName1, DatabaseSelector.SECONDARY))
         .isEqualTo(databaseEntriesCount / 2);
+    reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
 
+    ReportedErrorsContext reportedErrorsContext2 = new ReportedErrorsContext();
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName2)) {
         int id = 0;
@@ -344,9 +366,12 @@ public class TestMirroringTable {
     assertThat(databaseHelpers.countRows(tableName2, DatabaseSelector.PRIMARY)).isEqualTo(0);
     assertThat(databaseHelpers.countRows(tableName2, DatabaseSelector.SECONDARY))
         .isEqualTo(databaseEntriesCount / 2);
+
+    reportedErrorsContext2.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
   @Test
+  @Ignore
   public void testCheckAndPut() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -398,6 +423,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndPutPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -440,6 +466,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndPutSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -483,6 +510,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndDelete() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -550,6 +578,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndDeletePrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -594,6 +623,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndDeleteSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -635,6 +665,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndMutate() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -689,6 +720,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndMutatePrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -735,6 +767,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testCheckAndMutateSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -778,6 +811,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testIncrement() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -807,6 +841,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testIncrementPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -837,6 +872,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testIncrementSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -863,6 +899,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testAppend() throws IOException {
     int databaseEntriesCount = 1000;
 
@@ -894,6 +931,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testAppendPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -925,6 +963,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testAppendSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -951,6 +990,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testGet() throws IOException {
     int databaseEntriesCount = 1000;
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
@@ -967,6 +1007,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testGetWithPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -996,6 +1037,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testGetWithSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -1021,6 +1063,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testExists() throws IOException {
     int databaseEntriesCount = 1000;
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
@@ -1037,6 +1080,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testExistsWithPrimaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -1066,6 +1110,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testExistsWithSecondaryErrors() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -1091,6 +1136,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testBatch() throws IOException, InterruptedException {
     int databaseEntriesCount = 1000;
 
@@ -1116,6 +1162,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testBatchWithPrimaryErrors() throws IOException, InterruptedException {
     int databaseEntriesCount = 1000;
     Assume.assumeTrue(
@@ -1153,6 +1200,7 @@ public class TestMirroringTable {
   }
 
   @Test
+  @Ignore
   public void testBatchWithSecondaryErrors() throws IOException, InterruptedException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -1197,6 +1245,58 @@ public class TestMirroringTable {
       if (!willThrow) {
         fail("shouldn't throw");
       }
+    }
+  }
+
+  private static int getSecondaryWriteErrorLogMessagesWritten() throws IOException {
+    Configuration configuration = ConfigurationHelper.newConfiguration();
+    String prefixPath = configuration.get(DefaultAppender.PREFIX_PATH_KEY);
+    String[] prefixParts = prefixPath.split("/");
+    final String fileNamePrefix = prefixParts[prefixParts.length - 1];
+    String[] directoryParts = Arrays.copyOf(prefixParts, prefixParts.length - 1);
+    StringBuilder sb = new StringBuilder();
+    for (String directoryPart : directoryParts) {
+      sb.append(directoryPart);
+      sb.append("/");
+    }
+    String directoryPath = sb.toString();
+    File dir = new File(directoryPath);
+    File[] files =
+        dir.listFiles(
+            new FileFilter() {
+              @Override
+              public boolean accept(File file) {
+                return file.getName().startsWith(fileNamePrefix);
+              }
+            });
+
+    int numberOfLines = 0;
+    for (File f : files) {
+      String fileStr = FileUtils.readFileToString(f);
+      if (!fileStr.isEmpty()) {
+        int k = fileStr.split("\n").length;
+        numberOfLines += k;
+        System.out.printf("file %s %s\n", f.getName(), k);
+      }
+    }
+    return numberOfLines;
+  }
+
+  static class ReportedErrorsContext {
+    final int initialErrorsConsumed;
+    final int initialErrorsWritten;
+
+    public ReportedErrorsContext() throws IOException {
+      this.initialErrorsConsumed = TestWriteErrorConsumer.getErrorCount();
+      this.initialErrorsWritten = getSecondaryWriteErrorLogMessagesWritten();
+    }
+
+    public void assertNewErrorsReported(int expectedNewErrors) throws IOException {
+      int errorsConsumed = TestWriteErrorConsumer.getErrorCount();
+      int errorsWritten = getSecondaryWriteErrorLogMessagesWritten();
+
+      assertThat(errorsConsumed - initialErrorsConsumed).isEqualTo(expectedNewErrors);
+      assertThat(errorsWritten - initialErrorsWritten).isEqualTo(expectedNewErrors);
     }
   }
 }
