@@ -79,8 +79,7 @@ public class MirroringResultScanner<T> extends AbstractClientScanner
       VerificationContinuationFactory verificationContinuationFactory,
       FlowController flowController,
       MirroringTracer mirroringTracer,
-      boolean isVerificationEnabled)
-      throws IOException {
+      boolean isVerificationEnabled) {
     this.originalScan = originalScan;
     this.primaryResultScanner = primaryResultScanner;
     this.secondaryResultScannerWrapper = secondaryAsyncScannerWrapper;
@@ -216,6 +215,9 @@ public class MirroringResultScanner<T> extends AbstractClientScanner
       RequestResourcesDescription requestResourcesDescription,
       Supplier<ListenableFuture<U>> nextSupplier,
       FutureCallback<U> scannerNext) {
+    if (!this.isVerificationEnabled) {
+      return;
+    }
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
             requestResourcesDescription,

@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.hadoop.hbase.Cell;
@@ -70,6 +71,7 @@ public class TestMirroringAsyncTableInputModification {
   @Mock FlowController flowController;
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   @Mock ListenableReferenceCounter referenceCounter;
+  @Mock ExecutorService executorService;
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
   SettableFuture<Void> secondaryOperationAllowedFuture;
@@ -86,7 +88,8 @@ public class TestMirroringAsyncTableInputModification {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new MirroringTracer(),
-                referenceCounter));
+                referenceCounter,
+                executorService));
 
     secondaryOperationAllowedFuture = SettableFuture.create();
     blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).batch(anyList());

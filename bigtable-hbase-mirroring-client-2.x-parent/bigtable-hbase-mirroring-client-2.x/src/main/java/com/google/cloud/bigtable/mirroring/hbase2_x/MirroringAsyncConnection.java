@@ -28,6 +28,7 @@ import java.io.InterruptedIOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
@@ -58,6 +59,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final ExecutorService executorService;
 
   /**
    * The constructor called from {@link
@@ -113,6 +115,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
 
     this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(this.mirroringTracer, writeErrorConsumer);
+    this.executorService = Executors.newCachedThreadPool();
   }
 
   @Override
@@ -220,7 +223,8 @@ public class MirroringAsyncConnection implements AsyncConnection {
           flowController,
           secondaryWriteErrorConsumer,
           mirroringTracer,
-          referenceCounter);
+          referenceCounter,
+          executorService);
     }
 
     private AsyncTableBuilder<C> setTimeParameter(
