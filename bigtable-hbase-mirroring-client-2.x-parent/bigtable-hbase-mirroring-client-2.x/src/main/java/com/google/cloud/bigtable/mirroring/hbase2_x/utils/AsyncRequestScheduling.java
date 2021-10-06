@@ -16,57 +16,74 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureUtils;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class AsyncRequestScheduling {
-  public static <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
-      final CompletableFuture<T> primaryFuture,
-      final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
-      final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      final Function<T, FutureCallback<T>> verificationCreator) {
+  public static <T>
+      ResultWithVerificationCompletion<CompletableFuture<T>>
+          reserveFlowControlResourcesThenScheduleSecondary(
+              final CompletableFuture<T> primaryFuture,
+              final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
+              final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
+              final Function<T, FutureCallback<T>> verificationCreator) {
     return reserveFlowControlResourcesThenScheduleSecondary(
         primaryFuture, reservationFuture, secondaryFutureSupplier, verificationCreator, () -> {});
   }
 
-  public static <T> CompletableFuture<T> reserveFlowControlResourcesThenScheduleSecondary(
-      final CompletableFuture<T> primaryFuture,
-      final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
-      final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
-      final Function<T, FutureCallback<T>> verificationCreator,
-      final Runnable flowControlReservationErrorHandler) {
-    CompletableFuture<T> resultFuture = new CompletableFuture<T>();
-    primaryFuture.whenComplete(
-        (primaryResult, primaryError) -> {
-          if (primaryError != null) {
-            FlowController.cancelRequest(reservationFuture);
-            resultFuture.completeExceptionally(primaryError);
-            return;
-          }
-          reservationFuture.whenComplete(
-              (reservation, reservationError) -> {
-                resultFuture.complete(primaryResult);
-                if (reservationError != null) {
-                  flowControlReservationErrorHandler.run();
-                  return;
-                }
+  public static <T>
+      ResultWithVerificationCompletion<CompletableFuture<T>>
+          reserveFlowControlResourcesThenScheduleSecondary(
+              final CompletableFuture<T> primaryFuture,
+              final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
+              final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
+              final Function<T, FutureCallback<T>> verificationCreator,
+              final Runnable flowControlReservationErrorHandler) {
+    ResultWithVerificationCompletion<CompletableFuture<T>> returnedValue =
+        new ResultWithVerificationCompletion<>(new CompletableFuture<>());
 
-                scheduleVerificationAfterSecondaryOperation(
-                    reservation,
-                    secondaryFutureSupplier.get(),
-                    verificationCreator.apply(primaryResult));
-              });
-        });
-    return resultFuture;
+    primaryFuture
+        .thenAccept(
+            (primaryResult) ->
+                reservationFuture
+                    .whenComplete(
+                        (ignoredResult, ignoredError) ->
+                            returnedValue.result.complete(primaryResult))
+                    .thenAccept(
+                        reservation ->
+                            FutureUtils.forwardResult(
+                                scheduleVerificationAfterSecondaryOperation(
+                                    reservation,
+                                    secondaryFutureSupplier.get(),
+                                    verificationCreator.apply(primaryResult)),
+                                returnedValue.getVerificationCompletedFuture()))
+                    .exceptionally(
+                        reservationError -> {
+                          flowControlReservationErrorHandler.run();
+                          returnedValue.verificationCompleted();
+                          throw new CompletionException(reservationError);
+                        }))
+        .exceptionally(
+            primaryError -> {
+              FlowController.cancelRequest(reservationFuture);
+              returnedValue.result.completeExceptionally(
+                  FutureUtils.unwrapCompletionException(primaryError));
+              returnedValue.verificationCompleted();
+              throw new CompletionException(primaryError);
+            });
+
+    return returnedValue;
   }
 
-  private static <T> void scheduleVerificationAfterSecondaryOperation(
+  private static <T> CompletableFuture<Void> scheduleVerificationAfterSecondaryOperation(
       final FlowController.ResourceReservation reservation,
       final CompletableFuture<T> secondaryFuture,
       final FutureCallback<T> verificationCallback) {
-    secondaryFuture.whenComplete(
+    return secondaryFuture.handle(
         (secondaryResult, secondaryError) -> {
           try {
             if (secondaryError != null) {
@@ -77,6 +94,25 @@ public class AsyncRequestScheduling {
           } finally {
             reservation.release();
           }
+          return null;
         });
+  }
+
+  public static class ResultWithVerificationCompletion<T> {
+    public final T result;
+    private final CompletableFuture<Void> verificationEndedFuture;
+
+    public ResultWithVerificationCompletion(T result) {
+      this.result = result;
+      this.verificationEndedFuture = new CompletableFuture<>();
+    }
+
+    public void verificationCompleted() {
+      this.verificationEndedFuture.complete(null);
+    }
+
+    public CompletableFuture<Void> getVerificationCompletedFuture() {
+      return this.verificationEndedFuture;
+    }
   }
 }
