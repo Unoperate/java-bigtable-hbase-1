@@ -23,7 +23,7 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createRes
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -177,7 +177,8 @@ public class TestMirroringTableInputModification {
   }
 
   private void mockGet(Table table) throws IOException {
-    doAnswer(
+    lenient()
+        .doAnswer(
             new Answer() {
               @Override
               public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
@@ -194,7 +195,8 @@ public class TestMirroringTableInputModification {
   }
 
   private void mockExistsAll(Table table) throws IOException {
-    doAnswer(
+    lenient()
+        .doAnswer(
             new Answer<Object>() {
               @Override
               public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
@@ -207,7 +209,8 @@ public class TestMirroringTableInputModification {
   }
 
   private void mockBatch(Table table) throws IOException, InterruptedException {
-    doAnswer(
+    lenient()
+        .doAnswer(
             new Answer<Void>() {
               @Override
               public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
