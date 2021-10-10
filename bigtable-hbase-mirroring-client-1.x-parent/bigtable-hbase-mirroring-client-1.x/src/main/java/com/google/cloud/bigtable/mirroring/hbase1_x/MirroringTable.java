@@ -424,10 +424,7 @@ public class MirroringTable implements Table, ListenableCloseable {
           },
           HBaseOperation.PUT);
       scheduleWriteWithControlFlow(
-          new WriteOperationInfo(put),
-          this.secondaryAsyncWrapper.put(put),
-          this.flowController,
-          HBaseOperation.PUT);
+          new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put), this.flowController);
     }
   }
 
@@ -486,8 +483,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       scheduleWriteWithControlFlow(
           new WriteOperationInfo(delete),
           this.secondaryAsyncWrapper.delete(delete),
-          this.flowController,
-          HBaseOperation.DELETE);
+          this.flowController);
     }
   }
 
@@ -556,8 +552,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       scheduleWriteWithControlFlow(
           new WriteOperationInfo(rowMutations),
           this.secondaryAsyncWrapper.mutateRow(rowMutations),
-          this.flowController,
-          HBaseOperation.MUTATE_ROW);
+          this.flowController);
     }
   }
 
@@ -576,11 +571,10 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.APPEND);
 
+      Put put = makePutFromResult(result);
+
       scheduleWriteWithControlFlow(
-          new WriteOperationInfo(append),
-          this.secondaryAsyncWrapper.put(makePutFromResult(result)),
-          this.flowController,
-          HBaseOperation.PUT);
+          new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put), this.flowController);
       return result;
     }
   }
@@ -600,11 +594,10 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.INCREMENT);
 
+      Put put = makePutFromResult(result);
+
       scheduleWriteWithControlFlow(
-          new WriteOperationInfo(increment),
-          this.secondaryAsyncWrapper.put(makePutFromResult(result)),
-          this.flowController,
-          HBaseOperation.PUT);
+          new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put), this.flowController);
       return result;
     }
   }
@@ -706,8 +699,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       scheduleWriteWithControlFlow(
           new WriteOperationInfo(rowMutations),
           this.secondaryAsyncWrapper.mutateRow(rowMutations),
-          this.flowController,
-          HBaseOperation.MUTATE_ROW);
+          this.flowController);
     }
     return wereMutationsApplied;
   }
@@ -794,13 +786,13 @@ public class MirroringTable implements Table, ListenableCloseable {
   private <T> void scheduleWriteWithControlFlow(
       final WriteOperationInfo writeOperationInfo,
       final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
-      final FlowController flowController,
-      final HBaseOperation operation) {
+      final FlowController flowController) {
     WriteOperationFutureCallback<T> writeErrorCallback =
         new WriteOperationFutureCallback<T>() {
           @Override
           public void onFailure(Throwable throwable) {
-            secondaryWriteErrorConsumer.consume(operation, writeOperationInfo.operations);
+            secondaryWriteErrorConsumer.consume(
+                writeOperationInfo.hBaseOperation, writeOperationInfo.operations);
           }
         };
 
@@ -814,7 +806,8 @@ public class MirroringTable implements Table, ListenableCloseable {
             new Runnable() {
               @Override
               public void run() {
-                secondaryWriteErrorConsumer.consume(operation, writeOperationInfo.operations);
+                secondaryWriteErrorConsumer.consume(
+                    writeOperationInfo.hBaseOperation, writeOperationInfo.operations);
               }
             }));
   }
@@ -875,37 +868,35 @@ public class MirroringTable implements Table, ListenableCloseable {
   public static class WriteOperationInfo {
     public final RequestResourcesDescription requestResourcesDescription;
     public final List<? extends Row> operations;
+    public final HBaseOperation hBaseOperation;
 
     public WriteOperationInfo(Put operation) {
-      this(new RequestResourcesDescription(operation), operation);
+      this(new RequestResourcesDescription(operation), operation, HBaseOperation.PUT);
     }
 
     public WriteOperationInfo(Delete operation) {
-      this(new RequestResourcesDescription(operation), operation);
+      this(new RequestResourcesDescription(operation), operation, HBaseOperation.DELETE);
     }
 
     public WriteOperationInfo(Append operation) {
-      this(new RequestResourcesDescription(operation), operation);
+      this(new RequestResourcesDescription(operation), operation, HBaseOperation.APPEND);
     }
 
     public WriteOperationInfo(Increment operation) {
-      this(new RequestResourcesDescription(operation), operation);
+      this(new RequestResourcesDescription(operation), operation, HBaseOperation.INCREMENT);
     }
 
     public WriteOperationInfo(RowMutations operation) {
-      this(new RequestResourcesDescription(operation), operation);
+      this(new RequestResourcesDescription(operation), operation, HBaseOperation.MUTATE_ROW);
     }
 
     private WriteOperationInfo(
-        RequestResourcesDescription requestResourcesDescription, Row operation) {
+        RequestResourcesDescription requestResourcesDescription,
+        Row operation,
+        HBaseOperation hBaseOperation) {
       this.requestResourcesDescription = requestResourcesDescription;
       this.operations = Collections.singletonList(operation);
-    }
-
-    public WriteOperationInfo(List<? extends Row> successfulOperations, Result[] readResults) {
-      this.operations = successfulOperations;
-      this.requestResourcesDescription =
-          new RequestResourcesDescription(this.operations, readResults);
+      this.hBaseOperation = hBaseOperation;
     }
   }
 }
