@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutator;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
@@ -64,6 +65,7 @@ public class MirroringConnection implements Connection {
   private final Connection secondaryConnection;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final AtomicBoolean aborted = new AtomicBoolean(false);
+  private final boolean performWritesConcurrently;
 
   /**
    * The constructor called from {@link
@@ -117,6 +119,7 @@ public class MirroringConnection implements Connection {
         new SecondaryWriteErrorConsumerWithMetrics(
             this.mirroringTracer, secondaryWriteErrorConsumer);
     this.readSampler = new ReadSampler(this.configuration.mirroringOptions.readSamplingRate);
+    this.performWritesConcurrently = this.configuration.mirroringOptions.performWritesConcurrently;
   }
 
   @Override
@@ -154,6 +157,7 @@ public class MirroringConnection implements Connection {
               this.flowController,
               this.secondaryWriteErrorConsumer,
               this.readSampler,
+              this.performWritesConcurrently,
               this.mirroringTracer);
       this.referenceCounter.holdReferenceUntilClosing(table);
       return table;
@@ -170,7 +174,8 @@ public class MirroringConnection implements Connection {
       throws IOException {
     try (Scope scope =
         this.mirroringTracer.spanFactory.operationScope(HBaseOperation.GET_BUFFERED_MUTATOR)) {
-      return new MirroringBufferedMutator(
+      return MirroringBufferedMutator.create(
+          performWritesConcurrently,
           primaryConnection,
           secondaryConnection,
           bufferedMutatorParams,

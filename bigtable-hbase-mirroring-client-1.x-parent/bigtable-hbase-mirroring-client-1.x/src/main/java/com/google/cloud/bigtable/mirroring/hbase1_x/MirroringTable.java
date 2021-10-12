@@ -66,6 +66,7 @@ import org.apache.hadoop.hbase.client.Increment;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
 import org.apache.hadoop.hbase.client.Scan;
@@ -110,7 +111,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   private final MirroringTracer mirroringTracer;
 
   private final ReadSampler readSampler;
-
+  private final boolean performWritesConcurrently;
   /**
    * @param executorService ExecutorService is used to perform operations on secondaryTable and
    *     verification tasks.
@@ -126,6 +127,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       FlowController flowController,
       SecondaryWriteErrorConsumer secondaryWriteErrorConsumer,
       ReadSampler readSampler,
+      boolean performWritesConcurrently,
       MirroringTracer mirroringTracer) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
@@ -140,6 +142,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     this.referenceCounter = new ListenableReferenceCounter();
     this.referenceCounter.holdReferenceUntilClosing(this.secondaryAsyncWrapper);
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
+    this.performWritesConcurrently = performWritesConcurrently;
     this.mirroringTracer = mirroringTracer;
   }
 
@@ -192,7 +195,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               HBaseOperation.EXISTS);
 
       if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleVerificationAndRequestWithFlowControl(
+        scheduleSequentialReadOperationWithVerification(
             new RequestResourcesDescription(result),
             this.secondaryAsyncWrapper.exists(get),
             this.verificationContinuationFactory.exists(get, result));
@@ -218,31 +221,12 @@ public class MirroringTable implements Table, ListenableCloseable {
               HBaseOperation.EXISTS_ALL);
 
       if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleVerificationAndRequestWithFlowControl(
+        scheduleSequentialReadOperationWithVerification(
             new RequestResourcesDescription(result),
             this.secondaryAsyncWrapper.existsAll(list),
             this.verificationContinuationFactory.existsAll(list, result));
       }
       return result;
-    }
-  }
-
-  private void batchWithSpan(final List<? extends Row> inputOperations, final Object[] results)
-      throws IOException, InterruptedException {
-    final List<? extends Row> operations = new ArrayList<>(inputOperations);
-    Log.trace("[%s] batch(operations=%s, results)", this.getName(), operations);
-    try {
-      this.mirroringTracer.spanFactory.wrapPrimaryOperation(
-          new CallableThrowingIOAndInterruptedException<Void>() {
-            @Override
-            public Void call() throws IOException, InterruptedException {
-              MirroringTable.this.primaryTable.batch(operations, results);
-              return null;
-            }
-          },
-          HBaseOperation.BATCH);
-    } finally {
-      scheduleSecondaryWriteBatchOperations(operations, results);
     }
   }
 
@@ -306,12 +290,11 @@ public class MirroringTable implements Table, ListenableCloseable {
               HBaseOperation.GET);
 
       if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleVerificationAndRequestWithFlowControl(
+        scheduleSequentialReadOperationWithVerification(
             new RequestResourcesDescription(result),
             this.secondaryAsyncWrapper.get(get),
             this.verificationContinuationFactory.get(get, result));
       }
-
       return result;
     }
   }
@@ -333,7 +316,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               HBaseOperation.GET_LIST);
 
       if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleVerificationAndRequestWithFlowControl(
+        scheduleSequentialReadOperationWithVerification(
             new RequestResourcesDescription(result),
             this.secondaryAsyncWrapper.get(list),
             this.verificationContinuationFactory.get(list, result));
@@ -423,18 +406,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   public void put(final Put put) throws IOException {
     try (Scope scope = this.mirroringTracer.spanFactory.operationScope(HBaseOperation.PUT)) {
       Log.trace("[%s] put(put=%s)", this.getName(), put);
-
-      this.mirroringTracer.spanFactory.wrapPrimaryOperation(
-          new CallableThrowingIOException<Void>() {
-            @Override
-            public Void call() throws IOException {
-              MirroringTable.this.primaryTable.put(put);
-              return null;
-            }
-          },
-          HBaseOperation.PUT);
-      scheduleWriteWithControlFlow(
-          new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
+      this.batchSingleWriteOperation(put);
     }
   }
 
@@ -481,17 +453,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   public void delete(final Delete delete) throws IOException {
     try (Scope scope = this.mirroringTracer.spanFactory.operationScope(HBaseOperation.DELETE)) {
       Log.trace("[%s] delete(delete=%s)", this.getName(), delete);
-      this.mirroringTracer.spanFactory.wrapPrimaryOperation(
-          new CallableThrowingIOException<Void>() {
-            @Override
-            public Void call() throws IOException {
-              MirroringTable.this.primaryTable.delete(delete);
-              return null;
-            }
-          },
-          HBaseOperation.DELETE);
-      scheduleWriteWithControlFlow(
-          new WriteOperationInfo(delete), this.secondaryAsyncWrapper.delete(delete));
+      this.batchSingleWriteOperation(delete);
     }
   }
 
@@ -557,7 +519,7 @@ public class MirroringTable implements Table, ListenableCloseable {
           },
           HBaseOperation.MUTATE_ROW);
 
-      scheduleWriteWithControlFlow(
+      scheduleSequentialWriteOperation(
           new WriteOperationInfo(rowMutations), this.secondaryAsyncWrapper.mutateRow(rowMutations));
     }
   }
@@ -579,7 +541,7 @@ public class MirroringTable implements Table, ListenableCloseable {
 
       Put put = makePutFromResult(result);
 
-      scheduleWriteWithControlFlow(
+      scheduleSequentialWriteOperation(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
       return result;
     }
@@ -602,7 +564,7 @@ public class MirroringTable implements Table, ListenableCloseable {
 
       Put put = makePutFromResult(result);
 
-      scheduleWriteWithControlFlow(
+      scheduleSequentialWriteOperation(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
       return result;
     }
@@ -702,7 +664,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             HBaseOperation.CHECK_AND_MUTATE);
 
     if (wereMutationsApplied) {
-      scheduleWriteWithControlFlow(
+      scheduleSequentialWriteOperation(
           new WriteOperationInfo(rowMutations), this.secondaryAsyncWrapper.mutateRow(rowMutations));
     }
     return wereMutationsApplied;
@@ -774,12 +736,12 @@ public class MirroringTable implements Table, ListenableCloseable {
         .addListener(listener, MoreExecutors.directExecutor());
   }
 
-  private <T> void scheduleVerificationAndRequestWithFlowControl(
+  private <T> void scheduleSequentialReadOperationWithVerification(
       final RequestResourcesDescription resultInfo,
       final Supplier<ListenableFuture<T>> secondaryGetFutureSupplier,
       final FutureCallback<T> verificationCallback) {
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
+        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             resultInfo,
             secondaryGetFutureSupplier,
             this.mirroringTracer.spanFactory.wrapReadVerificationCallback(verificationCallback),
@@ -787,7 +749,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.mirroringTracer));
   }
 
-  private <T> void scheduleWriteWithControlFlow(
+  private <T> void scheduleSequentialWriteOperation(
       final WriteOperationInfo writeOperationInfo,
       final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier) {
     final FlowController flowController = this.flowController;
@@ -801,7 +763,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
+        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             writeOperationInfo.requestResourcesDescription,
             secondaryResultFutureSupplier,
             this.mirroringTracer.spanFactory.wrapWriteOperationCallback(writeErrorCallback),
@@ -815,6 +777,159 @@ public class MirroringTable implements Table, ListenableCloseable {
                 return null;
               }
             }));
+  }
+
+  private void batchSingleWriteOperation(Row operation) throws IOException {
+    Object[] results = new Object[1];
+    try {
+      batchWithSpan(Collections.singletonList(operation), results);
+    } catch (RetriesExhaustedWithDetailsException e) {
+      if (e.getCause(0) instanceof IOException) {
+        throw (IOException) e.getCause(0);
+      }
+      throw new IOException(e.getCause(0));
+    } catch (InterruptedException e) {
+      InterruptedIOException interruptedIOException = new InterruptedIOException();
+      interruptedIOException.initCause(e);
+      throw interruptedIOException;
+    }
+  }
+
+  private void batchWithSpan(final List<? extends Row> inputOperations, final Object[] results)
+      throws IOException, InterruptedException {
+    final List<? extends Row> operations = new ArrayList<>(inputOperations);
+    Log.trace("[%s] batch(operations=%s, results)", this.getName(), operations);
+
+    CallableThrowingIOAndInterruptedException<Void> primaryOperation =
+        new CallableThrowingIOAndInterruptedException<Void>() {
+          @Override
+          public Void call() throws IOException, InterruptedException {
+            MirroringTable.this.primaryTable.batch(operations, results);
+            return null;
+          }
+        };
+
+    if (!this.performWritesConcurrently || !canBatchBePerformedConcurrently(operations)) {
+      sequentialBatch(results, operations, primaryOperation);
+    } else {
+      concurrentBatch(primaryOperation, operations, results);
+    }
+  }
+
+  private boolean canBatchBePerformedConcurrently(List<? extends Row> operations) {
+    // Only Puts and Deletes can be performed concurrently.
+    // We assume that RowMutations can consist of only Puts and Deletes (which is true in HBase 1.x
+    // and 2.x).
+    for (Row operation : operations) {
+      if (!(operation instanceof Put)
+          && !(operation instanceof Delete)
+          && !(operation instanceof RowMutations)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private void sequentialBatch(
+      Object[] results,
+      List<? extends Row> operations,
+      CallableThrowingIOAndInterruptedException<Void> primaryOperation)
+      throws IOException, InterruptedException {
+    try {
+      this.mirroringTracer.spanFactory.wrapPrimaryOperation(primaryOperation, HBaseOperation.BATCH);
+    } finally {
+      scheduleSecondaryWriteBatchOperations(operations, results);
+    }
+  }
+
+  private void concurrentBatch(
+      final CallableThrowingIOAndInterruptedException<Void> primaryOperation,
+      final List<? extends Row> operations,
+      final Object[] primaryResults)
+      throws IOException, InterruptedException {
+    RequestResourcesDescription requestResourcesDescription =
+        new RequestResourcesDescription(operations, new Result[0]);
+
+    final Object[] secondaryResults = new Object[operations.size()];
+
+    final Throwable[] primaryException = new Throwable[1];
+
+    // After the flow control resources have been obtained, we will schedule secondary operation and
+    // then run primary operation.
+    final Supplier<ListenableFuture<Void>> invokeBothOperations =
+        new Supplier<ListenableFuture<Void>>() {
+          @Override
+          public ListenableFuture<Void> get() {
+            ListenableFuture<Void> secondaryOperationResultFuture =
+                secondaryAsyncWrapper.batch(operations, secondaryResults).get();
+            try {
+              primaryOperation.call();
+            } catch (IOException | InterruptedException e) {
+              primaryException[0] = e;
+            }
+            return secondaryOperationResultFuture;
+          }
+        };
+
+    FutureCallback<Void> verificationFuture =
+        new FutureCallback<Void>() {
+          private void verify() {
+            // Both calls have now ended.
+            // We are sure that they only contain stateless writes.
+            // We have to find operations that failed on only one of databases.
+            int numResults = primaryResults.length;
+            for (int i = 0; i < numResults; i++) {
+              Object primaryResult = primaryResults[i];
+              Object secondaryResult = secondaryResults[i];
+              boolean primaryFailure = isFailed(primaryResult);
+              boolean secondaryFailure = isFailed(secondaryResult);
+              // Primary errors will be reported directly to the user.
+              if (secondaryFailure && !primaryFailure) {
+                Throwable exception = secondaryResult == null ? null : (Throwable) secondaryResult;
+
+                secondaryWriteErrorConsumer.consume(
+                    HBaseOperation.BATCH, operations.get(i), exception);
+              }
+            }
+          }
+
+          private boolean isFailed(Object secondaryResult) {
+            return secondaryResult == null || secondaryResult instanceof Throwable;
+          }
+
+          @Override
+          public void onSuccess(@NullableDecl Void aVoid) {
+            verify();
+          }
+
+          @Override
+          public void onFailure(Throwable throwable) {
+            verify();
+          }
+        };
+
+    this.referenceCounter.holdReferenceUntilCompletion(
+        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
+            requestResourcesDescription,
+            invokeBothOperations,
+            verificationFuture,
+            this.flowController,
+            this.mirroringTracer,
+            new Function<Throwable, Void>() {
+              @NullableDecl
+              @Override
+              public Void apply(@NullableDecl Throwable throwable) {
+                return null;
+              }
+            }));
+
+    if (primaryException[0] != null) {
+      if (primaryException[0] instanceof InterruptedException) {
+        throw (InterruptedException) primaryException[0];
+      } else {
+        throw (IOException) primaryException[0];
+      }
+    }
   }
 
   private void scheduleSecondaryWriteBatchOperations(
@@ -866,7 +981,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleVerificationAndRequestWithFlowControl(
+        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             requestResourcesDescription,
             this.secondaryAsyncWrapper.batch(operationsToScheduleOnSecondary, resultsSecondary),
             verificationFuture,

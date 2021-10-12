@@ -15,10 +15,12 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createDelete;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGet;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGets;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createPut;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createResult;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.mockBatch;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerToRejectRequests;
 import static com.google.common.truth.Truth.assertThat;
@@ -29,7 +31,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -42,20 +43,24 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCou
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
 import org.apache.hadoop.hbase.CellUtil;
@@ -82,7 +87,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -117,6 +124,7 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
+                false,
                 new MirroringTracer()));
   }
 
@@ -541,29 +549,27 @@ public class TestMirroringTable {
   @Test
   public void testPutIsMirrored() throws IOException, InterruptedException {
     Put put = createPut("test", "f1", "q1", "v1");
-    List<Put> puts = Arrays.asList(put);
+    List<Put> puts = new ArrayList<>();
+    puts.add(put);
 
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Object[] args = invocationOnMock.getArguments();
-                Object[] result = (Object[]) args[1];
-
-                // secondary
-                result[0] = Result.create(new Cell[0]);
-                return null;
-              }
-            })
-        .when(primaryTable)
-        .batch(eq(puts), any(Object[].class));
+    mockBatch(primaryTable, put, new Result());
 
     mirroringTable.put(put);
-    mirroringTable.put(puts);
     executorServiceRule.waitForExecutor();
 
-    verify(primaryTable, times(1)).put(put);
-    verify(secondaryTable, times(1)).put(put);
+    verify(primaryTable, times(1)).batch(eq(puts), any(Object[].class));
+    verify(secondaryTable, times(1)).batch(eq(puts), any(Object[].class));
+  }
+
+  @Test
+  public void testPutListIsMirrored() throws IOException, InterruptedException {
+    Put put = createPut("test", "f1", "q1", "v1");
+    List<Put> puts = Arrays.asList(put);
+
+    mockBatch(primaryTable, put, new Result());
+
+    mirroringTable.put(puts);
+    executorServiceRule.waitForExecutor();
 
     // put(List<Put>) is mirrored using batch, we because we have to detect partially applied
     // writes.
@@ -572,9 +578,9 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testPutWithErrorIsNotMirrored() throws IOException {
+  public void testPutWithErrorIsNotMirrored() throws IOException, InterruptedException {
     final Put put = createPut("test", "f1", "q1", "v1");
-    doThrow(new IOException("test exception")).when(primaryTable).put(put);
+    mockBatch(this.primaryTable, put, new IOException("test"));
 
     assertThrows(
         IOException.class,
@@ -586,30 +592,25 @@ public class TestMirroringTable {
         });
     executorServiceRule.waitForExecutor();
 
-    verify(primaryTable, times(1)).put(put);
-    verify(secondaryTable, times(0)).put(put);
+    verify(primaryTable, times(1)).batch(eq(Arrays.asList(put)), any(Object[].class));
+    verify(secondaryTable, never()).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
   }
 
   @Test
-  public void testPutWithSecondaryErrorCallsErrorHandler() throws IOException {
+  public void testPutWithSecondaryErrorCallsErrorHandler()
+      throws IOException, InterruptedException {
     Put put = createPut("test", "f1", "q1", "v1");
-    doThrow(new IOException("test exception")).when(secondaryTable).put(put);
-    doNothing().when(primaryTable).put(put);
+    mockBatch(primaryTable);
+    mockBatch(secondaryTable, put, new IOException("test exception"));
 
     mirroringTable.put(put);
     executorServiceRule.waitForExecutor();
 
-    verify(primaryTable, times(1)).put(put);
-    verify(secondaryTable, times(1)).put(put);
+    verify(primaryTable, times(1)).batch(eq(Collections.singletonList(put)), any(Object[].class));
+    verify(secondaryTable, times(1)).batch(eq(Collections.singletonList(put)), any(Object[].class));
 
-    ArgumentCaptor<HBaseOperation> argument1 = ArgumentCaptor.forClass(HBaseOperation.class);
-    ArgumentCaptor<List<Row>> argument2 = ArgumentCaptor.forClass(List.class);
     verify(secondaryWriteErrorConsumer, times(1))
-        .consume(argument1.capture(), argument2.capture(), any(Throwable.class));
-    assertThat(argument2.getValue().size()).isEqualTo(1);
-    assertThat(argument2.getValue().get(0)).isEqualTo(put);
-
-    assertThat(argument1.getValue()).isEqualTo(HBaseOperation.PUT);
+        .consume(eq(HBaseOperation.BATCH), eq(put), any(Throwable.class));
   }
 
   @Test
@@ -625,31 +626,13 @@ public class TestMirroringTable {
     // get1 | ok   | ok
 
     final Result get1Result = createResult("get1", "value1");
-    final Result get3Result = createResult("get3", "value3");
 
     // primary
     Object[] results = new Object[2];
-    results[0] = Result.create(new Cell[0]);
-    results[1] = get1Result;
 
     List<Row> secondaryRequests = Arrays.asList(new Row[] {put1, get1});
 
-    doNothing().when(primaryTable).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Object[] args = invocationOnMock.getArguments();
-                Object[] result = (Object[]) args[1];
-
-                // secondary
-                result[0] = Result.create(new Cell[0]);
-                result[1] = get1Result;
-                return null;
-              }
-            })
-        .when(secondaryTable)
-        .batch(eq(secondaryRequests), any(Object[].class));
+    mockBatch(primaryTable, secondaryTable, put1, Result.create(new Cell[0]), get1, get1Result);
 
     mirroringTable.batch(requests, results);
     executorServiceRule.waitForExecutor();
@@ -689,41 +672,38 @@ public class TestMirroringTable {
 
     // primary
     Object[] results = new Object[6];
-    results[0] = Result.create(new Cell[0]); // put1 - ok
-    results[1] = null; // put2 - failed
-    results[2] = Result.create(new Cell[0]); // put3 - ok
-    results[3] = get1Result; // get1 - ok
-    results[4] = null; // get2 - fail
-    results[5] = get3Result; // get3 - ok
+    mockBatch(
+        primaryTable,
+        put1,
+        Result.create(new Cell[0]),
+        put2,
+        new IOException("test1"),
+        put3,
+        Result.create(new Cell[0]),
+        get1,
+        get1Result,
+        get2,
+        new IOException("test1"),
+        get3,
+        get3Result);
 
     List<Row> secondaryRequests = Arrays.asList(new Row[] {put1, put3, get1, get3});
 
-    doThrow(new IOException("test1"))
-        .when(primaryTable)
-        .batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Object[] args = invocationOnMock.getArguments();
-                Object[] result = (Object[]) args[1];
-
-                // secondary
-                result[0] = null; // put1 failed on secondary
-                result[1] = Result.create(new Cell[0]); // put3 ok on secondary
-                result[2] = new IOException("test"); // get1 - failed on secondary
-                result[3] = get3Result; // get3 - ok
-                throw new IOException("test2");
-              }
-            })
-        .when(secondaryTable)
-        .batch(eq(secondaryRequests), any(Object[].class));
+    mockBatch(
+        secondaryTable,
+        put1,
+        null,
+        put3,
+        Result.create(new Cell[0]),
+        get1,
+        new IOException("test"),
+        get3,
+        get3Result);
 
     try {
       mirroringTable.batch(requests, results);
       fail("should have thrown");
-    } catch (IOException e) {
-      assertThat(e).hasMessageThat().contains("test1");
+    } catch (IOException ignored) {
     }
     executorServiceRule.waitForExecutor();
 
@@ -758,35 +738,17 @@ public class TestMirroringTable {
     final Result get2Result = createResult("get2", "value2");
 
     // primary
-    Object[] results = new Object[6];
-    results[0] = null;
-    results[1] = get2Result;
+    Object[] results = new Object[2];
 
     List<Row> secondaryRequests = Arrays.asList(new Row[] {get2});
 
-    doThrow(new IOException("test1"))
-        .when(primaryTable)
-        .batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Object[] args = invocationOnMock.getArguments();
-                Object[] result = (Object[]) args[1];
-
-                // secondary
-                result[0] = get2Result;
-                return null;
-              }
-            })
-        .when(secondaryTable)
-        .batch(eq(secondaryRequests), any(Object[].class));
+    mockBatch(primaryTable, get1, new IOException("test"), get2, get2Result);
+    mockBatch(secondaryTable, get2, get2Result);
 
     try {
       mirroringTable.batch(requests, results);
       fail("should have thrown");
-    } catch (IOException e) {
-      assertThat(e).hasMessageThat().contains("test1");
+    } catch (IOException ignored) {
     }
     executorServiceRule.waitForExecutor();
 
@@ -923,30 +885,30 @@ public class TestMirroringTable {
   @Test
   public void testDelete() throws IOException, InterruptedException {
     Delete delete = new Delete("r1".getBytes());
+
+    mockBatch(primaryTable, secondaryTable, delete, new Result());
+
     mirroringTable.delete(delete);
+    executorServiceRule.waitForExecutor();
 
+    verify(primaryTable, times(1)).batch(eq(Arrays.asList(delete)), any(Object[].class));
+    verify(secondaryTable, times(1)).batch(eq(Arrays.asList(delete)), any(Object[].class));
+  }
+
+  @Test
+  public void testDeleteList() throws IOException, InterruptedException {
     List<Delete> deletes = new ArrayList<>();
-    deletes.add(delete);
+    deletes.add(new Delete("r1".getBytes()));
 
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Object[] args = invocationOnMock.getArguments();
-                Object[] result = (Object[]) args[1];
+    List<Delete> originalDeletes = new ArrayList<>(deletes);
 
-                // secondary
-                result[0] = Result.create(new Cell[0]);
-                return null;
-              }
-            })
-        .when(primaryTable)
-        .batch(eq(deletes), any(Object[].class));
+    mockBatch(primaryTable, secondaryTable, deletes.get(0), new Result());
 
     mirroringTable.delete(deletes);
+    assertThat(deletes).isEmpty();
     executorServiceRule.waitForExecutor();
-    verify(secondaryTable, times(1)).delete(delete);
-    verify(secondaryTable, times(1)).batch(eq(Arrays.asList(delete)), any(Object[].class));
+    verify(primaryTable, times(1)).batch(eq(originalDeletes), any(Object[].class));
+    verify(secondaryTable, times(1)).batch(eq(originalDeletes), any(Object[].class));
   }
 
   @Test
@@ -981,6 +943,7 @@ public class TestMirroringTable {
     executorServiceRule.waitForExecutor();
 
     ArgumentCaptor<Put> argument = ArgumentCaptor.forClass(Put.class);
+    verify(primaryTable, times(3)).increment(any(Increment.class));
     verify(secondaryTable, never()).increment(any(Increment.class));
     verify(secondaryTable, times(3)).put(argument.capture());
 
@@ -1008,6 +971,7 @@ public class TestMirroringTable {
                   CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
                 }));
     mirroringTable.append(append);
+    verify(primaryTable, times(1)).append(append);
     executorServiceRule.waitForExecutor();
 
     ArgumentCaptor<Put> argument = ArgumentCaptor.forClass(Put.class);
@@ -1092,18 +1056,22 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testFlowControllerExceptionInPutExecutesWriteErrorHandler() throws IOException {
+  public void testFlowControllerExceptionInPutExecutesWriteErrorHandler()
+      throws IOException, InterruptedException {
     setupFlowControllerToRejectRequests(flowController);
 
     Put request = createPut("test", "f1", "q1", "v1");
 
+    mockBatch(primaryTable, request, new Result());
+
     mirroringTable.put(request);
     executorServiceRule.waitForExecutor();
 
-    verify(primaryTable, times(1)).put(request);
-    verify(secondaryTable, never()).get(any(Get.class));
+    verify(primaryTable, times(1))
+        .batch(eq(Collections.singletonList(request)), any(Object[].class));
+    verify(secondaryTable, never()).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
     verify(secondaryWriteErrorConsumer, times(1))
-        .consume(eq(HBaseOperation.PUT), eq(ImmutableList.of(request)), any(Throwable.class));
+        .consume(eq(HBaseOperation.BATCH), eq(ImmutableList.of(request)), any(Throwable.class));
   }
 
   @Test
@@ -1113,24 +1081,17 @@ public class TestMirroringTable {
 
     Put put1 = createPut("test0", "f1", "q1", "v1");
     Put put2 = createPut("test1", "f1", "q2", "v1");
-    List<? extends Row> request = ImmutableList.of(put1, put2, createGet("test2"));
+    Get get1 = createGet("test2");
+    List<? extends Row> request = ImmutableList.of(put1, put2, get1);
 
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                Object[] args = invocationOnMock.getArguments();
-                Object[] result = (Object[]) args[1];
-
-                // secondary
-                result[0] = Result.create(new Cell[0]);
-                result[1] = Result.create(new Cell[0]);
-                result[2] = Result.create(new Cell[0]);
-                return null;
-              }
-            })
-        .when(primaryTable)
-        .batch(eq(request), any(Object[].class));
+    mockBatch(
+        primaryTable,
+        put1,
+        Result.create(new Cell[0]),
+        put2,
+        Result.create(new Cell[0]),
+        get1,
+        Result.create(new Cell[0]));
 
     Object[] results = new Object[3];
     mirroringTable.batch(request, results);
@@ -1178,5 +1139,224 @@ public class TestMirroringTable {
     assertPutsAreEqual(
         (Put) argumentCaptor.getValue().get(2), (Put) expectedSecondaryOperations.get(2));
     assertThat(argumentCaptor.getValue().get(3)).isEqualTo(expectedSecondaryOperations.get(3));
+  }
+
+  @Test
+  public void testConcurrentWritesAreFlowControlledBeforePrimaryAction()
+      throws IOException, InterruptedException {
+    this.mirroringTable =
+        spy(
+            new MirroringTable(
+                primaryTable,
+                secondaryTable,
+                this.executorServiceRule.executorService,
+                mismatchDetector,
+                flowController,
+                secondaryWriteErrorConsumer,
+                new ReadSampler(100),
+                true,
+                new MirroringTracer()));
+
+    Put put1 = createPut("r1", "f1", "q1", "v1");
+
+    // Both batches should be called even if first one fails.
+    mockBatch(primaryTable, secondaryTable, put1, new IOException());
+
+    InOrder inOrder = Mockito.inOrder(primaryTable, flowController);
+    try {
+      this.mirroringTable.put(put1);
+      fail("should fail");
+    } catch (IOException ignored) {
+    }
+    inOrder.verify(flowController).asyncRequestResource(any(RequestResourcesDescription.class));
+    inOrder.verify(primaryTable).batch(eq(Arrays.asList(put1)), any(Object[].class));
+
+    verify(primaryTable).batch(eq(Arrays.asList(put1)), any(Object[].class));
+    verify(secondaryTable).batch(eq(Arrays.asList(put1)), any(Object[].class));
+  }
+
+  @Test
+  public void testNonConcurrentOpsWontBePerformedConcurrently()
+      throws IOException, InterruptedException {
+    setupMirroringTableWithDirectExecutor();
+    Get get = createGet("get1");
+    Increment increment = new Increment("row".getBytes());
+    Append append = new Append("row".getBytes());
+
+    Put put = createPut("test1", "f1", "q1", "v1");
+    Delete delete = createDelete("test2");
+
+    mockBatch(
+        primaryTable,
+        secondaryTable,
+        get,
+        createResult(),
+        increment,
+        createResult("row", "v1"),
+        append,
+        createResult("row", "v2"));
+
+    checkBatchCalledSequentially(Arrays.asList(get));
+    checkBatchCalledSequentially(Arrays.asList(increment));
+    checkBatchCalledSequentially(Arrays.asList(append));
+
+    checkBatchCalledConcurrently(Arrays.asList(put));
+    checkBatchCalledConcurrently(Arrays.asList(delete));
+    checkBatchCalledConcurrently(Arrays.asList(put, delete));
+
+    checkBatchCalledSequentially(Arrays.asList(put, delete, get));
+    checkBatchCalledSequentially(Arrays.asList(put, delete, increment));
+    checkBatchCalledSequentially(Arrays.asList(put, delete, append));
+  }
+
+  private void setupMirroringTableWithDirectExecutor() {
+    this.mirroringTable =
+        spy(
+            new MirroringTable(
+                primaryTable,
+                secondaryTable,
+                MoreExecutors.listeningDecorator(MoreExecutors.newDirectExecutorService()),
+                mismatchDetector,
+                flowController,
+                secondaryWriteErrorConsumer,
+                new ReadSampler(100),
+                true,
+                new MirroringTracer()));
+  }
+
+  private void checkBatchCalledSequentially(List<? extends Row> requests)
+      throws IOException, InterruptedException {
+    InOrder inOrder = Mockito.inOrder(primaryTable, flowController, secondaryTable);
+    this.mirroringTable.batch(requests, new Object[requests.size()]);
+    inOrder.verify(primaryTable).batch(eq(requests), any(Object[].class));
+    inOrder.verify(flowController).asyncRequestResource(any(RequestResourcesDescription.class));
+    inOrder.verify(secondaryTable).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+  }
+
+  private void checkBatchCalledConcurrently(List<? extends Row> requests)
+      throws IOException, InterruptedException {
+    InOrder inOrder = Mockito.inOrder(primaryTable, flowController, secondaryTable);
+    this.mirroringTable.batch(requests, new Object[requests.size()]);
+    inOrder.verify(flowController).asyncRequestResource(any(RequestResourcesDescription.class));
+    inOrder.verify(secondaryTable).batch(eq(requests), any(Object[].class));
+    inOrder.verify(primaryTable).batch(eq(requests), any(Object[].class));
+  }
+
+  @Test
+  public void testConcurrentWritesWithErrors() throws IOException, InterruptedException {
+    setupMirroringTableWithDirectExecutor();
+
+    Put put1 = createPut("test1", "f1", "q1", "v1");
+    Put put2 = createPut("test2", "f2", "q2", "v2");
+    Put put3 = createPut("test3", "f3", "q3", "v3");
+    Put put4 = createPut("test4", "f4", "q4", "v4");
+    Delete delete1 = createDelete("delete1");
+    Delete delete2 = createDelete("delete2");
+    Delete delete3 = createDelete("delete3");
+    Delete delete4 = createDelete("delete4");
+
+    List<? extends Row> requests =
+        Arrays.asList(put1, put2, put3, put4, delete1, delete2, delete3, delete4);
+
+    //           |  p1  |  p2  |  p3  |  p4  |  d1  |  d2  |  d3  |  d4
+    // primary   |  v   |  v   |  x   |  x   |  v   |  v   |  x   |  x
+    // secondary |  v   |  x   |  v   |  x   |  v   |  x   |  v   |  y
+    // p. error  |      |      |  x   |      |      |      |  x   |
+    // s. error  |      |  x   |      |      |      |  x   |      |
+
+    IOException put2exception = new IOException("put2");
+    IOException put3exception = new IOException("put3");
+    IOException put4exception = new IOException("put4");
+
+    IOException delete2exception = new IOException("delete2");
+    IOException delete3exception = new IOException("delete3");
+    IOException delete4exception = new IOException("delete4");
+
+    mockBatch(
+        primaryTable,
+        put1,
+        new Result(),
+        put2,
+        new Result(),
+        put3,
+        put3exception,
+        put4,
+        put4exception,
+        delete1,
+        new Result(),
+        delete2,
+        new Result(),
+        delete3,
+        delete3exception,
+        delete4,
+        delete4exception);
+
+    mockBatch(
+        secondaryTable,
+        put1,
+        new Result(),
+        put2,
+        put2exception,
+        put3,
+        new Result(),
+        put4,
+        put4exception,
+        delete1,
+        new Result(),
+        delete2,
+        delete2exception,
+        delete3,
+        new Result(),
+        delete4,
+        delete4exception);
+
+    Object[] results = new Object[8];
+    try {
+      this.mirroringTable.batch(requests, results);
+      fail("should throw");
+    } catch (IOException ignored) {
+    }
+
+    verify(secondaryWriteErrorConsumer, times(1))
+        .consume(HBaseOperation.BATCH, put2, put2exception);
+    verify(secondaryWriteErrorConsumer, times(1))
+        .consume(HBaseOperation.BATCH, delete2, delete2exception);
+  }
+
+  @Test
+  public void testConcurrentOpsAreRunConcurrently() throws IOException, InterruptedException {
+    setupMirroringTableWithDirectExecutor();
+
+    Put put = createPut("test1", "f1", "q1", "v1");
+    mockBatch(primaryTable, secondaryTable);
+
+    final SettableFuture<Void> bothRun = SettableFuture.create();
+    final AtomicBoolean firstRun = new AtomicBoolean(false);
+    final AtomicBoolean oneWaited = new AtomicBoolean(false);
+
+    Answer<Void> answer =
+        new Answer() {
+          @Override
+          public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+            if (firstRun.getAndSet(true)) {
+              bothRun.set(null);
+            } else {
+              oneWaited.set(true);
+            }
+            bothRun.get(3, TimeUnit.SECONDS);
+            return null;
+          }
+        };
+
+    doAnswer(answer).when(primaryTable).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+    doAnswer(answer)
+        .when(secondaryTable)
+        .batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+
+    mirroringTable.put(put);
+
+    verify(primaryTable, times(1)).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+    verify(secondaryTable, times(1)).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+    assertThat(oneWaited.get()).isTrue();
   }
 }

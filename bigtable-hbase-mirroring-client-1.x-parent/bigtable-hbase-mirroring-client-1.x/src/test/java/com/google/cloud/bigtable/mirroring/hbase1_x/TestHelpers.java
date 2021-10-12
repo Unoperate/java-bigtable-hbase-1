@@ -29,14 +29,20 @@ import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.KeyValue.Type;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.Row;
+import org.apache.hadoop.hbase.client.Table;
+import org.mockito.ArgumentMatchers;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -90,6 +96,10 @@ public class TestHelpers {
       result.add(createGet(key));
     }
     return result;
+  }
+
+  public static Delete createDelete(String row) {
+    return new Delete(row.getBytes());
   }
 
   public static Cell createCell(
@@ -154,5 +164,65 @@ public class TestHelpers {
               }
             });
     return secondaryOperationAllowedFuture;
+  }
+
+  public static Map<Object, Object> mapOf(Object... keyValuePairs) {
+    assert keyValuePairs.length % 2 == 0;
+    Map<Object, Object> mapping = new HashMap<>();
+    for (int i = 0; i < keyValuePairs.length; i += 2) {
+      mapping.put(keyValuePairs[i], keyValuePairs[i + 1]);
+    }
+    return mapping;
+  }
+
+  public static void mockBatch(Table table1, Table table2, Object... keyValuePairs)
+      throws IOException, InterruptedException {
+    mockBatch(table1, keyValuePairs);
+    mockBatch(table2, keyValuePairs);
+  }
+
+  public static void mockBatch(Table table, Object... keyValuePairs)
+      throws IOException, InterruptedException {
+    final Map<Object, Object> mapping = mapOf(keyValuePairs);
+
+    lenient()
+        .doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
+                boolean shouldThrow = false;
+                Object[] args = invocationOnMock.getArguments();
+                List<? extends Row> operations = (List<? extends Row>) args[0];
+                Object[] result = (Object[]) args[1];
+
+                for (int i = 0; i < operations.size(); i++) {
+                  Row operation = operations.get(i);
+                  if (mapping.containsKey(operation)) {
+                    Object value = mapping.get(operation);
+                    result[i] = value;
+                    if (value instanceof Throwable) {
+                      shouldThrow = true;
+                    }
+                  } else if (operation instanceof Get) {
+                    Get get = (Get) operation;
+                    result[i] = createResult(get.getRow(), get.getRow());
+                  } else {
+                    result[i] = Result.create(new Cell[0]);
+                  }
+                }
+                if (shouldThrow) {
+                  throw new IOException();
+                }
+                return null;
+              }
+            })
+        .when(table)
+        .batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+  }
+
+  public static <T> ArrayList<T> asArrayList(T... entries) {
+    ArrayList<T> arrayList = new ArrayList<>();
+    arrayList.addAll(Arrays.asList(entries));
+    return arrayList;
   }
 }
