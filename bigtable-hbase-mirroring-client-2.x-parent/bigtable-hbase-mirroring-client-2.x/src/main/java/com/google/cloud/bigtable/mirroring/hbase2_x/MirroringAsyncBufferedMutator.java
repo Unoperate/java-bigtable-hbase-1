@@ -16,6 +16,8 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.AsyncBufferedMutator;
@@ -29,6 +31,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
 
   private final AsyncBufferedMutator primary;
   private final AsyncBufferedMutator secondary;
+  private final FlowController flowController;
 
   public MirroringAsyncBufferedMutator(
       AsyncBufferedMutator primary,
@@ -36,6 +39,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
       FlowController flowController) {
     this.primary = primary;
     this.secondary = secondary;
+    this.flowController = flowController;
   }
 
   @Override
@@ -51,9 +55,31 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   @Override
   public CompletableFuture<Void> mutate(Mutation mutation) {
     CompletableFuture<Void> primaryCompleted = primary.mutate(mutation);
-    primaryCompleted.thenRunAsync(() -> secondary.mutate(mutation));
+    CompletableFuture<Void> resultFuture = new CompletableFuture<>();
 
-    return primaryCompleted;
+    primaryCompleted.thenRunAsync(() -> {
+
+      // when primary completes, request resources.
+      CompletableFuture<FlowController.ResourceReservation> resourceAcquired =
+              FutureConverter.toCompletable(flowController.asyncRequestResource(new RequestResourcesDescription(mutation)));
+
+      resourceAcquired.thenRunAsync(() -> {
+        // got resources, complete resultFuture and schedule secondary
+        resultFuture.complete(null);
+        secondary.mutate(mutation);
+      }).exceptionally(ex -> {
+        // got error, complete resultFuture and handle secondary failure
+        resultFuture.complete(null);
+        System.out.println("secondary failed!");
+        return null;
+      });
+    }).exceptionally(ex -> {
+      // primary failed, propagate error
+      resultFuture.completeExceptionally(ex);
+      return null;
+    });
+
+    return resultFuture;
   }
 
   @Override

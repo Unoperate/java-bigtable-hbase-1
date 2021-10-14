@@ -33,9 +33,11 @@ import static org.mockito.Mockito.when;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import com.google.common.primitives.Longs;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,50 +64,60 @@ import org.mockito.junit.MockitoRule;
 
 @RunWith(JUnit4.class)
 public class TestMirroringAsyncBufferedMutator {
-    @Rule public final MockitoRule mockitoRule = MockitoJUnit.rule();
+  @Rule public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
-    @Mock AsyncBufferedMutator primaryMutator;
-    @Mock AsyncBufferedMutator secondaryMutator;
-    @Mock FlowController flowController;
+  @Mock AsyncBufferedMutator primaryMutator;
+  @Mock AsyncBufferedMutator secondaryMutator;
+  @Mock FlowController flowController;
 
-    MirroringAsyncBufferedMutator mirroringMutator;
+  MirroringAsyncBufferedMutator mirroringMutator;
 
-    @Before
-    public void setUp() {
-        setupFlowControllerMock(flowController);
-        this.mirroringMutator =
-                spy(
-                        new MirroringAsyncBufferedMutator(
-                                primaryMutator,
-                                secondaryMutator,
-                                flowController));
-    }
+  @Before
+  public void setUp() {
+    setupFlowControllerMock(flowController);
+    this.mirroringMutator =
+        spy(new MirroringAsyncBufferedMutator(primaryMutator, secondaryMutator, flowController));
+  }
 
-    @Test
-    public void testResultIsCompletedOnPrimaryCompletion()
-            throws ExecutionException, InterruptedException {
-        Put put = new Put(Bytes.toBytes("rowKey"));
-        put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
+  @Test
+  public void testResultIsCompletedOnPrimaryCompletion()
+      throws ExecutionException, InterruptedException {
+    Put put = new Put(Bytes.toBytes("rowKey"));
+    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
 
-        CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
-        CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
-        when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
-        when(secondaryMutator.mutate(put)).thenAnswer(invocationOnMock -> {
-            secondaryCalled.complete(null);
-            return new CompletableFuture<>();
-        });
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
+    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
+    when(secondaryMutator.mutate(put))
+        .thenAnswer(
+            invocationOnMock -> {
+              secondaryCalled.complete(null);
+              return new CompletableFuture<>();
+            });
 
-        CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
+    CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
+        new CompletableFuture<>();
+    when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
+        .thenReturn(FutureConverter.toListenable(resourcesAllocated));
 
-        assertThat(resultFuture.isDone()).isFalse();
-        verify(primaryMutator, times(1)).mutate(put);
-        verify(secondaryMutator, times(0)).mutate(put);
+    CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
 
-        primaryFuture.complete(null);
-        resultFuture.get();
-        assertThat(resultFuture.isDone()).isTrue();
-        secondaryCalled.get();
-        verify(secondaryMutator, times(1)).mutate(put);
-    }
+    // waiting for primary
+    verify(primaryMutator, times(1)).mutate(put);
+    verify(flowController, times(0)).asyncRequestResource(any(RequestResourcesDescription.class));
+    assertThat(resultFuture.isDone()).isFalse();
 
+    // primary complete but still waiting for resources so not done
+    primaryFuture.complete(null);
+    assertThat(resultFuture.isDone()).isFalse();
+
+    // got resources so we got the result
+    resourcesAllocated.complete(() -> {});
+    resultFuture.get();
+
+    // if we got the resources then we got the
+    secondaryCalled.get();
+    verify(flowController, times(1)).asyncRequestResource(any(RequestResourcesDescription.class));
+    verify(secondaryMutator, times(1)).mutate(put);
+  }
 }
