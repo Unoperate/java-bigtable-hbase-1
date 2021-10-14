@@ -115,9 +115,113 @@ public class TestMirroringAsyncBufferedMutator {
     resourcesAllocated.complete(() -> {});
     resultFuture.get();
 
-    // if we got the resources then we got the
+    // if we got the resources then the secondary should be scheduled
     secondaryCalled.get();
     verify(flowController, times(1)).asyncRequestResource(any(RequestResourcesDescription.class));
     verify(secondaryMutator, times(1)).mutate(put);
   }
+
+
+  @Test
+  public void testPrimaryFailed(){
+    Put put = new Put(Bytes.toBytes("rowKey"));
+    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
+
+    CompletableFuture<Void> primaryFailure = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
+
+    when(primaryMutator.mutate(put)).thenReturn(primaryFailure);
+
+    CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
+    primaryFailure.completeExceptionally(new RuntimeException());
+
+    verify(primaryMutator, times(1)).mutate(put);
+    verify(flowController, times(0)).asyncRequestResource(any(RequestResourcesDescription.class));
+    verify(secondaryMutator, times(0)).mutate(put);
+    assertThat(resultFuture.isCompletedExceptionally()).isTrue();
+    assertThat(secondaryCalled.isDone()).isFalse();
+  }
+
+  @Test
+  public void testRequestResourceFailed(){
+    Put put = new Put(Bytes.toBytes("rowKey"));
+    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
+
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
+    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
+
+    CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
+            new CompletableFuture<>();
+    when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
+            .thenReturn(FutureConverter.toListenable(resourcesAllocated));
+
+
+    CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
+
+    // waiting for primary
+    verify(primaryMutator, times(1)).mutate(put);
+    verify(flowController, times(0)).asyncRequestResource(any(RequestResourcesDescription.class));
+    assertThat(resultFuture.isDone()).isFalse();
+
+    // primary complete but still waiting for resources so not done
+    primaryFuture.complete(null);
+
+    assertThat(secondaryCalled.isDone()).isFalse();
+    resourcesAllocated.completeExceptionally(new RuntimeException());
+    try {
+      resultFuture.get();
+    } catch (InterruptedException | ExecutionException ignored) {}
+    assertThat(resultFuture.isCompletedExceptionally()).isFalse();
+
+    verify(flowController, times(1)).asyncRequestResource(any(RequestResourcesDescription.class));
+  }
+
+  @Test
+  public void testSecondaryFailed()
+          throws ExecutionException, InterruptedException {
+    Put put = new Put(Bytes.toBytes("rowKey"));
+    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
+
+    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
+    CompletableFuture<Void> secondaryFailure = new CompletableFuture<>();
+    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
+    when(secondaryMutator.mutate(put))
+            .thenAnswer(
+                    invocationOnMock -> {
+                      secondaryCalled.complete(null);
+                      return secondaryFailure;
+                    });
+
+    CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
+            new CompletableFuture<>();
+    when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
+            .thenReturn(FutureConverter.toListenable(resourcesAllocated));
+
+    CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
+
+    // waiting for primary
+    verify(primaryMutator, times(1)).mutate(put);
+    verify(flowController, times(0)).asyncRequestResource(any(RequestResourcesDescription.class));
+    assertThat(resultFuture.isDone()).isFalse();
+
+    // primary complete but still waiting for resources so not done
+    primaryFuture.complete(null);
+    assertThat(resultFuture.isDone()).isFalse();
+
+    secondaryFailure.completeExceptionally(new RuntimeException());
+
+    // got resources so we got the result
+    resourcesAllocated.complete(() -> {});
+    resultFuture.get();
+
+    secondaryCalled.get();
+
+    verify(flowController, times(1)).asyncRequestResource(any(RequestResourcesDescription.class));
+    verify(secondaryMutator, times(1)).mutate(put);
+
+    assertThat(resultFuture.isCompletedExceptionally()).isFalse();
+  }
+
 }

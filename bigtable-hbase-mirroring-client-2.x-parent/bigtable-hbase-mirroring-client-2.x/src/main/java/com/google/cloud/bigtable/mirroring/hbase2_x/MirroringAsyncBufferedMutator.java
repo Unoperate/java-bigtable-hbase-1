@@ -35,7 +35,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   private final AsyncBufferedMutator primary;
   private final AsyncBufferedMutator secondary;
   private final FlowController flowController;
-  private ListenableReferenceCounter referenceCounter;
+  private final ListenableReferenceCounter referenceCounter;
 
   public MirroringAsyncBufferedMutator(
       AsyncBufferedMutator primary, AsyncBufferedMutator secondary, FlowController flowController) {
@@ -77,7 +77,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
                         resultFuture.complete(null);
                         secondary
                             .mutate(mutation)
-                            .thenRun(() -> referenceCounter.decrementReferenceCount())
+                            .thenRun(referenceCounter::decrementReferenceCount)
                             .exceptionally(
                                 ex -> {
                                   // TODO log secondary error
