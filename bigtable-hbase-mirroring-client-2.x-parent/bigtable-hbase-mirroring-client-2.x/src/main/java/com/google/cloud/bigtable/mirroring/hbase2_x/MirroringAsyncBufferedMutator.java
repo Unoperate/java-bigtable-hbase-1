@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
@@ -25,6 +26,7 @@ import org.apache.hadoop.hbase.client.Mutation;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
@@ -32,6 +34,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   private final AsyncBufferedMutator primary;
   private final AsyncBufferedMutator secondary;
   private final FlowController flowController;
+  private ListenableReferenceCounter referenceCounter;
 
   public MirroringAsyncBufferedMutator(
       AsyncBufferedMutator primary,
@@ -40,6 +43,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
     this.primary = primary;
     this.secondary = secondary;
     this.flowController = flowController;
+    this.referenceCounter = new ListenableReferenceCounter();
   }
 
   @Override
@@ -54,11 +58,11 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
 
   @Override
   public CompletableFuture<Void> mutate(Mutation mutation) {
+    referenceCounter.incrementReferenceCount();
     CompletableFuture<Void> primaryCompleted = primary.mutate(mutation);
     CompletableFuture<Void> resultFuture = new CompletableFuture<>();
 
     primaryCompleted.thenRunAsync(() -> {
-
       // when primary completes, request resources.
       CompletableFuture<FlowController.ResourceReservation> resourceAcquired =
               FutureConverter.toCompletable(flowController.asyncRequestResource(new RequestResourcesDescription(mutation)));
@@ -66,15 +70,18 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
       resourceAcquired.thenRunAsync(() -> {
         // got resources, complete resultFuture and schedule secondary
         resultFuture.complete(null);
-        secondary.mutate(mutation);
+        secondary.mutate(mutation).thenRun(() ->
+                referenceCounter.decrementReferenceCount());
       }).exceptionally(ex -> {
         // got error, complete resultFuture and handle secondary failure
+        referenceCounter.decrementReferenceCount();
         resultFuture.complete(null);
         System.out.println("secondary failed!");
         return null;
       });
     }).exceptionally(ex -> {
       // primary failed, propagate error
+      referenceCounter.decrementReferenceCount();
       resultFuture.completeExceptionally(ex);
       return null;
     });
@@ -88,18 +95,33 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   }
 
   @Override
-  public void flush() {}
+  public void flush() {
+    primary.flush();
+    CompletableFuture.supplyAsync(() -> {
+      secondary.flush();
+      return null;
+    });
+  }
 
   @Override
-  public void close() {}
+  public void close() {
+    flush();
+    try {
+      this.referenceCounter.getOnLastReferenceClosed().get();
+      primary.close();
+      secondary.close();
+    } catch (InterruptedException | ExecutionException e) {
+      e.printStackTrace();
+    }
+  }
 
   @Override
   public long getWriteBufferSize() {
-    return 0;
+    return primary.getWriteBufferSize();
   }
 
   @Override
   public long getPeriodicalFlushTimeout(TimeUnit unit) {
-    return AsyncBufferedMutator.super.getPeriodicalFlushTimeout(unit);
+    return primary.getPeriodicalFlushTimeout(unit);
   }
 }
