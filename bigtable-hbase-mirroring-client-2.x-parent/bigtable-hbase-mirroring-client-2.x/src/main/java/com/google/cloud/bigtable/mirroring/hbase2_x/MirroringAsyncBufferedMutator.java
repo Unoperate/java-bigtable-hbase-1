@@ -24,6 +24,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.AsyncBufferedMutator;
 import org.apache.hadoop.hbase.client.Mutation;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -37,9 +38,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   private ListenableReferenceCounter referenceCounter;
 
   public MirroringAsyncBufferedMutator(
-      AsyncBufferedMutator primary,
-      AsyncBufferedMutator secondary,
-      FlowController flowController) {
+      AsyncBufferedMutator primary, AsyncBufferedMutator secondary, FlowController flowController) {
     this.primary = primary;
     this.secondary = secondary;
     this.flowController = flowController;
@@ -62,57 +61,81 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
     CompletableFuture<Void> primaryCompleted = primary.mutate(mutation);
     CompletableFuture<Void> resultFuture = new CompletableFuture<>();
 
-    primaryCompleted.thenRunAsync(() -> {
-      // when primary completes, request resources.
-      CompletableFuture<FlowController.ResourceReservation> resourceAcquired =
-              FutureConverter.toCompletable(flowController.asyncRequestResource(new RequestResourcesDescription(mutation)));
+    primaryCompleted
+        .thenRunAsync(
+            () -> {
+              // when primary completes, request resources.
+              CompletableFuture<FlowController.ResourceReservation> resourceAcquired =
+                  FutureConverter.toCompletable(
+                      flowController.asyncRequestResource(
+                          new RequestResourcesDescription(mutation)));
 
-      resourceAcquired.thenRunAsync(() -> {
-        // got resources, complete resultFuture and schedule secondary
-        resultFuture.complete(null);
-        secondary.mutate(mutation).thenRun(() ->
-                referenceCounter.decrementReferenceCount());
-      }).exceptionally(ex -> {
-        // got error, complete resultFuture and handle secondary failure
-        referenceCounter.decrementReferenceCount();
-        resultFuture.complete(null);
-        System.out.println("secondary failed!");
-        return null;
-      });
-    }).exceptionally(ex -> {
-      // primary failed, propagate error
-      referenceCounter.decrementReferenceCount();
-      resultFuture.completeExceptionally(ex);
-      return null;
-    });
+              resourceAcquired
+                  .thenRunAsync(
+                      () -> {
+                        // got resources, complete resultFuture and schedule secondary
+                        resultFuture.complete(null);
+                        secondary
+                            .mutate(mutation)
+                            .thenRun(() -> referenceCounter.decrementReferenceCount())
+                            .exceptionally(
+                                ex -> {
+                                  // TODO log secondary error
+                                  System.out.println(
+                                      "secondary failed " + mutation + ", got error:" + ex);
+                                  referenceCounter.decrementReferenceCount();
+                                  return null;
+                                });
+                      })
+                  .exceptionally(
+                      ex -> {
+                        // got error, complete resultFuture and handle secondary failure
+                        referenceCounter.decrementReferenceCount();
+                        resultFuture.complete(null);
+                        // TODO log secondary error
+                        System.out.println("secondary failed " + mutation + ", got error: " + ex);
+                        return null;
+                      });
+            })
+        .exceptionally(
+            ex -> {
+              // primary failed, propagate error
+              referenceCounter.decrementReferenceCount();
+              // TODO log primary error
+              System.out.println("primary failed " + mutation + ", got error: " + ex);
+              resultFuture.completeExceptionally(ex);
+              return null;
+            });
 
     return resultFuture;
   }
 
   @Override
   public List<CompletableFuture<Void>> mutate(List<? extends Mutation> list) {
-    return null;
+    ArrayList<CompletableFuture<Void>> results = new ArrayList<>(list.size());
+    for (Mutation mutation : list) {
+        results.add(mutate(mutation));
+    }
+    return results;
   }
 
   @Override
   public void flush() {
     primary.flush();
-    CompletableFuture.supplyAsync(() -> {
-      secondary.flush();
-      return null;
-    });
+    secondary.flush();
   }
 
   @Override
   public void close() {
     flush();
     try {
+      this.referenceCounter.decrementReferenceCount();
       this.referenceCounter.getOnLastReferenceClosed().get();
-      primary.close();
-      secondary.close();
     } catch (InterruptedException | ExecutionException e) {
       e.printStackTrace();
     }
+    primary.close();
+    secondary.close();
   }
 
   @Override
