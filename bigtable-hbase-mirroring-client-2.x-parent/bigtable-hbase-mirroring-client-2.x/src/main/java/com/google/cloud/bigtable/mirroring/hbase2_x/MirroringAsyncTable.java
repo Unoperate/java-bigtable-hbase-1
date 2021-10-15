@@ -395,7 +395,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     return new MirroringResultScanner<>(
         scan,
         this.primaryTable.getScanner(scan),
-        new AsyncResultScannerWrapper<MirroringAsyncTable<C>>(
+        new AsyncResultScannerWrapper<>(
             this,
             this.secondaryTable.getScanner(scan),
             MoreExecutors.listeningDecorator(this.executorService),

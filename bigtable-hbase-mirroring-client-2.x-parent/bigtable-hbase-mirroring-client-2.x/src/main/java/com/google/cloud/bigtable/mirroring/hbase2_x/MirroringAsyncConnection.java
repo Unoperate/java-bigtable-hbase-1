@@ -59,7 +59,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final ExecutorService executorService;
+  private final ExecutorService pool;
 
   /**
    * The constructor called from {@link
@@ -115,7 +115,16 @@ public class MirroringAsyncConnection implements AsyncConnection {
 
     this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(this.mirroringTracer, writeErrorConsumer);
-    this.executorService = Executors.newCachedThreadPool();
+
+    this.pool = Executors.newCachedThreadPool();
+  }
+
+  public AsyncConnection getPrimaryConnection() {
+    return this.primaryConnection;
+  }
+
+  public AsyncConnection getSecondaryConnection() {
+    return this.secondaryConnection;
   }
 
   @Override
@@ -224,7 +233,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
           secondaryWriteErrorConsumer,
           mirroringTracer,
           referenceCounter,
-          executorService);
+          pool);
     }
 
     private AsyncTableBuilder<C> setTimeParameter(
