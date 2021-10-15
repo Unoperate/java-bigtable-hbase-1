@@ -47,12 +47,12 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
 
   @Override
   public TableName getName() {
-    return null;
+    return primary.getName();
   }
 
   @Override
   public Configuration getConfiguration() {
-    return null;
+    return primary.getConfiguration();
   }
 
   @Override
