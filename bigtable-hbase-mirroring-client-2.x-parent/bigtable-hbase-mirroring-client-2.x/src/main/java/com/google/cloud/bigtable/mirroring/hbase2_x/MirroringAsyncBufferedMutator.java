@@ -83,7 +83,6 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
     primaryCompleted
         .thenRun(
             () -> {
-              // when primary completes, request resources.
               CompletableFuture<FlowController.ResourceReservation> resourceRequested =
                   FutureConverter.toCompletable(
                       flowController.asyncRequestResource(
@@ -92,7 +91,6 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
               resourceRequested
                   .thenRun(
                       () -> {
-                        // got resources, complete resultFuture and schedule secondary
                         resultFuture.complete(null);
                         secondary
                             .mutate(mutation)
@@ -108,7 +106,6 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
                       })
                   .exceptionally(
                       resourceReservationError -> {
-                        // got error, complete resultFuture and handle secondary failure
                         referenceCounter.decrementReferenceCount();
                         resultFuture.complete(null);
                         this.secondaryWriteErrorConsumer.consume(
@@ -119,7 +116,6 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
             })
         .exceptionally(
             primaryError -> {
-              // primary failed, propagate error
               referenceCounter.decrementReferenceCount();
               resultFuture.completeExceptionally(primaryError);
               return null;

@@ -27,9 +27,11 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.AsyncBufferedMutator;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.Before;
 import org.junit.Rule;
@@ -49,6 +51,11 @@ public class TestMirroringAsyncBufferedMutator {
   @Mock FlowController flowController;
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
 
+  CompletableFuture<Void> primaryFuture;
+  CompletableFuture<Void> secondaryCalled;
+  Put put;
+
+
   MirroringAsyncBufferedMutator mirroringMutator;
 
   @Before
@@ -58,17 +65,21 @@ public class TestMirroringAsyncBufferedMutator {
         spy(
             new MirroringAsyncBufferedMutator(
                 primaryMutator, secondaryMutator, flowController, secondaryWriteErrorConsumer));
+
+    this.put = new Put(Bytes.toBytes("rowKey"));
+    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
+
+    this.primaryFuture = new CompletableFuture<>();
+    this.secondaryCalled = new CompletableFuture<>();
+    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
+
+
   }
 
   @Test
   public void testResultIsCompletedOnPrimaryCompletion()
       throws ExecutionException, InterruptedException {
-    Put put = new Put(Bytes.toBytes("rowKey"));
-    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
 
-    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
-    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
-    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
     when(secondaryMutator.mutate(put))
         .thenAnswer(
             invocationOnMock -> {
@@ -93,7 +104,7 @@ public class TestMirroringAsyncBufferedMutator {
     assertThat(resultFuture.isDone()).isFalse();
 
     // got resources so we got the result
-    resourcesAllocated.complete(() -> {});
+    resourcesAllocated.complete(null);
     resultFuture.get();
 
     // if we got the resources then the secondary should be scheduled
@@ -104,33 +115,25 @@ public class TestMirroringAsyncBufferedMutator {
 
   @Test
   public void testPrimaryFailed() {
-    Put put = new Put(Bytes.toBytes("rowKey"));
-    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
-
     CompletableFuture<Void> primaryFailure = new CompletableFuture<>();
-    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
 
     when(primaryMutator.mutate(put)).thenReturn(primaryFailure);
 
     CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
-    primaryFailure.completeExceptionally(new RuntimeException());
+    primaryFailure.completeExceptionally(new IOException());
 
     verify(primaryMutator, times(1)).mutate(put);
     verify(flowController, times(0)).asyncRequestResource(any(RequestResourcesDescription.class));
     verify(secondaryMutator, times(0)).mutate(put);
+    try {
+      resultFuture.get();
+    } catch (InterruptedException | ExecutionException ignored) {}
     assertThat(resultFuture.isCompletedExceptionally()).isTrue();
     assertThat(secondaryCalled.isDone()).isFalse();
   }
 
   @Test
   public void testRequestResourceFailed() {
-    Put put = new Put(Bytes.toBytes("rowKey"));
-    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
-
-    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
-    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
-    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
-
     CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
         new CompletableFuture<>();
     when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
@@ -147,7 +150,7 @@ public class TestMirroringAsyncBufferedMutator {
     primaryFuture.complete(null);
 
     assertThat(secondaryCalled.isDone()).isFalse();
-    resourcesAllocated.completeExceptionally(new RuntimeException());
+    resourcesAllocated.completeExceptionally(new IOException());
     try {
       resultFuture.get();
     } catch (InterruptedException | ExecutionException ignored) {
@@ -159,13 +162,7 @@ public class TestMirroringAsyncBufferedMutator {
 
   @Test
   public void testSecondaryFailed() throws ExecutionException, InterruptedException {
-    Put put = new Put(Bytes.toBytes("rowKey"));
-    put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
-
-    CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
-    CompletableFuture<Void> secondaryCalled = new CompletableFuture<>();
     CompletableFuture<Void> secondaryFailure = new CompletableFuture<>();
-    when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
     when(secondaryMutator.mutate(put))
         .thenAnswer(
             invocationOnMock -> {
@@ -189,10 +186,10 @@ public class TestMirroringAsyncBufferedMutator {
     primaryFuture.complete(null);
     assertThat(resultFuture.isDone()).isFalse();
 
-    secondaryFailure.completeExceptionally(new RuntimeException());
+    secondaryFailure.completeExceptionally(new IOException());
 
     // got resources so we got the result
-    resourcesAllocated.complete(() -> {});
+    resourcesAllocated.complete(null);
     resultFuture.get();
 
     secondaryCalled.get();
