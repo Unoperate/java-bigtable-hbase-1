@@ -15,17 +15,9 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGet;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGets;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createPut;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createResult;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerToRejectRequests;
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -34,22 +26,9 @@ import static org.mockito.Mockito.when;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
-import com.google.common.primitives.Longs;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellBuilderFactory;
-import org.apache.hadoop.hbase.CellBuilderType;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.Before;
@@ -57,7 +36,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -69,6 +47,7 @@ public class TestMirroringAsyncBufferedMutator {
   @Mock AsyncBufferedMutator primaryMutator;
   @Mock AsyncBufferedMutator secondaryMutator;
   @Mock FlowController flowController;
+  @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
 
   MirroringAsyncBufferedMutator mirroringMutator;
 
@@ -76,7 +55,9 @@ public class TestMirroringAsyncBufferedMutator {
   public void setUp() {
     setupFlowControllerMock(flowController);
     this.mirroringMutator =
-        spy(new MirroringAsyncBufferedMutator(primaryMutator, secondaryMutator, flowController));
+        spy(
+            new MirroringAsyncBufferedMutator(
+                primaryMutator, secondaryMutator, flowController, secondaryWriteErrorConsumer));
   }
 
   @Test
@@ -121,9 +102,8 @@ public class TestMirroringAsyncBufferedMutator {
     verify(secondaryMutator, times(1)).mutate(put);
   }
 
-
   @Test
-  public void testPrimaryFailed(){
+  public void testPrimaryFailed() {
     Put put = new Put(Bytes.toBytes("rowKey"));
     put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
 
@@ -143,7 +123,7 @@ public class TestMirroringAsyncBufferedMutator {
   }
 
   @Test
-  public void testRequestResourceFailed(){
+  public void testRequestResourceFailed() {
     Put put = new Put(Bytes.toBytes("rowKey"));
     put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
 
@@ -152,10 +132,9 @@ public class TestMirroringAsyncBufferedMutator {
     when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
 
     CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
-            new CompletableFuture<>();
+        new CompletableFuture<>();
     when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
-            .thenReturn(FutureConverter.toListenable(resourcesAllocated));
-
+        .thenReturn(FutureConverter.toListenable(resourcesAllocated));
 
     CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
 
@@ -171,15 +150,15 @@ public class TestMirroringAsyncBufferedMutator {
     resourcesAllocated.completeExceptionally(new RuntimeException());
     try {
       resultFuture.get();
-    } catch (InterruptedException | ExecutionException ignored) {}
+    } catch (InterruptedException | ExecutionException ignored) {
+    }
     assertThat(resultFuture.isCompletedExceptionally()).isFalse();
 
     verify(flowController, times(1)).asyncRequestResource(any(RequestResourcesDescription.class));
   }
 
   @Test
-  public void testSecondaryFailed()
-          throws ExecutionException, InterruptedException {
+  public void testSecondaryFailed() throws ExecutionException, InterruptedException {
     Put put = new Put(Bytes.toBytes("rowKey"));
     put.addColumn(Bytes.toBytes("cf1"), Bytes.toBytes("c1"), Bytes.toBytes("value"));
 
@@ -188,16 +167,16 @@ public class TestMirroringAsyncBufferedMutator {
     CompletableFuture<Void> secondaryFailure = new CompletableFuture<>();
     when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
     when(secondaryMutator.mutate(put))
-            .thenAnswer(
-                    invocationOnMock -> {
-                      secondaryCalled.complete(null);
-                      return secondaryFailure;
-                    });
+        .thenAnswer(
+            invocationOnMock -> {
+              secondaryCalled.complete(null);
+              return secondaryFailure;
+            });
 
     CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
-            new CompletableFuture<>();
+        new CompletableFuture<>();
     when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
-            .thenReturn(FutureConverter.toListenable(resourcesAllocated));
+        .thenReturn(FutureConverter.toListenable(resourcesAllocated));
 
     CompletableFuture<Void> resultFuture = mirroringMutator.mutate(put);
 
@@ -223,5 +202,4 @@ public class TestMirroringAsyncBufferedMutator {
 
     assertThat(resultFuture.isCompletedExceptionally()).isFalse();
   }
-
 }
