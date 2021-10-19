@@ -90,7 +90,8 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
                                 secondaryError -> {
                                   this.secondaryWriteErrorConsumer.consume(
                                       MirroringSpanConstants.HBaseOperation.BUFFERED_MUTATOR_MUTATE,
-                                      mutation);
+                                      mutation,
+                                      secondaryError);
                                   referenceCounter.decrementReferenceCount();
                                   return null;
                                 });
@@ -101,7 +102,8 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
                         resultFuture.complete(null);
                         this.secondaryWriteErrorConsumer.consume(
                             MirroringSpanConstants.HBaseOperation.BUFFERED_MUTATOR_MUTATE,
-                            mutation);
+                            mutation,
+                            resourceReservationError);
                         return null;
                       });
             })
