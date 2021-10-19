@@ -136,18 +136,14 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
 
   @Override
   public synchronized void close() {
-    try (Scope scope =
-        this.mirroringTracer.spanFactory.operationScope(
-            MirroringSpanConstants.HBaseOperation.MIRRORING_BUFFERED_MUTATOR_CLOSE)) {
-      if (this.closed.get()) {
-        return;
-      }
-      this.closed.set(true);
-      closeMirroringBufferedMutatorAndWaitForAsyncOperations();
-
-      this.primary.close();
-      this.secondary.close();
+    if (this.closed.get()) {
+      return;
     }
+    this.closed.set(true);
+    closeMirroringBufferedMutatorAndWaitForAsyncOperations();
+
+    this.primary.close();
+    this.secondary.close();
   }
 
   @Override
