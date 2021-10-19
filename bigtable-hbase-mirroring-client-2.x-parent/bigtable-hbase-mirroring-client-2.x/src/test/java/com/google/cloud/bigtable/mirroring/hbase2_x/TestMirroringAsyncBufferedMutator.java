@@ -55,7 +55,6 @@ public class TestMirroringAsyncBufferedMutator {
   CompletableFuture<Void> secondaryCalled;
   Put put;
 
-
   MirroringAsyncBufferedMutator mirroringMutator;
 
   @Before
@@ -72,8 +71,6 @@ public class TestMirroringAsyncBufferedMutator {
     this.primaryFuture = new CompletableFuture<>();
     this.secondaryCalled = new CompletableFuture<>();
     when(primaryMutator.mutate(put)).thenReturn(primaryFuture);
-
-
   }
 
   @Test
@@ -127,7 +124,8 @@ public class TestMirroringAsyncBufferedMutator {
     verify(secondaryMutator, times(0)).mutate(put);
     try {
       resultFuture.get();
-    } catch (InterruptedException | ExecutionException ignored) {}
+    } catch (InterruptedException | ExecutionException ignored) {
+    }
     assertThat(resultFuture.isCompletedExceptionally()).isTrue();
     assertThat(secondaryCalled.isDone()).isFalse();
   }

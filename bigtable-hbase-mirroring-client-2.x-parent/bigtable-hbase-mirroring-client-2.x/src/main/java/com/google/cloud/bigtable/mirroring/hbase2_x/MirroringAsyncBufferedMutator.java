@@ -16,7 +16,6 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.api.core.InternalApi;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -24,17 +23,13 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestRes
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
-
-import java.io.IOException;
-import java.io.InterruptedIOException;
+import io.opencensus.common.Scope;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import io.opencensus.common.Scope;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.AsyncBufferedMutator;
@@ -142,8 +137,8 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   @Override
   public synchronized void close() {
     try (Scope scope =
-                 this.mirroringTracer.spanFactory.operationScope(
-                         MirroringSpanConstants.HBaseOperation.MIRRORING_BUFFERED_MUTATOR_CLOSE)) {
+        this.mirroringTracer.spanFactory.operationScope(
+            MirroringSpanConstants.HBaseOperation.MIRRORING_BUFFERED_MUTATOR_CLOSE)) {
       if (this.closed.get()) {
         return;
       }
@@ -165,7 +160,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
     return primary.getPeriodicalFlushTimeout(unit);
   }
 
-  private void closeMirroringBufferedMutatorAndWaitForAsyncOperations(){
+  private void closeMirroringBufferedMutatorAndWaitForAsyncOperations() {
     this.referenceCounter.decrementReferenceCount();
     try {
       this.referenceCounter.getOnLastReferenceClosed().get();
