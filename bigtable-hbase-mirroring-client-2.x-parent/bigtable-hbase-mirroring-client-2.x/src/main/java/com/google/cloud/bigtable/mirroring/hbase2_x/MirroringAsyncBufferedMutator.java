@@ -21,9 +21,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
-import io.opencensus.common.Scope;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -43,8 +41,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
   private final FlowController flowController;
   private final ListenableReferenceCounter referenceCounter;
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
-  private final MirroringTracer mirroringTracer;
-  private AtomicBoolean closed = new AtomicBoolean(false);
+  private final AtomicBoolean closed = new AtomicBoolean(false);
 
   public MirroringAsyncBufferedMutator(
       AsyncBufferedMutator primary,
@@ -56,7 +53,6 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
     this.flowController = flowController;
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     this.referenceCounter = new ListenableReferenceCounter();
-    this.mirroringTracer = new MirroringTracer();
   }
 
   @Override
