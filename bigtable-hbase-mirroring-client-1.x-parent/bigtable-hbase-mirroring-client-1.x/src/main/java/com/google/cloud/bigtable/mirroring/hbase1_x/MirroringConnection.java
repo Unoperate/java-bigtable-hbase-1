@@ -51,13 +51,13 @@ import org.apache.hadoop.hbase.security.User;
 public class MirroringConnection implements Connection {
   private static final com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger Log =
       new com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger(MirroringConnection.class);
-  private final FlowController flowController;
-  private final ExecutorService executorService;
-  private final MismatchDetector mismatchDetector;
-  private final ListenableReferenceCounter referenceCounter;
-  private final MirroringTracer mirroringTracer;
-  private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
-  private final ReadSampler readSampler;
+  protected final FlowController flowController;
+  protected final ExecutorService executorService;
+  protected final MismatchDetector mismatchDetector;
+  protected final ListenableReferenceCounter referenceCounter;
+  protected final MirroringTracer mirroringTracer;
+  protected final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
+  protected final ReadSampler readSampler;
   private final Logger failedWritesLogger;
   private final MirroringConfiguration configuration;
   private final Connection primaryConnection;

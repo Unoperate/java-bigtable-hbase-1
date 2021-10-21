@@ -15,6 +15,8 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.blockMethodCall;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.delayMethodCall;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_BUFFERED_MUTATOR_BYTES_TO_FLUSH;
 import static com.google.common.truth.Truth.assertThat;
@@ -40,6 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -421,6 +424,66 @@ public class TestMirroringBufferedMutator {
 
     verify(secondaryBufferedMutator, never()).flush();
     verify(resourceReservation, times(3)).release();
+  }
+
+  @Test
+  public void testCloseWaitsForOngoingFlushes()
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    final List<? extends Mutation> mutations =
+        Arrays.asList(
+            new Delete(Longs.toByteArray(0)),
+            new Delete(Longs.toByteArray(1)),
+            new Delete(Longs.toByteArray(2)));
+
+    long mutationSize = mutations.get(0).heapSize();
+
+    final SettableFuture<Void> closeStarted = SettableFuture.create();
+    final SettableFuture<Void> unlockSecondaryFlush = SettableFuture.create();
+
+    int numRunningFlushes = 10;
+
+    Semaphore semaphore = new Semaphore(numRunningFlushes);
+    semaphore.acquire(numRunningFlushes);
+
+    final BufferedMutator bm = getBufferedMutator((long) 4 * mutationSize);
+
+    blockMethodCall(secondaryBufferedMutator, unlockSecondaryFlush, semaphore).flush();
+    delayMethodCall(primaryBufferedMutator, 300).flush();
+
+    for (int i = 0; i < numRunningFlushes; i++) {
+      bm.mutate(mutations);
+      // Primary flush completes immediately, secondary is blocked but releases one permit on the
+      // semaphore.
+      bm.flush();
+      // wait until flush is started
+      assertThat(semaphore.tryAcquire(1, TimeUnit.SECONDS)).isTrue();
+    }
+
+    Thread t =
+        new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                try {
+                  closeStarted.set(null);
+                  bm.close();
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              }
+            });
+    t.start();
+    closeStarted.get(1, TimeUnit.SECONDS);
+
+    // best effort - we give the closing thread some time to run.
+    t.join(1000);
+    assertThat(t.isAlive()).isTrue();
+
+    unlockSecondaryFlush.set(null);
+    t.join(3000);
+    assertThat(t.isAlive()).isFalse();
+
+    executorServiceRule.waitForExecutor();
   }
 
   private Answer<Void> blockedFlushes(
