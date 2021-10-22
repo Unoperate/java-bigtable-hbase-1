@@ -22,6 +22,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
@@ -71,6 +72,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
   private final ListenableReferenceCounter referenceCounter;
+  private final ReadSampler readSampler;
 
   public MirroringAsyncTable(
       AsyncTable<C> primaryTable,
@@ -79,6 +81,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
       FlowController flowController,
       SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer,
       MirroringTracer mirroringTracer,
+      ReadSampler readSampler,
       ListenableReferenceCounter referenceCounter) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
@@ -87,6 +90,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     this.mirroringTracer = mirroringTracer;
     this.referenceCounter = referenceCounter;
+    this.readSampler = readSampler;
   }
 
   @Override
@@ -270,14 +274,26 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     waitForAllWithErrorHandler(primaryFutures, primaryErrorHandler, primaryResults)
         .whenComplete(
             (ignoredResult, ignoredError) -> {
+              boolean skipReads = !readSampler.shouldNextReadOperationBeSampled();
               final FailedSuccessfulSplit<ActionType, SuccessfulResultType> failedSuccessfulSplit =
-                  new FailedSuccessfulSplit<>(
-                      actions, primaryResults, resultIsFaultyPredicate, successfulResultTypeClass);
+                  BatchHelpers.createOperationsSplit(
+                      actions,
+                      primaryResults,
+                      this.readSampler,
+                      resultIsFaultyPredicate,
+                      successfulResultTypeClass,
+                      skipReads);
 
               if (failedSuccessfulSplit.successfulOperations.isEmpty()) {
-                // All results were instances of Throwable, so we already completed
-                // exceptionally result futures with errorHandler passed to
-                // waitForAllWithErrorHandler.
+                // Two cases
+                // - either everything failed - all results were instances of Throwable and we
+                // already completed exceptionally result futures with errorHandler passed to
+                // waitForAllWithErrorHandler, or
+                // - reads were successful but were excluded due to sampling and we should forward
+                // primary results to user results.
+                if (skipReads) {
+                  completeSuccessfulResultFutures(returnedValue.result, primaryResults, numActions);
+                }
                 returnedValue.verificationCompleted();
                 return;
               }
@@ -383,6 +399,11 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         (primaryResult, primaryError) -> {
           if (primaryError != null) {
             result.result.completeExceptionally(primaryError);
+            result.verificationCompleted();
+            return;
+          }
+          if (!this.readSampler.shouldNextReadOperationBeSampled()) {
+            result.result.complete(primaryResult);
             result.verificationCompleted();
             return;
           }

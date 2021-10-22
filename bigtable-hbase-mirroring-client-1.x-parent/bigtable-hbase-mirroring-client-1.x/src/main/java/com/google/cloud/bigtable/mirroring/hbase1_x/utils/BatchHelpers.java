@@ -265,4 +265,25 @@ public class BatchHelpers {
       this.writeResults = writeResultsList.toArray(new Object[0]);
     }
   }
+
+  public static <ActionType extends Row, ResultType>
+      FailedSuccessfulSplit<ActionType, ResultType> createOperationsSplit(
+          List<ActionType> operations,
+          Object[] results,
+          ReadSampler readSampler,
+          Predicate<Object> resultIsFaultyPredicate,
+          Class<ResultType> resultTypeClass,
+          boolean skipReads) {
+    if (skipReads) {
+      ReadWriteSplit<ActionType, ResultType> readWriteSplit =
+          new ReadWriteSplit<>(operations, results, resultTypeClass);
+      return new FailedSuccessfulSplit<>(
+          readWriteSplit.writeOperations,
+          readWriteSplit.writeResults,
+          resultIsFaultyPredicate,
+          resultTypeClass);
+    }
+    return new FailedSuccessfulSplit<>(
+        operations, results, resultIsFaultyPredicate, resultTypeClass);
+  }
 }
