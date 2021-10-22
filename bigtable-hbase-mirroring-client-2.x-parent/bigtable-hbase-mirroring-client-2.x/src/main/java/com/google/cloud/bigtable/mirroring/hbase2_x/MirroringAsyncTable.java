@@ -301,7 +301,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
               GeneralBatchBuilder batchBuilder = batchBuilderCreator.apply(failedSuccessfulSplit);
 
               final List<ActionType> operationsToScheduleOnSecondary =
-                  failedSuccessfulSplit.successfulOperations;
+                  BatchHelpers.rewriteIncrementsAndAppendsAsPuts(
+                      failedSuccessfulSplit.successfulOperations,
+                      failedSuccessfulSplit.successfulResults);
 
               final Object[] secondaryResults = new Object[operationsToScheduleOnSecondary.size()];
 

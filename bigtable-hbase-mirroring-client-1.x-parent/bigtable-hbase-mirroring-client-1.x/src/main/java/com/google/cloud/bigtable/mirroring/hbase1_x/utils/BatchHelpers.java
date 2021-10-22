@@ -24,7 +24,12 @@ import io.opencensus.common.Scope;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
+import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.Increment;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.Table;
@@ -264,6 +269,43 @@ public class BatchHelpers {
           readResultsList.toArray((ReadResultType[]) Array.newInstance(readResultTypeClass, 0));
       this.writeResults = writeResultsList.toArray(new Object[0]);
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <ActionType extends Row> List<ActionType> rewriteIncrementsAndAppendsAsPuts(
+      List<ActionType> successfulOperations, Object[] successfulResults) {
+    List<ActionType> rewrittenRows = new ArrayList<>(successfulOperations.size());
+    for (int i = 0; i < successfulOperations.size(); i++) {
+      ActionType operation = successfulOperations.get(i);
+      if (operation instanceof Increment || operation instanceof Append) {
+        Result result = (Result) successfulResults[i];
+        // This would fail iff ActionType == Increment || ActionType == Append, but if any of
+        // operations is an Increment or an Append, then we are performing a batch and ActionType ==
+        // Row
+        rewrittenRows.add((ActionType) makePutFromResult(result));
+      } else {
+        rewrittenRows.add(operation);
+      }
+    }
+    return rewrittenRows;
+  }
+
+  public static Put makePutFromResult(Result result) {
+    Put put = new Put(result.getRow());
+    for (Entry<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> familyEntry :
+        result.getMap().entrySet()) {
+      byte[] family = familyEntry.getKey();
+      for (Entry<byte[], NavigableMap<Long, byte[]>> qualifierEntry :
+          familyEntry.getValue().entrySet()) {
+        byte[] qualifier = qualifierEntry.getKey();
+        for (Entry<Long, byte[]> valueEntry : qualifierEntry.getValue().entrySet()) {
+          long timestamp = valueEntry.getKey();
+          byte[] value = valueEntry.getValue();
+          put.addColumn(family, qualifier, timestamp, value);
+        }
+      }
+    }
+    return put;
   }
 
   public static <ActionType extends Row, ResultType>

@@ -46,8 +46,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.Cell;
@@ -137,24 +135,6 @@ public class MirroringTable implements Table, ListenableCloseable {
     this.referenceCounter.holdReferenceUntilClosing(this.secondaryAsyncWrapper);
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     this.mirroringTracer = mirroringTracer;
-  }
-
-  private static Put makePutFromResult(Result result) {
-    Put put = new Put(result.getRow());
-    for (Entry<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> familyEntry :
-        result.getMap().entrySet()) {
-      byte[] family = familyEntry.getKey();
-      for (Entry<byte[], NavigableMap<Long, byte[]>> qualifierEntry :
-          familyEntry.getValue().entrySet()) {
-        byte[] qualifier = qualifierEntry.getKey();
-        for (Entry<Long, byte[]> valueEntry : qualifierEntry.getValue().entrySet()) {
-          long timestamp = valueEntry.getKey();
-          byte[] value = valueEntry.getValue();
-          put.addColumn(family, qualifier, timestamp, value);
-        }
-      }
-    }
-    return put;
   }
 
   @Override
@@ -580,7 +560,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.APPEND);
 
-      Put put = makePutFromResult(result);
+      Put put = BatchHelpers.makePutFromResult(result);
 
       scheduleWriteWithControlFlow(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
@@ -603,7 +583,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.INCREMENT);
 
-      Put put = makePutFromResult(result);
+      Put put = BatchHelpers.makePutFromResult(result);
 
       scheduleWriteWithControlFlow(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
@@ -832,7 +812,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     }
 
     List<? extends Row> operationsToScheduleOnSecondary =
-        rewriteIncrementsAndAppendsAsPuts(
+        BatchHelpers.rewriteIncrementsAndAppendsAsPuts(
             failedSuccessfulSplit.successfulOperations, failedSuccessfulSplit.successfulResults);
 
     final Object[] resultsSecondary = new Object[operationsToScheduleOnSecondary.size()];
@@ -876,21 +856,6 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.flowController,
             this.mirroringTracer,
             resourceReservationFailureCallback));
-  }
-
-  private List<? extends Row> rewriteIncrementsAndAppendsAsPuts(
-      List<? extends Row> successfulOperations, Result[] successfulResults) {
-    List<Row> rewrittenRows = new ArrayList<>();
-    for (int i = 0; i < successfulOperations.size(); i++) {
-      Row operation = successfulOperations.get(i);
-      if (operation instanceof Increment || operation instanceof Append) {
-        Result result = successfulResults[i];
-        rewrittenRows.add(makePutFromResult(result));
-      } else {
-        rewrittenRows.add(operation);
-      }
-    }
-    return rewrittenRows;
   }
 
   public static class WriteOperationInfo {
