@@ -33,6 +33,12 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetecto
 import io.opencensus.common.Scope;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,7 +50,9 @@ import org.apache.hadoop.hbase.client.BufferedMutator;
 import org.apache.hadoop.hbase.client.BufferedMutatorParams;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
+import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.RegionLocator;
+import org.apache.hadoop.hbase.client.RowMutations;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.security.User;
 
@@ -280,5 +288,78 @@ public class MirroringConnection implements Connection {
     } catch (ExecutionException e) {
       throw new RuntimeException(e);
     }
+  }
+}
+
+class FaillogJVMShutdownHook extends Thread {
+  private final Set<Object> pendingOperations =
+      Collections.newSetFromMap(new ConcurrentHashMap<Object, Boolean>());
+
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+
+  private final Logger logger;
+
+  public FaillogJVMShutdownHook(Logger logger) {
+    this.logger = logger;
+  }
+
+  public void registerPendingOperation(Object o) throws IOException {
+    if (closed.get()) {
+      try {
+        writeOps(Collections.singletonList(o));
+      } catch (InterruptedException e) {
+        throw new IOException(e);
+      }
+      flushOps();
+      throw new IOException("JVM is shuting down");
+    } else {
+      pendingOperations.add(o);
+    }
+  }
+
+  public void removePendingOperation(Object o) {
+    pendingOperations.remove(o);
+  }
+
+  @Override
+  public void run() {
+    closed.set(true);
+    List<Object> ops = new ArrayList<>();
+    while (!pendingOperations.isEmpty()) {
+      for (Object o : pendingOperations) {
+        ops.add(o);
+      }
+      pendingOperations.removeAll(ops);
+      try {
+        writeOps(ops);
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  Exception dummyException = new Exception("JVM shutdown handler.");
+
+  private void writeOps(List<Object> ops) throws InterruptedException {
+    for (Object o : ops) {
+      if (o instanceof List) {
+        writeOps((List) o);
+        continue;
+      }
+      if (o instanceof Mutation) {
+        logger.mutationFailed((Mutation)o, dummyException);
+      } else if (o instanceof RowMutations) {
+        RowMutations rowMutation = (RowMutations) o;
+        for (Mutation mutation : rowMutation.getMutations()) {
+          logger.mutationFailed(mutation, dummyException);
+        }
+      } else {
+        // TODO: log unsupported.
+      }
+    }
+  }
+
+  private void flushOps() {
+    logger.close();
   }
 }

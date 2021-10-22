@@ -113,6 +113,8 @@ public class MirroringTable implements Table, ListenableCloseable {
 
   private final ReadSampler readSampler;
   private final boolean performWritesConcurrently;
+
+  private final FaillogJVMShutdownHook faillogJVMShutdownHook;
   /**
    * @param executorService ExecutorService is used to perform operations on secondaryTable and
    *     verification tasks.
@@ -979,7 +981,8 @@ public class MirroringTable implements Table, ListenableCloseable {
             verificationFuture,
             this.flowController,
             this.mirroringTracer,
-            resourceReservationFailureCallback));
+            resourceReservationFailureCallback)
+    );
   }
 
   private FailedSuccessfulSplit<? extends Row> createOperationsSplit(
