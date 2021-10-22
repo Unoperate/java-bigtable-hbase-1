@@ -17,6 +17,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -119,6 +120,8 @@ public class MirroringBufferedMutator implements BufferedMutator {
   private List<RetriesExhaustedWithDetailsException> exceptionsToBeThrown = new ArrayList<>();
 
   private boolean closed = false;
+  // private WaitableCounter ongoingFlushesCounter = new WaitableCounter(0);
+  private ListenableReferenceCounter ongoingFlushesCounter = new ListenableReferenceCounter();
 
   public MirroringBufferedMutator(
       Connection primaryConnection,
@@ -300,7 +303,9 @@ public class MirroringBufferedMutator implements BufferedMutator {
       List<IOException> exceptions = new ArrayList<>();
 
       try {
-        scheduleFlush().secondaryFlushFinished.get();
+        scheduleFlush().primaryFlushFinished.get();
+        this.ongoingFlushesCounter.decrementReferenceCount();
+        this.ongoingFlushesCounter.getOnLastReferenceClosed().get();
       } catch (InterruptedException | ExecutionException e) {
         setInterruptedFlagInInterruptedException(e);
         exceptions.add(new IOException(e));
@@ -390,6 +395,7 @@ public class MirroringBufferedMutator implements BufferedMutator {
 
   private synchronized FlushFutures scheduleFlush() {
     try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
+      this.ongoingFlushesCounter.incrementReferenceCount();
       this.mutationsBufferSizeBytes = 0;
 
       final List<? extends Mutation> dataToFlush = this.mutationsBuffer;
@@ -399,6 +405,14 @@ public class MirroringBufferedMutator implements BufferedMutator {
       this.reservations = new ArrayList<>();
 
       final SettableFuture<Void> secondaryFlushFinished = SettableFuture.create();
+      secondaryFlushFinished.addListener(
+          new Runnable() {
+            @Override
+            public void run() {
+              ongoingFlushesCounter.decrementReferenceCount();
+            }
+          },
+          MoreExecutors.directExecutor());
 
       ListenableFuture<Void> primaryFlushFinished =
           this.executorService.submit(
