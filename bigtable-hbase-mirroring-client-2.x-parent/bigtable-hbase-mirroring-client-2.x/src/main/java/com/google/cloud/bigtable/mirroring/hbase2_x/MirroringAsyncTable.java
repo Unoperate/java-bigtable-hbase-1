@@ -190,8 +190,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 list,
                 this.primaryTable::get,
                 this.secondaryTable::get,
-                BatchBuilder::new,
-                Object.class);
+                BatchBuilder<Get, Result>::new,
+                Result.class);
     keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
     return completionStages.result;
   }
@@ -204,8 +204,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 list,
                 this.primaryTable::put,
                 this.secondaryTable::put,
-                BatchBuilder::new,
-                Object.class);
+                BatchBuilder<Put, Void>::new,
+                Void.class);
     keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
     return completionStages.result;
   }
@@ -218,8 +218,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 list,
                 this.primaryTable::delete,
                 this.secondaryTable::delete,
-                BatchBuilder::new,
-                Object.class);
+                BatchBuilder<Delete, Void>::new,
+                Void.class);
     keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
     return completionStages.result;
   }
@@ -232,7 +232,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 actions,
                 this.primaryTable::batch,
                 this.secondaryTable::batch,
-                BatchBuilder::new,
+                BatchBuilder<Row, Object>::new,
                 Object.class);
     keepReferenceUntilOperationCompletes(completionStages.getVerificationCompletedFuture());
     return completionStages.result;
@@ -261,7 +261,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   public <ResultType, ActionType extends Row, SuccessfulResultType>
       AsyncRequestScheduling.ResultWithVerificationCompletion<List<CompletableFuture<ResultType>>>
           generalBatch(
-              List<ActionType> userActions,
+              List<? extends ActionType> userActions,
               Function<List<ActionType>, List<CompletableFuture<ResultType>>> primaryFunction,
               Function<List<ActionType>, List<CompletableFuture<ResultType>>> secondaryFunction,
               Function<FailedSuccessfulSplit<ActionType, SuccessfulResultType>, GeneralBatchBuilder>
@@ -293,7 +293,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                 // All results were instances of Throwable, so we already completed
                 // exceptionally result futures with errorHandler passed to
                 // waitForAllWithErrorHandler.
-                returnedValue.getVerificationCompletedFuture().complete(null);
+                returnedValue.verificationCompleted();
                 return;
               }
 
@@ -304,8 +304,14 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
               final Object[] secondaryResults = new Object[operationsToScheduleOnSecondary.size()];
 
+              ReadWriteSplit<ActionType, SuccessfulResultType> successfulReadWriteSplit =
+                  new ReadWriteSplit<>(
+                      failedSuccessfulSplit.successfulOperations,
+                      failedSuccessfulSplit.successfulResults,
+                      successfulResultTypeClass);
+
               final RequestResourcesDescription requestResourcesDescription =
-                  batchBuilder.getRequestResourcesDescription();
+                  batchBuilder.getRequestResourcesDescription(operationsToScheduleOnSecondary);
 
               final CompletableFuture<FlowController.ResourceReservation>
                   resourceReservationRequest =
@@ -317,7 +323,10 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
                     completeSuccessfulResultFutures(
                         returnedValue.result, primaryResults, numActions);
                     if (resourceReservationError != null) {
-                      batchBuilder.handleResourceReservationError(resourceReservationError);
+                      if (!successfulReadWriteSplit.writeOperations.isEmpty()) {
+                        secondaryWriteErrorConsumer.consume(
+                            HBaseOperation.BATCH, successfulReadWriteSplit.writeOperations);
+                      }
                       return;
                     }
                     FutureUtils.forwardResult(
@@ -381,27 +390,34 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
               final Function<T, FutureCallback<T>> verificationCallbackCreator) {
     AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<T>> result =
         new AsyncRequestScheduling.ResultWithVerificationCompletion<>(new CompletableFuture<>());
-    primaryFuture.whenComplete(
-        (primaryResult, primaryError) -> {
-          if (primaryError != null) {
-            result.result.completeExceptionally(primaryError);
-            result.verificationCompleted();
-            return;
-          }
-          AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<T>>
-              completionStages =
-                  reserveFlowControlResourcesThenScheduleSecondary(
-                      primaryFuture,
-                      FutureConverter.toCompletable(
-                          flowController.asyncRequestResource(
-                              resourcesDescriptionCreator.apply(primaryResult))),
-                      secondaryFutureSupplier,
-                      verificationCallbackCreator);
-          FutureUtils.forwardResult(completionStages.result, result.result);
-          FutureUtils.forwardResult(
-              completionStages.getVerificationCompletedFuture(),
-              result.getVerificationCompletedFuture());
-        });
+    primaryFuture
+        .whenComplete(
+            (primaryResult, primaryError) -> {
+              if (primaryError != null) {
+                result.result.completeExceptionally(primaryError);
+                result.verificationCompleted();
+                return;
+              }
+              AsyncRequestScheduling.ResultWithVerificationCompletion<CompletableFuture<T>>
+                  completionStages =
+                      reserveFlowControlResourcesThenScheduleSecondary(
+                          primaryFuture,
+                          FutureConverter.toCompletable(
+                              flowController.asyncRequestResource(
+                                  resourcesDescriptionCreator.apply(primaryResult))),
+                          secondaryFutureSupplier,
+                          verificationCallbackCreator);
+              FutureUtils.forwardResult(completionStages.result, result.result);
+              FutureUtils.forwardResult(
+                  completionStages.getVerificationCompletedFuture(),
+                  result.getVerificationCompletedFuture());
+            })
+        .exceptionally(
+            whenCompleteError -> {
+              result.result.completeExceptionally(whenCompleteError);
+              result.verificationCompleted();
+              return null;
+            });
     return result;
   }
 
@@ -504,18 +520,18 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   }
 
   private interface GeneralBatchBuilder {
-    RequestResourcesDescription getRequestResourcesDescription();
+    RequestResourcesDescription getRequestResourcesDescription(
+        List<? extends Row> operationsToPerformOnSecondary);
 
     FutureCallback<Void> getVerificationCallback(Object[] secondaryResults);
-
-    void handleResourceReservationError(Throwable t);
   }
 
-  private class BatchBuilder implements GeneralBatchBuilder {
-    final FailedSuccessfulSplit<? extends Row, Object> failedSuccessfulSplit;
-    final ReadWriteSplit<? extends Row, Result> successfulReadWriteSplit;
+  private class BatchBuilder<ActionType extends Row, SuccessfulResultType>
+      implements GeneralBatchBuilder {
+    final FailedSuccessfulSplit<ActionType, SuccessfulResultType> failedSuccessfulSplit;
+    final ReadWriteSplit<ActionType, Result> successfulReadWriteSplit;
 
-    BatchBuilder(FailedSuccessfulSplit<? extends Row, Object> split) {
+    BatchBuilder(FailedSuccessfulSplit<ActionType, SuccessfulResultType> split) {
       this.failedSuccessfulSplit = split;
       this.successfulReadWriteSplit =
           new ReadWriteSplit<>(
@@ -525,17 +541,10 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     }
 
     @Override
-    public void handleResourceReservationError(Throwable t) {
-      if (!successfulReadWriteSplit.writeOperations.isEmpty()) {
-        secondaryWriteErrorConsumer.consume(
-            HBaseOperation.BATCH, successfulReadWriteSplit.writeOperations);
-      }
-    }
-
-    @Override
-    public RequestResourcesDescription getRequestResourcesDescription() {
+    public RequestResourcesDescription getRequestResourcesDescription(
+        List<? extends Row> operationsToPerformOnSecondary) {
       return new RequestResourcesDescription(
-          failedSuccessfulSplit.successfulOperations, successfulReadWriteSplit.readResults);
+          operationsToPerformOnSecondary, successfulReadWriteSplit.readResults);
     }
 
     @Override
@@ -565,7 +574,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     }
 
     @Override
-    public RequestResourcesDescription getRequestResourcesDescription() {
+    public RequestResourcesDescription getRequestResourcesDescription(
+        List<? extends Row> operationsToPerformOnSecondary) {
       return new RequestResourcesDescription(primarySuccessfulResults);
     }
 
@@ -595,8 +605,5 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         }
       };
     }
-
-    @Override
-    public void handleResourceReservationError(Throwable ignored) {}
   }
 }
