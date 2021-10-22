@@ -23,6 +23,8 @@ import org.junit.runners.Suite;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
   TestMirroringAsyncTable.class,
+  TestBlocking.class,
+  TestErrorDetection.class,
 })
 public class IntegrationTests {
   // Classes in test suites should use their own ConnectionRule, the one here serves to keep a
