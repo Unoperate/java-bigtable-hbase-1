@@ -1021,14 +1021,6 @@ public class MirroringTable implements Table, ListenableCloseable {
       this(new RequestResourcesDescription(operation), operation, HBaseOperation.DELETE);
     }
 
-    public WriteOperationInfo(Append operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.APPEND);
-    }
-
-    public WriteOperationInfo(Increment operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.INCREMENT);
-    }
-
     public WriteOperationInfo(RowMutations operation) {
       this(new RequestResourcesDescription(operation), operation, HBaseOperation.MUTATE_ROW);
     }
