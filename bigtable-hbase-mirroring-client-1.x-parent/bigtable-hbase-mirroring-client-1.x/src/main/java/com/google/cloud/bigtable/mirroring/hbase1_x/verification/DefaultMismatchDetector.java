@@ -36,6 +36,7 @@ public class DefaultMismatchDetector implements MismatchDetector {
 
   public void exists(Get request, boolean primary, boolean secondary) {
     if (primary != secondary) {
+      // TODO: change system.out.println to Log.trace()
       System.out.println("exists mismatch");
       this.metricsRecorder.recordReadMismatches(HBaseOperation.EXISTS, 1);
     }
