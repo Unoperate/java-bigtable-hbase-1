@@ -25,7 +25,7 @@ jobs:
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-x${{ hashFiles('bigtable-hbase-mirroring-client-1.x-parent/bigtable-hbase-mirroring-client-1.x/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+          restore-keys: ${{ runner.os }}-m2-x
       - name: verify 1.x
         run: mvn --batch-mode --update-snapshots verify -pl bigtable-hbase-mirroring-client-1.x-parent/bigtable-hbase-mirroring-client-1.x
   tests_2_x:
