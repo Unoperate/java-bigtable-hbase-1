@@ -25,7 +25,11 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
@@ -110,7 +114,7 @@ public class DefaultMismatchDetector implements MismatchDetector {
 
   @Override
   public void get(List<Get> request, Result[] primary, Result[] secondary) {
-    verifyResults(primary, secondary, "get", HBaseOperation.GET_LIST);
+    verifyBatchGet(primary, secondary, "get", HBaseOperation.GET_LIST);
   }
 
   @Override
@@ -121,48 +125,33 @@ public class DefaultMismatchDetector implements MismatchDetector {
   }
 
   @Override
-  public void scannerNext(Scan request, int entriesAlreadyRead, Result primary, Result secondary) {
-    if (Comparators.resultsEqual(primary, secondary)) {
-      this.metricsRecorder.recordReadMatches(HBaseOperation.NEXT, 1);
-    } else {
-      Log.debug(
-          "scan[id=%s, entriesRead=%d] mismatch: (%s, %s)",
-          request.getId(),
-          entriesAlreadyRead,
-          new LazyBytesHexlifier(getResultValue(primary), maxValueBytesLogged),
-          new LazyBytesHexlifier(getResultValue(secondary), maxValueBytesLogged));
-      this.metricsRecorder.recordReadMismatches(HBaseOperation.NEXT, 1);
-    }
+  public void scannerNext(
+      Scan request, ScannerResultVerifier scanResultVerifier, Result primary, Result secondary) {
+    scanResultVerifier.verify(new Result[] {primary}, new Result[] {secondary});
   }
 
   @Override
-  public void scannerNext(Scan request, int entriesAlreadyRead, Throwable throwable) {
-    Log.debug(
-        "scan[id=%s, entriesRead=%d] failed: (throwable=%s)",
-        request.getId(), entriesAlreadyRead, throwable);
+  public void scannerNext(Scan request, Throwable throwable) {
+    Log.debug("scan(id=%s) failed: (throwable=%s)", request.getId(), throwable);
   }
 
   @Override
   public void scannerNext(
-      Scan request, int entriesAlreadyRead, Result[] primary, Result[] secondary) {
-    verifyResults(
-        primary,
-        secondary,
-        String.format("scan[id=%s]", request.getId()),
-        HBaseOperation.NEXT_MULTIPLE);
+      Scan request,
+      ScannerResultVerifier scanResultVerifier,
+      Result[] primary,
+      Result[] secondary) {
+    scanResultVerifier.verify(primary, secondary);
   }
 
   @Override
-  public void scannerNext(
-      Scan request, int entriesAlreadyRead, int entriesRequested, Throwable throwable) {
-    Log.debug(
-        "scan[id=%s, entriesRead=%d, entriesRequested=%d] failed: (throwable=%s)",
-        request.getId(), entriesAlreadyRead, entriesRequested, throwable);
+  public void scannerNext(Scan request, int entriesRequested, Throwable throwable) {
+    Log.debug("scan(id=%s) failed: (throwable=%s)", request.getId(), throwable);
   }
 
   @Override
   public void batch(List<Get> request, Result[] primary, Result[] secondary) {
-    verifyResults(primary, secondary, "batch", HBaseOperation.BATCH);
+    verifyBatchGet(primary, secondary, "batch", HBaseOperation.BATCH);
   }
 
   @Override
@@ -172,13 +161,11 @@ public class DefaultMismatchDetector implements MismatchDetector {
         listOfHexRows(request, maxValueBytesLogged), throwable);
   }
 
-  private void verifyResults(
+  private void verifyBatchGet(
       Result[] primary, Result[] secondary, String operationName, HBaseOperation operation) {
-    int minLength = Math.min(primary.length, secondary.length);
-    int maxLength = Math.max(primary.length, secondary.length);
-    int errors = maxLength - minLength;
+    int errors = 0;
     int matches = 0;
-    for (int i = 0; i < minLength; i++) {
+    for (int i = 0; i < primary.length; i++) {
       if (Comparators.resultsEqual(primary[i], secondary[i])) {
         matches++;
       } else {
@@ -199,18 +186,112 @@ public class DefaultMismatchDetector implements MismatchDetector {
     }
   }
 
-  private byte[] getResultValue(Result primary) {
-    if (primary == null) {
-      return null;
-    }
-    return primary.value();
+  private byte[] getResultValue(Result result) {
+    return result == null ? null : result.value();
   }
 
   private byte[] getResultRow(Result result) {
-    if (result == null) {
+    return result == null ? null : result.getRow();
+  }
+
+  @Override
+  public ScannerResultVerifier createScannerResultVerifier(Scan request, int maxBufferedResults) {
+    return new DefaultScannerResultVerifier(request, maxBufferedResults);
+  }
+
+  public class DefaultScannerResultVerifier implements ScannerResultVerifier {
+    private final LinkedList<Result> primaryMismatchBuffer;
+    private final LinkedList<Result> secondaryMismatchBuffer;
+    private final int sizeLimit;
+    private final Scan scanRequest;
+
+    private DefaultScannerResultVerifier(Scan scan, int sizeLimit) {
+      this.scanRequest = scan;
+      this.sizeLimit = sizeLimit;
+      this.primaryMismatchBuffer = new LinkedList<>();
+      this.secondaryMismatchBuffer = new LinkedList<>();
+    }
+
+    @Override
+    public void flush() {
+      this.shrinkBuffer(this.primaryMismatchBuffer, 0);
+      this.shrinkBuffer(this.secondaryMismatchBuffer, 0);
+    }
+
+    @Override
+    public void verify(Result[] primary, Result[] secondary) {
+      this.addNotNull(this.primaryMismatchBuffer, primary);
+      this.addNotNull(this.secondaryMismatchBuffer, secondary);
+
+      this.matchResults();
+
+      this.shrinkBuffer(this.primaryMismatchBuffer, this.sizeLimit);
+      this.shrinkBuffer(this.secondaryMismatchBuffer, this.sizeLimit);
+    }
+
+    private void addNotNull(Deque<Result> mismatchBuffer, Result[] results) {
+      for (Result result : results) {
+        if (result == null) break;
+        mismatchBuffer.addLast(result);
+      }
+    }
+
+    private void matchResults() {
+      Set<Result> matches = this.matchingResults();
+      while (!matches.isEmpty()) {
+        Result primaryResult = this.firstMatch(this.primaryMismatchBuffer, matches);
+        this.popUntilMatchesWanted(this.secondaryMismatchBuffer, primaryResult, matches);
+        metricsRecorder.recordReadMatches(HBaseOperation.NEXT, 1);
+      }
+    }
+
+    private Result firstMatch(Deque<Result> primaryBuffer, Set<Result> matches) {
+      while (!primaryBuffer.isEmpty()) {
+        Result result = primaryBuffer.removeFirst();
+        if (matches.remove(result)) {
+          return result;
+        }
+        logAndRecordScanMismatch(result);
+      }
+      // A match should have been found.
+      assert false;
       return null;
     }
-    return result.getRow();
+
+    void popUntilMatchesWanted(Deque<Result> buffer, Result wanted, Set<Result> matches) {
+      while (!buffer.isEmpty()) {
+        Result result = buffer.removeFirst();
+        matches.remove(result);
+        if (Comparators.resultsEqual(result, wanted)) {
+          return;
+        }
+        logAndRecordScanMismatch(result);
+      }
+      // Wanted result should have been found.
+      assert false;
+    }
+
+    private Set<Result> matchingResults() {
+      Set<Result> results = new HashSet<>(this.primaryMismatchBuffer);
+      results.retainAll(this.secondaryMismatchBuffer);
+      return results;
+    }
+
+    private void shrinkBuffer(Deque<Result> mismatchBuffer, int targetSize) {
+      int toRemove = Math.max(0, mismatchBuffer.size() - targetSize);
+      for (int i = 0; i < toRemove; i++) {
+        logAndRecordScanMismatch(mismatchBuffer.removeFirst());
+      }
+    }
+
+    private void logAndRecordScanMismatch(Result scanResult) {
+      Log.debug(
+          String.format(
+              "scan(id=%s) mismatch: only one database contains (row=%s)",
+              this.scanRequest.getId(),
+              new LazyBytesHexlifier(scanResult.getRow(), maxValueBytesLogged)));
+      metricsRecorder.recordReadMismatches(HBaseOperation.NEXT, 1);
+    }
   }
 
   // Used for logging. Overrides toString() in order to be as lazy as possible.
