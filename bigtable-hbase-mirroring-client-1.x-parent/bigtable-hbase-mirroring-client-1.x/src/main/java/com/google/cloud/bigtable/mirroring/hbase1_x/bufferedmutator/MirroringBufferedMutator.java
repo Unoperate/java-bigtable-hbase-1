@@ -101,7 +101,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
    * Size that mutations kept in {@link #mutationEntries} should reach to invoke a asynchronous
    * flush() on the primary database.
    */
-  protected final long mutationsBufferFlushIntervalBytes;
+  protected final long mutationsBufferFlushThresholdBytes;
 
   /**
    * Internal buffer that should keep mutations that were not yet flushed asynchronously. Type of
@@ -155,7 +155,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
         secondaryConnection.getBufferedMutator(
             createBufferedMutatorParamsWithListener(
                 bufferedMutatorParams, secondaryErrorsListener));
-    this.mutationsBufferFlushIntervalBytes =
+    this.mutationsBufferFlushThresholdBytes =
         configuration.mirroringOptions.bufferedMutatorBytesToFlush;
     this.executorService = MoreExecutors.listeningDecorator(executorService);
     this.configuration = configuration.baseConfiguration;
@@ -204,7 +204,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       BufferEntryType entry, RequestResourcesDescription resourcesDescription) {
     this.mutationEntries.add(entry);
     this.mutationsBufferSizeBytes += resourcesDescription.sizeInBytes;
-    if (this.mutationsBufferSizeBytes > this.mutationsBufferFlushIntervalBytes) {
+    if (this.mutationsBufferSizeBytes > this.mutationsBufferFlushThresholdBytes) {
       // We are not afraid of multiple simultaneous flushes:
       // - HBase clients are thread-safe.
       // - Each failed Row should be reported and placed in `failedPrimaryOperations` once.
