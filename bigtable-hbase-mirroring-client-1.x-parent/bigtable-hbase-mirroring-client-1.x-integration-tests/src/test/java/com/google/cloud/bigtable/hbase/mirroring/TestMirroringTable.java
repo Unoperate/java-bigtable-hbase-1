@@ -22,13 +22,13 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.ConfigurationHelper;
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConnectionRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.DatabaseHelpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.DatabaseHelpers.DatabaseSelector;
-import com.google.cloud.bigtable.hbase.mirroring.utils.ExecutorServiceRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounter;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.TestWriteErrorConsumer;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegion;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegionRule;
+import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.DefaultAppender;
 import com.google.common.base.Predicate;
@@ -56,16 +56,23 @@ import org.junit.Rule;
 import org.junit.Test;
 
 public class TestMirroringTable {
-
   @ClassRule public static ConnectionRule connectionRule = new ConnectionRule();
-
-  @Rule public ExecutorServiceRule executorServiceRule = new ExecutorServiceRule();
-
-  @Rule public FailingHBaseHRegionRule failingHBaseHRegionRule = new FailingHBaseHRegionRule();
+  @Rule public ExecutorServiceRule executorServiceRule = ExecutorServiceRule.cachedPoolExecutor();
+  private DatabaseHelpers databaseHelpers =
+      new DatabaseHelpers(connectionRule, executorServiceRule);
 
   @Rule
   public MismatchDetectorCounterRule mismatchDetectorCounterRule =
       new MismatchDetectorCounterRule();
+
+  @Rule public FailingHBaseHRegionRule failingHBaseHRegionRule = new FailingHBaseHRegionRule();
+
+  static final byte[] columnFamily1 = "cf1".getBytes();
+  static final byte[] qualifier1 = "cq1".getBytes();
+  static final byte[] qualifier2 = "cq2".getBytes();
+  static final byte[] qualifier3 = "cq3".getBytes();
+  static final byte[] qualifier4 = "cq4".getBytes();
+  static final byte[] qualifier5 = "cq5".getBytes();
 
   final Predicate<byte[]> failPredicate =
       new Predicate<byte[]>() {
@@ -74,15 +81,6 @@ public class TestMirroringTable {
           return bytes.length == 8 && Longs.fromByteArray(bytes) % 2 == 0;
         }
       };
-
-  public DatabaseHelpers databaseHelpers = new DatabaseHelpers(connectionRule, executorServiceRule);
-
-  static final byte[] columnFamily1 = "cf1".getBytes();
-  static final byte[] qualifier1 = "cq1".getBytes();
-  static final byte[] qualifier2 = "cq2".getBytes();
-  static final byte[] qualifier3 = "cq3".getBytes();
-  static final byte[] qualifier4 = "cq4".getBytes();
-  static final byte[] qualifier5 = "cq5".getBytes();
 
   public static byte[] rowKeyFromId(int id) {
     return Longs.toByteArray(id);
