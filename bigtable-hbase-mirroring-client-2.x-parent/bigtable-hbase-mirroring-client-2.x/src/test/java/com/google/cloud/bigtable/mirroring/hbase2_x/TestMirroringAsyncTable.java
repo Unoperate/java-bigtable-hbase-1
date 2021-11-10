@@ -57,6 +57,8 @@ import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellBuilderFactory;
 import org.apache.hadoop.hbase.CellBuilderType;
 import org.apache.hadoop.hbase.CellComparator;
+import org.apache.hadoop.hbase.CellUtil;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.client.AsyncTable;
 import org.apache.hadoop.hbase.client.Delete;
@@ -78,6 +80,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -902,6 +905,90 @@ public class TestMirroringAsyncTable {
     assertPutsAreEqual(expectedPut, argument.getValue());
 
     verify(secondaryTable, never()).append(any(Append.class));
+  }
+
+  @Test
+  public void testAppendIncrementWhichDontWantResults()
+      throws IOException, InterruptedException, ExecutionException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    Append appendIgnoringResults = new Append(row).setReturnResults(false);
+    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+
+    when(primaryTable.append(any(Append.class)))
+        .thenAnswer(
+            invocationOnMock -> {
+              assert ((Append) invocationOnMock.getArgument(0)).isReturnResults();
+              return CompletableFuture.completedFuture(
+                  Result.create(
+                      new Cell[] {
+                        CellUtil.createCell(
+                            row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                      }));
+            });
+    Result appendWithoutResult = mirroringTable.append(appendIgnoringResults).get();
+    verify(primaryTable, times(1)).append(any(Append.class));
+    assertThat(appendWithoutResult.value()).isNull();
+
+    when(primaryTable.increment(any(Increment.class)))
+        .thenAnswer(
+            invocationOnMock -> {
+              assert ((Increment) invocationOnMock.getArgument(0)).isReturnResults();
+              return CompletableFuture.completedFuture(
+                  Result.create(
+                      new Cell[] {
+                        CellUtil.createCell(
+                            row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                      }));
+            });
+    Result incrementWithoutResult = mirroringTable.increment(incrementIgnoringResults).get();
+    verify(primaryTable, times(1)).increment(any(Increment.class));
+    assertThat(incrementWithoutResult.value()).isNull();
+  }
+
+  @Test
+  public void testBatchAppendIncrementWhichDontWantResults()
+      throws IOException, InterruptedException, ExecutionException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    Append appendIgnoringResults = new Append(row).setReturnResults(false);
+    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+
+    when(primaryTable.batch(anyList()))
+        .thenAnswer(
+            invocationOnMock -> {
+              List<Row> requests = (List<Row>) invocationOnMock.getArgument(0);
+
+              assert ((Append) requests.get(0)).isReturnResults();
+              assert ((Increment) requests.get(1)).isReturnResults();
+              return Arrays.asList(
+                  CompletableFuture.completedFuture(
+                      Result.create(
+                          new Cell[] {
+                            CellUtil.createCell(
+                                row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                          })),
+                  CompletableFuture.completedFuture(
+                      Result.create(
+                          new Cell[] {
+                            CellUtil.createCell(
+                                row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                          })));
+            });
+
+    List<CompletableFuture<Result>> appendIncrementWithoutResults =
+        mirroringTable.batch(Arrays.asList(appendIgnoringResults, incrementIgnoringResults));
+    verify(primaryTable, times(1)).batch(ArgumentMatchers.<Row>anyList());
+    assertThat(appendIncrementWithoutResults.get(0).get().value()).isNull();
+    assertThat(appendIncrementWithoutResults.get(1).get().value()).isNull();
   }
 
   @Test

@@ -15,10 +15,18 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
+import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.client.Append;
+import org.apache.hadoop.hbase.client.Increment;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.Row;
 
 public class OperationUtils {
   public static Put makePutFromResult(Result result) {
@@ -37,5 +45,95 @@ public class OperationUtils {
       }
     }
     return put;
+  }
+
+  public interface EmptyResultFactory {
+    Result emptyAppendResult();
+
+    Result emptyIncrementResult();
+  }
+
+  public static class EmptyResultFactory1x implements EmptyResultFactory {
+    public EmptyResultFactory1x() {}
+
+    @Override
+    public Result emptyAppendResult() {
+      return null;
+    }
+
+    @Override
+    public Result emptyIncrementResult() {
+      return Result.create(new Cell[0]);
+    }
+  }
+
+  public static class EmptyResultFactory2x implements EmptyResultFactory {
+    public EmptyResultFactory2x() {}
+
+    @Override
+    public Result emptyAppendResult() {
+      return Result.create(new Cell[0]);
+    }
+
+    @Override
+    public Result emptyIncrementResult() {
+      return Result.create(new Cell[0]);
+    }
+  }
+
+  public static class RewrittenOperations<T extends Row> {
+    /**
+     * Behaviour of HBase when setReturnResults(false) was called on input Append and Increment
+     * requests:
+     *
+     * <ul>
+     *   <li>HBase 1.4.12
+     *       <ul>
+     *         <li>append(Append): null
+     *         <li>increment(Increment): Result.create(new Cell[0])
+     *         <li>batch(Append): IllegalStateException
+     *         <li>batch(Increment): IllegalStateException
+     *       </ul>
+     *   <li>HBase 2.2.3
+     *       <p>all operations on both Table and AsyncTable return a Result equal to
+     *       Result.create(new Cell[0])
+     * </ul>
+     */
+    public final List<T> operations;
+
+    private final Set<Integer> unwantedResultIndices;
+    private final EmptyResultFactory emptyResultFactory;
+
+    public RewrittenOperations(
+        List<? extends T> inputOperations, EmptyResultFactory emptyResultFactory) {
+      this.emptyResultFactory = emptyResultFactory;
+      this.unwantedResultIndices = new HashSet<>();
+      this.operations = new ArrayList<>(inputOperations);
+      for (int i = 0; i < operations.size(); i++) {
+        Row row = operations.get(i);
+        if (row instanceof Increment) {
+          ((Increment) row).setReturnResults(true);
+          this.unwantedResultIndices.add(i);
+        } else if (row instanceof Append) {
+          ((Append) row).setReturnResults(true);
+          this.unwantedResultIndices.add(i);
+        }
+      }
+    }
+
+    public void discardUnwantedResults(Object[] results) {
+      if (!this.unwantedResultIndices.isEmpty()) {
+        for (int i = 0; i < results.length; i++) {
+          if (results[i] instanceof Result && this.unwantedResultIndices.contains(i)) {
+            Row op = this.operations.get(i);
+            if (op instanceof Increment) {
+              results[i] = this.emptyResultFactory.emptyIncrementResult();
+            } else if (op instanceof Append) {
+              results[i] = this.emptyResultFactory.emptyAppendResult();
+            }
+          }
+        }
+      }
+    }
   }
 }
