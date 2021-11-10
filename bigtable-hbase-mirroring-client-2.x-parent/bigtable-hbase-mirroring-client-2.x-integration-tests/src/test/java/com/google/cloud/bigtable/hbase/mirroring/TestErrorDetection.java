@@ -191,7 +191,10 @@ public class TestErrorDetection {
       }
 
       for (PropagatingThread worker : workers) {
-        worker.propagatingJoin(60000);
+        try {
+          worker.propagatingJoin(60000);
+        } catch (Exception ignored) {
+        }
       }
     }
 
