@@ -15,6 +15,8 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.EmptyResultFactory;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.EmptyResultFactory2x;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -29,6 +31,8 @@ import org.apache.hadoop.hbase.client.TableDescriptor;
 
 public class MirroringTable extends com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable
     implements Table {
+  static EmptyResultFactory emptyResultFactory = new EmptyResultFactory2x();
+
   public MirroringTable(
       Table primaryTable,
       Table secondaryTable,
@@ -61,5 +65,10 @@ public class MirroringTable extends com.google.cloud.bigtable.mirroring.hbase1_x
   @Override
   public boolean[] exists(List<Get> gets) throws IOException {
     return existsAll(gets);
+  }
+
+  @Override
+  protected EmptyResultFactory getEmptyResultFactory() {
+    return emptyResultFactory;
   }
 }

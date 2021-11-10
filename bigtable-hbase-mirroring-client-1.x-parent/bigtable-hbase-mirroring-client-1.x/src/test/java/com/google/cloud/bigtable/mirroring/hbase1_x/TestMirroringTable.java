@@ -999,6 +999,95 @@ public class TestMirroringTable {
   }
 
   @Test
+  public void testAppendIncrementWhichDontWantResults() throws IOException, InterruptedException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    Append appendIgnoringResults = new Append(row).setReturnResults(false);
+    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+
+    when(primaryTable.append(any(Append.class)))
+        .thenAnswer(
+            new Answer<Result>() {
+              @Override
+              public Result answer(InvocationOnMock invocationOnMock) throws Throwable {
+                assert ((Append) invocationOnMock.getArgument(0)).isReturnResults();
+                return Result.create(
+                    new Cell[] {
+                      CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+                    });
+              }
+            });
+    Result appendWithoutResult = mirroringTable.append(appendIgnoringResults);
+    verify(primaryTable, times(1)).append(any(Append.class));
+    assertThat(appendWithoutResult).isNull();
+
+    when(primaryTable.increment(any(Increment.class)))
+        .thenAnswer(
+            new Answer<Result>() {
+              @Override
+              public Result answer(InvocationOnMock invocationOnMock) throws Throwable {
+                assert ((Increment) invocationOnMock.getArgument(0)).isReturnResults();
+                return Result.create(
+                    new Cell[] {
+                      CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+                    });
+              }
+            });
+    Result incrementWithoutResult = mirroringTable.increment(incrementIgnoringResults);
+    verify(primaryTable, times(1)).increment(any(Increment.class));
+    assertThat(incrementWithoutResult.value()).isNull();
+
+    executorServiceRule.waitForExecutor();
+  }
+
+  @Test
+  public void testBatchAppendIncrementWhichDontWantResults()
+      throws IOException, InterruptedException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    Append appendIgnoringResults = new Append(row).setReturnResults(false);
+    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+
+    doAnswer(
+            new Answer<Void>() {
+              @Override
+              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
+                List<Row> requests = (List<Row>) invocationOnMock.getArgument(0);
+                Object[] results = invocationOnMock.getArgument(1);
+
+                assert ((Append) requests.get(0)).isReturnResults();
+                assert ((Increment) requests.get(1)).isReturnResults();
+
+                results[0] = null;
+                results[1] =
+                    Result.create(
+                        new Cell[] {
+                          CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+                        });
+                return null;
+              }
+            })
+        .when(primaryTable)
+        .batch(ArgumentMatchers.<Row>anyList(), (Object[]) any());
+
+    Object[] appendIncrementWithoutResults =
+        mirroringTable.batch(Arrays.asList(appendIgnoringResults, incrementIgnoringResults));
+    verify(primaryTable, times(1)).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
+    assertThat(appendIncrementWithoutResults[0]).isNull();
+    assertThat(((Result) appendIncrementWithoutResults[1]).value()).isNull();
+
+    executorServiceRule.waitForExecutor();
+  }
+
+  @Test
   public void testBatchWithCallback() throws IOException, InterruptedException {
     List<Get> mutations = Arrays.asList(createGet("get1"));
     Object[] expectedResults = new Object[] {createResult("test")};
