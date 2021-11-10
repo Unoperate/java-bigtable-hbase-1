@@ -22,18 +22,18 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConfigurationHelper;
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConnectionRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.DatabaseHelpers;
-import com.google.cloud.bigtable.hbase.mirroring.utils.ExecutorServiceRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounter;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.SlowMismatchDetector;
-import com.google.cloud.bigtable.hbase.mirroring.utils.ZipkinTracingRule;
+import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Table;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,16 +42,24 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class TestBlocking {
-  static final byte[] columnFamily1 = "cf1".getBytes();
-  static final byte[] qualifier1 = "q1".getBytes();
   @ClassRule public static ConnectionRule connectionRule = new ConnectionRule();
-  @ClassRule public static ZipkinTracingRule zipkinTracingRule = new ZipkinTracingRule();
-  @Rule public ExecutorServiceRule executorServiceRule = new ExecutorServiceRule();
-  public DatabaseHelpers databaseHelpers = new DatabaseHelpers(connectionRule, executorServiceRule);
+  @Rule public ExecutorServiceRule executorServiceRule = ExecutorServiceRule.fixedPoolExecutor(3);
+  private DatabaseHelpers databaseHelpers =
+      new DatabaseHelpers(connectionRule, executorServiceRule);
 
   @Rule
   public MismatchDetectorCounterRule mismatchDetectorCounterRule =
       new MismatchDetectorCounterRule();
+
+  private static final byte[] columnFamily1 = "cf1".getBytes();
+  private static final byte[] qualifier1 = "q1".getBytes();
+
+  private TableName tableName;
+
+  @Before
+  public void setUp() throws IOException {
+    this.tableName = connectionRule.createTable(columnFamily1);
+  }
 
   @Test
   public void testConnectionCloseBlocksUntilAllRequestsHaveBeenVerified()
@@ -94,10 +102,9 @@ public class TestBlocking {
     config.set(MIRRORING_MISMATCH_DETECTOR_CLASS, SlowMismatchDetector.class.getCanonicalName());
     SlowMismatchDetector.sleepTime = 100;
     config.set(MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS, "10");
-    TableName tableName;
+
     byte[] row = "1".getBytes();
     try (MirroringConnection connection = databaseHelpers.createConnection(config)) {
-      tableName = connectionRule.createTable(connection, columnFamily1);
       try (Table table = connection.getTable(tableName)) {
         table.put(Helpers.createPut(row, columnFamily1, qualifier1, "1".getBytes()));
       }
