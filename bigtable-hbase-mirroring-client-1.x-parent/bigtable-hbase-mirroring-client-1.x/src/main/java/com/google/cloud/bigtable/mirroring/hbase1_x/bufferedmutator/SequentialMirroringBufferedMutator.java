@@ -228,6 +228,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
   @Override
   protected void scopedFlush() throws IOException {
     try {
+      // Secondary flush is scheduled asynchronously after primary flush has finished.
       scheduleFlushAll().primaryFlushFinished.get();
     } catch (InterruptedException | ExecutionException e) {
       setInterruptedFlagIfInterruptedException(e);
@@ -280,12 +281,10 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
                   performSecondaryFlush(dataToFlush, secondaryFlushFinished);
                 } else {
                   // In other cases, we do not know what caused the error and we have no idea
-                  // what was really written to the primary DB, the best we can do is write
-                  // them to on-disk log. Trying to save them to secondary database is not a
-                  // good idea - if current thread was interrupted then next flush might also
-                  // be, only increasing our confusion, moreover, that may cause secondary
-                  // writes that were not completed on primary.
-                  reportWriteErrors(Entry.mergeMutations(dataToFlush), throwable);
+                  // what was really written to the primary DB. We will behave as if nothing was
+                  // written and throw the exception to the user. Writing mutations to the faillog
+                  // would cause confusion as the user would think that those writes were successful
+                  // on primary, but they were not.
                   releaseReservations(dataToFlush);
                   secondaryFlushFinished.setException(throwable);
                   saveOperationException(throwable);
