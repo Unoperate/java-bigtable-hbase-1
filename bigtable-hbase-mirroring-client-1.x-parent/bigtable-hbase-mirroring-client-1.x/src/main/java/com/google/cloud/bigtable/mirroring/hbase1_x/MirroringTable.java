@@ -467,6 +467,8 @@ public class MirroringTable implements Table, ListenableCloseable {
         final FailedSuccessfulSplit<Delete, Object> failedSuccessfulSplit =
             new FailedSuccessfulSplit<>(deletes, results, resultIsFaultyPredicate, Object.class);
 
+        // Delete should remove successful operations from input list.
+        // To conform to this requirement we are clearing the list and re-adding failed deletes.
         deletes.clear();
         deletes.addAll(failedSuccessfulSplit.failedOperations);
       }
