@@ -62,8 +62,8 @@ public class TestBlocking {
   }
 
   @Test
-  public void testConnectionCloseBlocksUntilAllRequestsHaveBeenVerified()
-      throws IOException, InterruptedException {
+  public void testConnectionCloseBlocksUntilAllRequestsHaveBeenVerified() throws IOException {
+    final int numberOfOperations = 9;
     long beforeTableClose;
     long afterTableClose;
     long afterConnectionClose;
@@ -73,32 +73,49 @@ public class TestBlocking {
         MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.Factory.class.getName());
     SlowMismatchDetector.sleepTime = 1000;
 
-    TableName tableName;
+    // TODO:
+    // - dodajemy event startowy do slowmismatchdetectora.
+    // - dodajemy licznik weryfikacji do wykonania tamze, jak osiaga 0 to ustawiamy flage atomic.
+    // - podstawiamy za druga baze danych mocka, ktory na gecie zwraca nulla, a na closie sprawdza flage.
+    // - odpowiednio dlugi test (kilka sekund) zmniejsza mozliwosc false negativeow.
+
+    // We run 9 operations with 9 corresponding verifications (each taking at least 1000ms) on a
+    // threadpool of 3 threads.
+    // We expect the whole scenario to take >= 3 seconds and most of this time should be spent in
+    // MirroringConnection#close() which is blocking and will wait for all asynchronously scheduled
+    // operations.
     try (MirroringConnection connection = databaseHelpers.createConnection(config)) {
-      tableName = connectionRule.createTable(connection, columnFamily1);
       try (Table t = connection.getTable(tableName)) {
-        for (int i = 0; i < 10; i++) {
-          Get get = new Get("1".getBytes());
-          get.addColumn(columnFamily1, qualifier1);
-          t.get(get);
+        for (int i = 0; i < numberOfOperations; i++) {
+          t.get(Helpers.createGet("1".getBytes(), columnFamily1, qualifier1));
         }
         beforeTableClose = System.currentTimeMillis();
-      }
+      } // Here MirroringTable#close() is performed and it should be non-blocking.
       afterTableClose = System.currentTimeMillis();
-    }
+    } // Here MirroringConnection#close() is invoked and it should wait until all async operations
+    // finish.
     afterConnectionClose = System.currentTimeMillis();
+
     long tableCloseDuration = afterTableClose - beforeTableClose;
     long connectionCloseDuration = afterConnectionClose - afterTableClose;
-    assertThat(tableCloseDuration).isLessThan(100);
-    assertThat(connectionCloseDuration).isGreaterThan(900);
+
+    // MirroringTable#close() should be non blocking and fast operation. 500ms seems fair bound for
+    // a simple operation, but it might happen that the test thread won't be given a timeslice while
+    // in that method for this long. In such a case the test would fail, TODO.
+    assertThat(tableCloseDuration).isLessThan(500);
+    // MirroringConnection#close() on the other hand should have blocked.
+    // The verification takes at least 3000ms, at most 500ms was taken by table's close, thus at
+    // least 2000ms
+    assertThat(connectionCloseDuration).isGreaterThan(2000);
+    // And check that all verification operations that were started have also finished.
     assertThat(MismatchDetectorCounter.getInstance().getVerificationsStartedCounter())
-        .isEqualTo(10);
+        .isEqualTo(numberOfOperations);
     assertThat(MismatchDetectorCounter.getInstance().getVerificationsFinishedCounter())
-        .isEqualTo(10);
+        .isEqualTo(numberOfOperations);
   }
 
   @Test
-  public void testSlowSecondaryConnection() throws IOException {
+  public void testSlowVerificationCreateFlowControllerBackpressure() throws IOException {
     Configuration config = ConfigurationHelper.newConfiguration();
     config.set(
         MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.Factory.class.getName());
