@@ -126,7 +126,8 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
    * Exceptions caught when performing asynchronous flush() on primary BufferedMutator that should
    * be rethrown to inform the user about failed writes.
    */
-  private List<RetriesExhaustedWithDetailsException> exceptionsToBeThrown = new ArrayList<>();
+  private final ThreadSafeRetriesExhaustedWithDetailsExceptionList exceptionsToBeThrown =
+      new ThreadSafeRetriesExhaustedWithDetailsExceptionList();
 
   private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
 
@@ -202,6 +203,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
       reportWriteErrors(mutations, e);
 
       setInterruptedFlagInInterruptedException(e);
+      // TODO: use AccumulatedException instead.
       if (primaryException != null) {
         // We are currently in a finally block handling an exception, we shouldn't throw anything.
         primaryException.addSuppressed(e);
@@ -217,7 +219,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
   @Override
   protected void scopedFlush() throws IOException {
     try {
-      scheduleFlush().primaryFlushFinished.get();
+      scheduleFlushAll().primaryFlushFinished.get();
     } catch (InterruptedException | ExecutionException e) {
       setInterruptedFlagInInterruptedException(e);
       throw new IOException(e);
@@ -242,7 +244,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
   }
 
   @Override
-  protected synchronized FlushFutures scheduleFlushScoped(final List<Entry> dataToFlush) {
+  protected FlushFutures scheduleFlushScoped(final List<Entry> dataToFlush) {
     final SettableFuture<Void> secondaryFlushFinished = SettableFuture.create();
 
     ListenableFuture<Void> primaryFlushFinished = schedulePrimaryFlush();
@@ -355,19 +357,15 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     return successfulMutations;
   }
 
-  protected final synchronized void saveExceptionToBeThrown(
+  protected final void saveExceptionToBeThrown(
       RetriesExhaustedWithDetailsException exception) {
     this.exceptionsToBeThrown.add(exception);
   }
 
   protected final RetriesExhaustedWithDetailsException getExceptionsToBeThrown() {
-    List<RetriesExhaustedWithDetailsException> exceptions;
-    synchronized (this) {
-      if (this.exceptionsToBeThrown.isEmpty()) {
-        return null;
-      }
-      exceptions = this.exceptionsToBeThrown;
-      this.exceptionsToBeThrown = new ArrayList<>();
+    List<RetriesExhaustedWithDetailsException> exceptions = this.exceptionsToBeThrown.getAndClear();
+    if (exceptions == null) {
+      return null;
     }
 
     List<Row> rows = new ArrayList<>();
@@ -422,6 +420,23 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
         mutations.addAll(e.mutations);
       }
       return mutations;
+    }
+  }
+
+  private static class ThreadSafeRetriesExhaustedWithDetailsExceptionList {
+    private List<RetriesExhaustedWithDetailsException> list = new ArrayList<>();
+
+    public synchronized void add(RetriesExhaustedWithDetailsException e) {
+      list.add(e);
+    }
+
+    public synchronized List<RetriesExhaustedWithDetailsException> getAndClear() {
+      if (this.list.isEmpty()) {
+        return null;
+      }
+      List<RetriesExhaustedWithDetailsException> returnValue = this.list;
+      this.list = new ArrayList<>();
+      return returnValue;
     }
   }
 }

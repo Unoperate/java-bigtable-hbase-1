@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.BufferedMutator;
@@ -108,15 +109,13 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
    * the entry is specified by subclasses and can contain more elements than just mutations, e.g.
    * related resource reservations.
    */
-  private List<BufferEntryType> mutationEntries;
+  private final BufferedMutations<BufferEntryType> mutationEntries;
 
   /** ExceptionListener supplied by the user. */
   protected final ExceptionListener userListener;
 
-  protected long mutationsBufferSizeBytes;
-
-  private boolean closed = false;
-  private ListenableReferenceCounter ongoingFlushesCounter = new ListenableReferenceCounter();
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final ListenableReferenceCounter ongoingFlushesCounter = new ListenableReferenceCounter();
 
   public MirroringBufferedMutator(
       Connection primaryConnection,
@@ -163,7 +162,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
     this.configuration = configuration.baseConfiguration;
     this.bufferedMutatorParams = bufferedMutatorParams;
 
-    this.mutationEntries = new ArrayList<>();
+    this.mutationEntries = new BufferedMutations<>(this.mutationsBufferFlushThresholdBytes);
     this.mirroringTracer = mirroringTracer;
   }
 
@@ -203,35 +202,59 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
 
   protected final synchronized void storeResourcesAndFlushIfNeeded(
       BufferEntryType entry, RequestResourcesDescription resourcesDescription) {
-    this.mutationEntries.add(entry);
-    this.mutationsBufferSizeBytes += resourcesDescription.sizeInBytes;
-    if (this.mutationsBufferSizeBytes > this.mutationsBufferFlushThresholdBytes) {
-      // We are not afraid of multiple simultaneous flushes:
+    // This method is synchronized to make sure that order of scheduled flushes matches order of
+    // created dataToFlush lists.
+    // TODO: problem - we are using synchronization to be sure to schedule flush in order (we want
+    // flush() to match dataToFlush), however we only synchronize scheduling and do no guarantee the
+    // order of execution of flush()es.
+    // Following scenario:
+    // Thread1: enter monitor
+    // Thread1: dataToFlush = [1, 2, 3]
+    // Thread1: scheduleFlush([1,2,3]) (flush 1)
+    // Thread1: exit monitor
+    // Thread1: enter monitor
+    // Thread1: dataToFlush = []
+    // Thread1: scheduleFlush([]) (flush 2)
+    // Thread1: exit monitor
+    // worker thread 1: flush2 (flushes [1,2,3], calls handler for [])
+    // worker thread 2: flush1 (flushes [], finishes immediately (nothing to flush), calls handler
+    // for [1,2,3])
+    // Thus the synchronization doesn't help at all.
+    List<BufferEntryType> dataToFlush =
+        this.mutationEntries.add(entry, resourcesDescription.sizeInBytes);
+    if (dataToFlush != null) {
+      // We are not afraid of multiple simultaneous asynchronous flushes:
       // - HBase clients are thread-safe.
       // - Each failed Row should be reported and placed in `failedPrimaryOperations` once.
       // - Each issued Row will be consulted with `failedPrimaryOperations` only once, because
       //   each flush sets up a clean buffer for incoming mutations.
-      scheduleFlush();
+      scheduleFlush(dataToFlush);
     }
   }
 
+  protected final synchronized FlushFutures scheduleFlushAll() {
+    // This method is synchronized to make sure that order of scheduled flushes matches order of
+    // created dataToFlush lists.
+    List<BufferEntryType> dataToFlush = this.mutationEntries.flushBuffer();
+    return scheduleFlush(dataToFlush);
+  }
+
   @Override
-  public final synchronized void close() throws IOException {
+  public final void close() throws IOException {
     try (Scope scope =
         this.mirroringTracer.spanFactory.operationScope(HBaseOperation.BUFFERED_MUTATOR_CLOSE)) {
-      if (this.closed) {
+      if (this.closed.getAndSet(true)) {
         this.mirroringTracer
             .spanFactory
             .getCurrentSpan()
             .addAnnotation("MirroringBufferedMutator closed more than once.");
         return;
       }
-      this.closed = true;
 
       List<IOException> exceptions = new ArrayList<>();
 
       try {
-        scheduleFlush().secondaryFlushFinished.get();
+        scheduleFlushAll().secondaryFlushFinished.get();
         this.ongoingFlushesCounter.decrementReferenceCount();
         this.ongoingFlushesCounter.getOnLastReferenceClosed().get();
       } catch (InterruptedException | ExecutionException e) {
@@ -320,13 +343,10 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
     }
   }
 
-  protected final synchronized FlushFutures scheduleFlush() {
+  protected final FlushFutures scheduleFlush(List<BufferEntryType> dataToFlush) {
     try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
       this.ongoingFlushesCounter.incrementReferenceCount();
-      this.mutationsBufferSizeBytes = 0;
 
-      final List<BufferEntryType> dataToFlush = this.mutationEntries;
-      this.mutationEntries = new ArrayList<>();
       FlushFutures resultFutures = scheduleFlushScoped(dataToFlush);
       resultFutures.secondaryFlushFinished.addListener(
           new Runnable() {
@@ -365,6 +385,34 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
   protected final void setInterruptedFlagInInterruptedException(Exception e) {
     if (e instanceof InterruptedException) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  private static class BufferedMutations<EntryType> {
+    private List<EntryType> mutationEntries;
+    private long mutationsBufferSizeBytes;
+    protected final long mutationsBufferFlushThresholdBytes;
+
+    private BufferedMutations(long mutationsBufferFlushThresholdBytes) {
+      this.mutationsBufferFlushThresholdBytes = mutationsBufferFlushThresholdBytes;
+      this.mutationEntries = new ArrayList<>();
+      this.mutationsBufferSizeBytes = 0;
+    }
+
+    private synchronized List<EntryType> add(EntryType entry, long sizeInBytes) {
+      this.mutationEntries.add(entry);
+      this.mutationsBufferSizeBytes += sizeInBytes;
+      if (this.mutationsBufferSizeBytes > this.mutationsBufferFlushThresholdBytes) {
+        return flushBuffer();
+      }
+      return null;
+    }
+
+    private synchronized List<EntryType> flushBuffer() {
+      List<EntryType> returnValue = this.mutationEntries;
+      this.mutationEntries = new ArrayList<>();
+      this.mutationsBufferSizeBytes = 0;
+      return returnValue;
     }
   }
 }
