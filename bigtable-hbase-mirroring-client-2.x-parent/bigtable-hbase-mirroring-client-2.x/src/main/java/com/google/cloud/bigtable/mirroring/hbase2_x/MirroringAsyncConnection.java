@@ -179,7 +179,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
 
   @Override
   public AsyncTableRegionLocator getRegionLocator(TableName tableName) {
-    throw new UnsupportedOperationException();
+    return this.primaryConnection.getRegionLocator(tableName);
   }
 
   @Override
