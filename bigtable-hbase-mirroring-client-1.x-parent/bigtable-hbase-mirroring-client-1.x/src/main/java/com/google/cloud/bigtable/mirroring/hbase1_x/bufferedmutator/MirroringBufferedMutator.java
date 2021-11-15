@@ -258,7 +258,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
         this.ongoingFlushesCounter.decrementReferenceCount();
         this.ongoingFlushesCounter.getOnLastReferenceClosed().get();
       } catch (InterruptedException | ExecutionException e) {
-        setInterruptedFlagInInterruptedException(e);
+        setInterruptedFlagIfInterruptedException(e);
         exceptions.add(new IOException(e));
       }
       try {
@@ -382,7 +382,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
             }));
   }
 
-  protected final void setInterruptedFlagInInterruptedException(Exception e) {
+  protected final void setInterruptedFlagIfInterruptedException(Exception e) {
     if (e instanceof InterruptedException) {
       Thread.currentThread().interrupt();
     }

@@ -202,7 +202,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
       // secondaryWriteErrorConsumer.
       reportWriteErrors(mutations, e);
 
-      setInterruptedFlagInInterruptedException(e);
+      setInterruptedFlagIfInterruptedException(e);
       // TODO: use AccumulatedException instead.
       if (primaryException != null) {
         // We are currently in a finally block handling an exception, we shouldn't throw anything.
@@ -221,7 +221,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     try {
       scheduleFlushAll().primaryFlushFinished.get();
     } catch (InterruptedException | ExecutionException e) {
-      setInterruptedFlagInInterruptedException(e);
+      setInterruptedFlagIfInterruptedException(e);
       throw new IOException(e);
     }
     // If #flush() above has thrown, the it will be propagated to the user now.
