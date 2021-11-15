@@ -22,7 +22,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.reflection.ReflectionConstructor;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -81,7 +80,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
       Object ignoredRegistry,
       String ignoredClusterId,
       User user)
-      throws ExecutionException, InterruptedException {
+      throws Throwable {
     this.configuration = new MirroringAsyncConfiguration(conf);
 
     this.mirroringTracer = new MirroringTracer();
@@ -96,27 +95,39 @@ public class MirroringAsyncConnection implements AsyncConnection {
     this.referenceCounter = new ListenableReferenceCounter();
     this.flowController =
         new FlowController(
-            ReflectionConstructor.construct(
-                this.configuration.mirroringOptions.flowControllerStrategyClass,
-                this.configuration.mirroringOptions));
+            this.configuration
+                .mirroringOptions
+                .flowControllerStrategyFactoryClass
+                .newInstance()
+                .create(this.configuration.mirroringOptions));
     this.mismatchDetector =
-        ReflectionConstructor.construct(
-            this.configuration.mirroringOptions.mismatchDetectorClass,
-            this.mirroringTracer,
-            this.configuration.mirroringOptions.maxLoggedBinaryValueLength);
+        this.configuration
+            .mirroringOptions
+            .mismatchDetectorFactoryClass
+            .newInstance()
+            .create(
+                this.mirroringTracer,
+                this.configuration.mirroringOptions.maxLoggedBinaryValueLength);
 
     Logger failedWritesLogger =
         new Logger(
-            ReflectionConstructor.construct(
-                this.configuration.mirroringOptions.writeErrorLogAppenderClass,
-                Configuration.class,
-                this.configuration.baseConfiguration),
-            ReflectionConstructor.construct(
-                this.configuration.mirroringOptions.writeErrorLogSerializerClass));
+            this.configuration
+                .mirroringOptions
+                .writeErrorLogAppenderFactoryClass
+                .newInstance()
+                .create(this.configuration.baseConfiguration),
+            this.configuration
+                .mirroringOptions
+                .writeErrorLogSerializerFactoryClass
+                .newInstance()
+                .create());
 
     SecondaryWriteErrorConsumer writeErrorConsumer =
-        ReflectionConstructor.construct(
-            this.configuration.mirroringOptions.writeErrorConsumerClass, failedWritesLogger);
+        this.configuration
+            .mirroringOptions
+            .writeErrorConsumerFactoryClass
+            .newInstance()
+            .create(failedWritesLogger);
 
     this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(this.mirroringTracer, writeErrorConsumer);

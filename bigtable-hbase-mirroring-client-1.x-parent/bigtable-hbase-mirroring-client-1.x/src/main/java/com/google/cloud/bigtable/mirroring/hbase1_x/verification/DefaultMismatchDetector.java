@@ -260,4 +260,11 @@ public class DefaultMismatchDetector implements MismatchDetector {
       return new String(out);
     }
   }
+
+  public static class Factory implements MismatchDetector.Factory {
+    @Override
+    public MismatchDetector create(MirroringTracer mirroringTracer, Integer maxValueBytesLogged) {
+      return new DefaultMismatchDetector(mirroringTracer, maxValueBytesLogged);
+    }
+  }
 }

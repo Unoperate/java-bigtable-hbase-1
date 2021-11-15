@@ -210,8 +210,8 @@ public class TestBufferedMutator {
     TestWriteErrorConsumer.clearErrors();
     Configuration configuration = this.createConfiguration();
     configuration.set(
-        "google.bigtable.mirroring.write-error-consumer.impl",
-        TestWriteErrorConsumer.class.getCanonicalName());
+        "google.bigtable.mirroring.write-error-consumer.factory-impl",
+        TestWriteErrorConsumer.Factory.class.getName());
 
     TableName tableName;
     List<Throwable> flushExceptions = null;

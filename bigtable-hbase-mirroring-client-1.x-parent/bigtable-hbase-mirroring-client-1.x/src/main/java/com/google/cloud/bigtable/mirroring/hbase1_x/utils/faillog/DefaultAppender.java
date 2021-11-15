@@ -216,4 +216,11 @@ public class DefaultAppender implements Appender {
         PREFIX_PATH_KEY);
     return prefixPath;
   }
+
+  public static class Factory implements Appender.Factory {
+    @Override
+    public Appender create(Configuration configuration) throws IOException {
+      return new DefaultAppender(configuration);
+    }
+  }
 }

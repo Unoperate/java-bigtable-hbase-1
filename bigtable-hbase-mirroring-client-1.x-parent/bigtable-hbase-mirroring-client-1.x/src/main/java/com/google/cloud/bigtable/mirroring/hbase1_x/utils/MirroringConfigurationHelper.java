@@ -78,24 +78,24 @@ public class MirroringConfigurationHelper {
   public static final String MIRRORING_SECONDARY_CONFIG_PREFIX_KEY =
       "google.bigtable.mirroring.secondary-client.prefix";
 
-  public static final String MIRRORING_MISMATCH_DETECTOR_CLASS =
-      "google.bigtable.mirroring.mismatch-detector.impl";
+  public static final String MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS =
+      "google.bigtable.mirroring.mismatch-detector.factory-impl";
 
-  public static final String MIRRORING_FLOW_CONTROLLER_STRATEGY_CLASS =
-      "google.bigtable.mirroring.flow-controller.impl";
+  public static final String MIRRORING_FLOW_CONTROLLER_STRATEGY_FACTORY_CLASS =
+      "google.bigtable.mirroring.flow-controller.factory-impl";
 
   public static final String MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS =
       "google.bigtable.mirroring.flow-controller.max-outstanding-requests";
   public static final String MIRRORING_FLOW_CONTROLLER_MAX_USED_BYTES =
       "google.bigtable.mirroring.flow-controller.max-used-bytes";
 
-  public static final String MIRRORING_WRITE_ERROR_CONSUMER_CLASS =
-      "google.bigtable.mirroring.write-error-consumer.impl";
+  public static final String MIRRORING_WRITE_ERROR_CONSUMER_FACTORY_CLASS =
+      "google.bigtable.mirroring.write-error-consumer.factory-impl";
 
-  public static final String MIRRORING_WRITE_ERROR_LOG_APPENDER_CLASS =
-      "google.bigtable.mirroring.write-error-log.appender.impl";
-  public static final String MIRRORING_WRITE_ERROR_LOG_SERIALIZER_CLASS =
-      "google.bigtable.mirroring.write-error-log.serializer.impl";
+  public static final String MIRRORING_WRITE_ERROR_LOG_APPENDER_FACTORY_CLASS =
+      "google.bigtable.mirroring.write-error-log.appender.factory-impl";
+  public static final String MIRRORING_WRITE_ERROR_LOG_SERIALIZER_FACTORY_CLASS =
+      "google.bigtable.mirroring.write-error-log.serializer.factory-impl";
 
   /**
    * Integer value representing how many first bytes of binary values (such as row) should be

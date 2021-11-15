@@ -56,4 +56,11 @@ public class TestWriteErrorConsumer implements SecondaryWriteErrorConsumer {
     errorCount.addAndGet(operations.size());
     this.secondaryWriteErrorConsumer.consume(operation, operations, cause);
   }
+
+  public static class Factory implements SecondaryWriteErrorConsumer.Factory {
+    @Override
+    public SecondaryWriteErrorConsumer create(Logger logger) {
+      return new TestWriteErrorConsumer(logger);
+    }
+  }
 }

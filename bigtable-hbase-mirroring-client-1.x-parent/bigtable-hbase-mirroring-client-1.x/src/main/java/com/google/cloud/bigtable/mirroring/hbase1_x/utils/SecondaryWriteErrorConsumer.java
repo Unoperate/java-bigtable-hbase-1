@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
 
 import com.google.api.core.InternalApi;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import java.util.List;
 import org.apache.hadoop.hbase.client.Row;
@@ -25,4 +26,8 @@ public interface SecondaryWriteErrorConsumer {
   void consume(HBaseOperation operation, Row row, Throwable cause);
 
   void consume(HBaseOperation operation, List<? extends Row> operations, Throwable cause);
+
+  interface Factory {
+    SecondaryWriteErrorConsumer create(Logger logger) throws Throwable;
+  }
 }
