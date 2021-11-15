@@ -128,6 +128,9 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       throws IOException {
     this.userListener = bufferedMutatorParams.getListener();
 
+    // Our primary exception listeners do not throw exception but might call user-supplied handler
+    // which might throw. All exceptions thrown by that handler are rethrown to the user in places
+    // where they expect it.
     ExceptionListener primaryErrorsListener =
         new ExceptionListener() {
           @Override
@@ -142,8 +145,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
         new ExceptionListener() {
           @Override
           public void onException(
-              RetriesExhaustedWithDetailsException e, BufferedMutator bufferedMutator)
-              throws RetriesExhaustedWithDetailsException {
+              RetriesExhaustedWithDetailsException e, BufferedMutator bufferedMutator) {
             handleSecondaryException(e);
           }
         };
@@ -197,8 +199,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
   abstract void handlePrimaryException(RetriesExhaustedWithDetailsException e)
       throws RetriesExhaustedWithDetailsException;
 
-  abstract void handleSecondaryException(RetriesExhaustedWithDetailsException e)
-      throws RetriesExhaustedWithDetailsException;
+  abstract void handleSecondaryException(RetriesExhaustedWithDetailsException e);
 
   protected final synchronized void storeResourcesAndFlushIfNeeded(
       BufferEntryType entry, RequestResourcesDescription resourcesDescription) {
