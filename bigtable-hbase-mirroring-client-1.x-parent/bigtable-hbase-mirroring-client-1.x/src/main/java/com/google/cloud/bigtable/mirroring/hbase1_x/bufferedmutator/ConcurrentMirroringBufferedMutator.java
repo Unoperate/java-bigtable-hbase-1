@@ -147,7 +147,7 @@ public class ConcurrentMirroringBufferedMutator
   @Override
   protected void scopedFlush() throws IOException {
     try {
-      scheduleFlush().bothFlushesFinished.get();
+      scheduleFlushAll().bothFlushesFinished.get();
     } catch (InterruptedException | ExecutionException e) {
       setInterruptedFlagInInterruptedException(e);
       throw new IOException(e);
@@ -172,8 +172,7 @@ public class ConcurrentMirroringBufferedMutator
   }
 
   @Override
-  protected synchronized FlushFutures scheduleFlushScoped(
-      final List<List<? extends Mutation>> dataToFlush) {
+  protected FlushFutures scheduleFlushScoped(final List<List<? extends Mutation>> dataToFlush) {
     final SettableFuture<Void> bothFlushesFinished = SettableFuture.create();
 
     ListenableFuture<Void> primaryFlushFinished = schedulePrimaryFlush();
