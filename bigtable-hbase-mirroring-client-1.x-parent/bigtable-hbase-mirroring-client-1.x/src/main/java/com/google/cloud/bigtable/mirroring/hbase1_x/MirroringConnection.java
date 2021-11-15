@@ -204,7 +204,7 @@ public class MirroringConnection implements Connection {
 
   @Override
   public RegionLocator getRegionLocator(TableName tableName) throws IOException {
-    throw new UnsupportedOperationException();
+    return this.primaryConnection.getRegionLocator(tableName);
   }
 
   @Override
