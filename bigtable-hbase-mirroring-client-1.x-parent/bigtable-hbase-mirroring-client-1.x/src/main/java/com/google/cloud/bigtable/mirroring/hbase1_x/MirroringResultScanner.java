@@ -207,7 +207,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
 
   @Override
   public ScanMetrics getScanMetrics() {
-    throw new UnsupportedOperationException();
+    return this.primaryResultScanner.getScanMetrics();
   }
 
   private <T> void scheduleRequest(
