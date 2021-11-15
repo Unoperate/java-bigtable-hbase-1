@@ -149,7 +149,7 @@ public class ConcurrentMirroringBufferedMutator
     try {
       scheduleFlushAll().bothFlushesFinished.get();
     } catch (InterruptedException | ExecutionException e) {
-      setInterruptedFlagInInterruptedException(e);
+      setInterruptedFlagIfInterruptedException(e);
       throw new IOException(e);
     }
     throwExceptionIfAvailable();
