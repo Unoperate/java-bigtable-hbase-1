@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.hbase.client.BufferedMutator;
@@ -100,7 +101,7 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
  * when we perform an asynchronous {@link BufferedMutator#flush()} on primaryBufferedMutator from a
  * worker thread. In the first case the exception is rethrown to the user directly from the called
  * method. In the second case we gather the asynchronously caught exception in a {@link
- * #exceptionsToBeThrown} list and rethrow them on next user interaction with out
+ * #failedMutationsExceptions} list and rethrow them on next user interaction with out
  * MirroringBufferedMutator.
  *
  * <p>In such a way we ensure two things - we are notified about every failed mutation and the user
@@ -126,8 +127,16 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
    * Exceptions caught when performing asynchronous flush() on primary BufferedMutator that should
    * be rethrown to inform the user about failed writes.
    */
-  private final ThreadSafeRetriesExhaustedWithDetailsExceptionList exceptionsToBeThrown =
+  private final ThreadSafeRetriesExhaustedWithDetailsExceptionList failedMutationsExceptions =
       new ThreadSafeRetriesExhaustedWithDetailsExceptionList();
+
+  /**
+   * Stores exceptions thrown by asynchronous flush()es that were not {@link
+   * RetriesExhaustedWithDetailsException} (those are kept in {@link #failedMutationsExceptions} and
+   * handled separately).
+   */
+  private final ConcurrentLinkedQueue<Throwable> failedOperationsExceptions =
+      new ConcurrentLinkedQueue<>();
 
   private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
 
@@ -279,6 +288,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
                   reportWriteErrors(Entry.mergeMutations(dataToFlush), throwable);
                   releaseReservations(dataToFlush);
                   secondaryFlushFinished.setException(throwable);
+                  saveOperationException(throwable);
                 }
               }
             }),
@@ -357,13 +367,13 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     return successfulMutations;
   }
 
-  protected final void saveExceptionToBeThrown(
-      RetriesExhaustedWithDetailsException exception) {
-    this.exceptionsToBeThrown.add(exception);
+  protected final void saveExceptionToBeThrown(RetriesExhaustedWithDetailsException exception) {
+    this.failedMutationsExceptions.add(exception);
   }
 
-  protected final RetriesExhaustedWithDetailsException getExceptionsToBeThrown() {
-    List<RetriesExhaustedWithDetailsException> exceptions = this.exceptionsToBeThrown.getAndClear();
+  protected final RetriesExhaustedWithDetailsException getFailedMutationsExceptions() {
+    List<RetriesExhaustedWithDetailsException> exceptions =
+        this.failedMutationsExceptions.getAndClear();
     if (exceptions == null) {
       return null;
     }
@@ -382,8 +392,24 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     return new RetriesExhaustedWithDetailsException(causes, rows, hostnames);
   }
 
-  private void throwExceptionIfAvailable() throws RetriesExhaustedWithDetailsException {
-    RetriesExhaustedWithDetailsException e = getExceptionsToBeThrown();
+  private void saveOperationException(Throwable throwable) {
+    failedOperationsExceptions.add(throwable);
+  }
+
+  private void throwFailedMutationExceptionIfAvailable() throws IOException {
+    Throwable operationException = this.failedOperationsExceptions.poll();
+    if (operationException != null) {
+      if (operationException instanceof IOException) {
+        throw (IOException) operationException;
+      }
+      throw new IOException(operationException);
+    }
+  }
+
+  private void throwExceptionIfAvailable() throws IOException {
+    throwFailedMutationExceptionIfAvailable();
+
+    RetriesExhaustedWithDetailsException e = getFailedMutationsExceptions();
     if (e != null) {
       throw e;
     }
