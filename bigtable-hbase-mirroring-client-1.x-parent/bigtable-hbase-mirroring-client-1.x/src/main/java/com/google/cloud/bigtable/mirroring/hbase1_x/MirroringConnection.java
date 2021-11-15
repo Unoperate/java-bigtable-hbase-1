@@ -22,14 +22,10 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCou
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Appender;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Serializer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowControlStrategy;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.reflection.ReflectionConstructor;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -79,7 +75,7 @@ public class MirroringConnection implements Connection {
    * are passed back to the user.
    */
   public MirroringConnection(Configuration conf, boolean managed, ExecutorService pool, User user)
-      throws IOException {
+      throws Throwable {
     // This is an always-false legacy hbase parameter.
     Preconditions.checkArgument(!managed, "Mirroring client doesn't support managed connections.");
     this.configuration = new MirroringConfiguration(conf);
@@ -99,24 +95,37 @@ public class MirroringConnection implements Connection {
     referenceCounter = new ListenableReferenceCounter();
     this.flowController =
         new FlowController(
-            ReflectionConstructor.<FlowControlStrategy>construct(
-                this.configuration.mirroringOptions.flowControllerStrategyClass,
-                this.configuration.mirroringOptions));
+            this.configuration
+                .mirroringOptions
+                .flowControllerStrategyFactoryClass
+                .newInstance()
+                .create(this.configuration.mirroringOptions));
     this.mismatchDetector =
-        ReflectionConstructor.construct(
-            this.configuration.mirroringOptions.mismatchDetectorClass, this.mirroringTracer);
+        this.configuration
+            .mirroringOptions
+            .mismatchDetectorFactoryClass
+            .newInstance()
+            .create(this.mirroringTracer);
 
     this.failedWritesLogger =
         new Logger(
-            ReflectionConstructor.<Appender>construct(
-                this.configuration.mirroringOptions.writeErrorLogAppenderClass,
-                this.configuration.baseConfiguration),
-            ReflectionConstructor.<Serializer>construct(
-                this.configuration.mirroringOptions.writeErrorLogSerializerClass));
+            this.configuration
+                .mirroringOptions
+                .writeErrorLogAppenderFactoryClass
+                .newInstance()
+                .create(this.configuration.baseConfiguration),
+            this.configuration
+                .mirroringOptions
+                .writeErrorLogSerializerFactoryClass
+                .newInstance()
+                .create());
 
     final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer =
-        ReflectionConstructor.construct(
-            this.configuration.mirroringOptions.writeErrorConsumerClass, this.failedWritesLogger);
+        this.configuration
+            .mirroringOptions
+            .writeErrorConsumerFactoryClass
+            .newInstance()
+            .create(this.failedWritesLogger);
 
     this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(

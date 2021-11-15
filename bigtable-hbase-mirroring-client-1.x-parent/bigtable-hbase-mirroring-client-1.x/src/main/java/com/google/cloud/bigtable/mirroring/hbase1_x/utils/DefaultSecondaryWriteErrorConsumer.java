@@ -67,4 +67,11 @@ public class DefaultSecondaryWriteErrorConsumer implements SecondaryWriteErrorCo
       consume(operation, row, cause);
     }
   }
+
+  public static class Factory implements SecondaryWriteErrorConsumer.Factory {
+    @Override
+    public SecondaryWriteErrorConsumer create(Logger logger) {
+      return new DefaultSecondaryWriteErrorConsumer(logger);
+    }
+  }
 }

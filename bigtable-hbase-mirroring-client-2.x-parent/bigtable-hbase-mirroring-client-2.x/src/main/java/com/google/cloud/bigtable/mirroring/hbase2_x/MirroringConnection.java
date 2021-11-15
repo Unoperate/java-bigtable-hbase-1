@@ -15,7 +15,6 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
@@ -27,12 +26,11 @@ import org.apache.hadoop.hbase.security.User;
 public class MirroringConnection
     extends com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection implements Connection {
   public MirroringConnection(Configuration conf, boolean managed, ExecutorService pool, User user)
-      throws IOException {
+      throws Throwable {
     super(conf, managed, pool, user);
   }
 
-  public MirroringConnection(Configuration conf, ExecutorService pool, User user)
-      throws IOException {
+  public MirroringConnection(Configuration conf, ExecutorService pool, User user) throws Throwable {
     this(conf, false, pool, user);
   }
 

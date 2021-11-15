@@ -132,4 +132,11 @@ public class DefaultMismatchDetector implements MismatchDetector {
       this.metricsRecorder.recordReadMismatches(operation, errors);
     }
   }
+
+  public static class Factory implements MismatchDetector.Factory {
+    @Override
+    public MismatchDetector create(MirroringTracer mirroringTracer) {
+      return new DefaultMismatchDetector(mirroringTracer);
+    }
+  }
 }

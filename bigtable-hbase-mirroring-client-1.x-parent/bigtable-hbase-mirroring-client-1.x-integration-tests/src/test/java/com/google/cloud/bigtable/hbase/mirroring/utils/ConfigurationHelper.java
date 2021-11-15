@@ -71,11 +71,11 @@ public class ConfigurationHelper {
         "com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection");
 
     configuration.setIfUnset(
-        "google.bigtable.mirroring.mismatch-detector.impl",
-        TestMismatchDetector.class.getCanonicalName());
+        "google.bigtable.mirroring.mismatch-detector.factory-impl",
+        TestMismatchDetector.Factory.class.getName());
 
     configuration.setIfUnset(
-        "google.bigtable.mirroring.write-error-consumer.impl",
-        TestWriteErrorConsumer.class.getCanonicalName());
+        "google.bigtable.mirroring.write-error-consumer.factory-impl",
+        TestWriteErrorConsumer.Factory.class.getName());
   }
 }

@@ -16,7 +16,7 @@
 package com.google.cloud.bigtable.hbase.mirroring;
 
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_MISMATCH_DETECTOR_CLASS;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConfigurationHelper;
@@ -69,7 +69,7 @@ public class TestBlocking {
     long afterConnectionClose;
 
     Configuration config = ConfigurationHelper.newConfiguration();
-    config.set(MIRRORING_MISMATCH_DETECTOR_CLASS, SlowMismatchDetector.class.getCanonicalName());
+    config.set(MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.class.getName());
     SlowMismatchDetector.sleepTime = 1000;
 
     TableName tableName;
@@ -99,7 +99,7 @@ public class TestBlocking {
   @Test
   public void testSlowSecondaryConnection() throws IOException {
     Configuration config = ConfigurationHelper.newConfiguration();
-    config.set(MIRRORING_MISMATCH_DETECTOR_CLASS, SlowMismatchDetector.class.getCanonicalName());
+    config.set(MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.class.getName());
     SlowMismatchDetector.sleepTime = 100;
     config.set(MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS, "10");
 

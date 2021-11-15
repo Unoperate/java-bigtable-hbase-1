@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol;
 
 import com.google.api.core.InternalApi;
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController.ResourceReservation;
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -41,4 +42,8 @@ public interface FlowControlStrategy {
 
   /** Releases resources associated with provided description. */
   void releaseResource(RequestResourcesDescription resource);
+
+  interface Factory {
+    FlowControlStrategy create(MirroringOptions options) throws Throwable;
+  }
 }

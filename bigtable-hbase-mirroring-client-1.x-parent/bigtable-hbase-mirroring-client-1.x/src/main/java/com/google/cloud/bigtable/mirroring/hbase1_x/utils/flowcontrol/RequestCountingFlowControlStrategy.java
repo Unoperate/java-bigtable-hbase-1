@@ -96,4 +96,11 @@ public class RequestCountingFlowControlStrategy extends SingleQueueFlowControlSt
       this.usedBytes -= requestResourcesDescription.sizeInBytes;
     }
   }
+
+  public static class Factory implements FlowControlStrategy.Factory {
+    @Override
+    public FlowControlStrategy create(MirroringOptions options) {
+      return new RequestCountingFlowControlStrategy(options);
+    }
+  }
 }
