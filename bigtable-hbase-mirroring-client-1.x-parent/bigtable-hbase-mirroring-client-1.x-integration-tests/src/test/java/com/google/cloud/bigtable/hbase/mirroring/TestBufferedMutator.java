@@ -110,6 +110,10 @@ public class TestBufferedMutator {
     final int numMutationsInBatch = 100;
     final int numBatchesPerThread = 1000;
 
+    // We will run `numThreads` threads, each performing `numBatchesPerThread` batches of mutations,
+    // `numMutationsInBatch` each, using our MirroringClient. After all the operations are over we
+    // will verify if primary and secondary databases have the same contents.
+
     class WorkerThread extends PropagatingThread {
       final BufferedMutator bufferedMutator;
       final int threadId;
@@ -141,6 +145,7 @@ public class TestBufferedMutator {
     }
 
     Configuration config = this.createConfiguration();
+    // Set flow controller requests limit to high value to increase concurrency.
     config.set(MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS, "10000");
 
     TableName tableName;

@@ -66,6 +66,45 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
  * mutate() might block if secondary database lags behind. We account size of all operations that
  * were placed in primary BufferedMutator but weren't yet executed and confirmed on secondary
  * BufferedMutator (or until we are informed that they have failed on primary).
+ *
+ * <p>Notes about error handling in SequentialMirroringBufferedMutator:
+ *
+ * <p>The HBase 1.x BufferedMutator's API notifies the user about failed mutations by calling user
+ * supplied exception handler with appropriate {@link RetriesExhaustedWithDetailsException}
+ * exception as a parameter. The error handlers are not called asynchronously from BufferedMutator's
+ * internal thread - instead BufferedMutator implementations gather encountered failed mutations and
+ * reasons of their failures in an internal data structure. The exception handler is called when the
+ * user code interacts with the BufferedMutator again - when {@link
+ * BufferedMutator#mutate(Mutation)} or {@link BufferedMutator#flush()} is called (HBase 1.x
+ * BufferedMutator's implementation calls the exception handler performing the operation requested
+ * by the user).
+ *
+ * <p>Because the exception handlers are called synchronously in user thread they can throw
+ * exceptions that will be propagated to the user (what can be seen in {@link
+ * ExceptionListener#onException(RetriesExhaustedWithDetailsException, BufferedMutator)}'s
+ * signature). The default exception handler is implemented in such a way, it just throws supplied
+ * exception.
+ *
+ * <p>The goal of SequentialMirroringBufferedMutator is to mirror only those mutations that were
+ * successful. For this reason we inject our own error handler to primary BufferedMutator ({@link
+ * #handlePrimaryException(RetriesExhaustedWithDetailsException)}) that gathers failed mutations
+ * that shouldn't be mirrored into the secondary (into {@link #failedPrimaryOperations} collection)
+ * and forwards the exception supplied in the parameter to user's exception handler (as the user
+ * expects it). If the user-supplied error handler throws an exception, then {@link
+ * #primaryBufferedMutator#mutate(Mutation)} etc. will also throw.
+ *
+ * <p>We want to forward every exception thrown by user supplied error handler back to the user.
+ * Those exceptions can be thrown in two places: first - when the user calls {@link
+ * BufferedMutator#mutate(List)} or {@link BufferedMutator#flush()} on our MirroringBufferedMutator
+ * and we synchronously call corresponding operation on {@link #primaryBufferedMutator}; second -
+ * when we perform an asynchronous {@link BufferedMutator#flush()} on primaryBufferedMutator from a
+ * worker thread. In the first case the exception is rethrown to the user directly from the called
+ * method. In the second case we gather the asynchronously caught exception in a {@link
+ * #exceptionsToBeThrown} list and rethrow them on next user interaction with out
+ * MirroringBufferedMutator.
+ *
+ * <p>In such a way we ensure two things - we are notified about every failed mutation and the user
+ * receives every exception that was thrown by {@link #primaryBufferedMutator}.
  */
 @InternalApi("For internal usage only")
 public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator<Entry> {
@@ -134,8 +173,10 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
       // HBase client library might also block.
       addSecondaryMutation(list, primaryException);
     }
-    // Throw exceptions that were thrown by ExceptionListener on primary BufferedMutator which we
-    // have caught when calling flush.
+    // If primary #mutate() has thrown, the exception is propagated to the user and we don't reach
+    // here.
+    // Otherwise we will try to throw exceptions thrown by asynchronous #flush() on primary, if
+    // there were any.
     throwExceptionIfAvailable();
   }
 
@@ -181,6 +222,8 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
       setInterruptedFlagInInterruptedException(e);
       throw new IOException(e);
     }
+    // If #flush() above has thrown, the it will be propagated to the user now.
+    // Otherwise we might still have a exception from an asynchronous #flush() to propagate.
     throwExceptionIfAvailable();
   }
 
@@ -286,6 +329,22 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     }
   }
 
+  /**
+   * Iterates over {@code dataToFlush} and checks if any of the mutations in it have failed by
+   * consulting {@link #failedPrimaryOperations} collection. Failed mutations are removed from
+   * {@link #failedPrimaryOperations}.
+   *
+   * <p>This method is called from secondary thread that performs asynchronous flush() of {@link
+   * #primaryBufferedMutator} and {@link #failedPrimaryOperations} might contain mutations that are
+   * not in {@code dataToFlush} parameter (for instance, asynchronous flush was scheduled after one
+   * call to mutate(), but the user thread performed two mutate() calls before the async task was
+   * started - the flush() on primary would flush mutations from both mutate() calls, but
+   * dataToFlush would only contain mutations from the first one). For this reason we cannot just
+   * clear the {@link #failedPrimaryOperations} collection, if there are some operations left in it
+   * after this method ends then they will be removed in one of subsequent calls.
+   *
+   * @return List of successful mutations.
+   */
   private List<? extends Mutation> removeFailedMutations(List<? extends Mutation> dataToFlush) {
     List<Mutation> successfulMutations = new ArrayList<>();
     for (Mutation mutation : dataToFlush) {
