@@ -168,12 +168,12 @@ public class MirroringTable implements Table, ListenableCloseable {
 
   @Override
   public Configuration getConfiguration() {
-    throw new UnsupportedOperationException();
+    return this.primaryTable.getConfiguration();
   }
 
   @Override
   public HTableDescriptor getTableDescriptor() throws IOException {
-    throw new UnsupportedOperationException();
+    return this.primaryTable.getTableDescriptor();
   }
 
   @Override
