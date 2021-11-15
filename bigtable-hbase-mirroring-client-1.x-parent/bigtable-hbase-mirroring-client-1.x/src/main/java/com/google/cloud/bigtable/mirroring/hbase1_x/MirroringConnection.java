@@ -31,6 +31,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.reflection.ReflectionConstructor;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.opencensus.common.Scope;
 import java.io.IOException;
@@ -273,10 +274,12 @@ public class MirroringConnection implements Connection {
     return this.aborted.get();
   }
 
+  @VisibleForTesting
   public Connection getPrimaryConnection() {
     return this.primaryConnection;
   }
 
+  @VisibleForTesting
   public Connection getSecondaryConnection() {
     return this.secondaryConnection;
   }
