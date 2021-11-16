@@ -116,10 +116,9 @@ public class MirroringSpanFactory {
   }
 
   public <T> T wrapPrimaryOperation(
-      CallableThrowingIOException<T> operationRunner, HBaseOperation operationName)
-      throws IOException {
+      CallableThrowingIOException<T> operations, HBaseOperation operationName) throws IOException {
     try {
-      return wrapPrimaryOperationAndMeasure(operationRunner, operationName);
+      return wrapPrimaryOperationAndMeasure(operations, operationName);
     } catch (InterruptedException e) {
       assert false;
       throw new IllegalStateException();
@@ -127,16 +126,15 @@ public class MirroringSpanFactory {
   }
 
   public <T> void wrapPrimaryOperation(
-      CallableThrowingIOAndInterruptedException<T> operationRunner, HBaseOperation operationName)
+      CallableThrowingIOAndInterruptedException<T> operations, HBaseOperation operationName)
       throws IOException, InterruptedException {
-    wrapPrimaryOperationAndMeasure(operationRunner, operationName);
+    wrapPrimaryOperationAndMeasure(operations, operationName);
   }
 
   public <T> T wrapSecondaryOperation(
-      CallableThrowingIOException<T> operationRunner, HBaseOperation operationName)
-      throws IOException {
+      CallableThrowingIOException<T> operations, HBaseOperation operationName) throws IOException {
     try {
-      return wrapSecondaryOperationAndMeasure(operationRunner, operationName);
+      return wrapSecondaryOperationAndMeasure(operations, operationName);
     } catch (InterruptedException e) {
       assert false;
       throw new IllegalStateException();
@@ -144,9 +142,9 @@ public class MirroringSpanFactory {
   }
 
   public <T> T wrapSecondaryOperation(
-      CallableThrowingIOAndInterruptedException<T> operationRunner, HBaseOperation operationName)
+      CallableThrowingIOAndInterruptedException<T> operations, HBaseOperation operationName)
       throws IOException, InterruptedException {
-    return wrapSecondaryOperationAndMeasure(operationRunner, operationName);
+    return wrapSecondaryOperationAndMeasure(operations, operationName);
   }
 
   public <T> FutureCallback<T> wrapReadVerificationCallback(final FutureCallback<T> callback) {
@@ -208,21 +206,17 @@ public class MirroringSpanFactory {
   }
 
   private <T> T wrapPrimaryOperationAndMeasure(
-      CallableThrowingIOAndInterruptedException<T> operationRunner, HBaseOperation operationName)
+      CallableThrowingIOAndInterruptedException<T> operations, HBaseOperation operationName)
       throws IOException, InterruptedException {
     return wrapOperationAndMeasure(
-        operationRunner,
-        PRIMARY_LATENCY,
-        PRIMARY_ERRORS,
-        this.primaryOperationScope(),
-        operationName);
+        operations, PRIMARY_LATENCY, PRIMARY_ERRORS, this.primaryOperationScope(), operationName);
   }
 
   private <T> T wrapSecondaryOperationAndMeasure(
-      CallableThrowingIOAndInterruptedException<T> operationRunner, HBaseOperation operationName)
+      CallableThrowingIOAndInterruptedException<T> operations, HBaseOperation operationName)
       throws IOException, InterruptedException {
     return wrapOperationAndMeasure(
-        operationRunner,
+        operations,
         SECONDARY_LATENCY,
         SECONDARY_ERRORS,
         this.secondaryOperationsScope(),
@@ -230,7 +224,7 @@ public class MirroringSpanFactory {
   }
 
   private <T> T wrapOperationAndMeasure(
-      CallableThrowingIOAndInterruptedException<T> operationRunner,
+      CallableThrowingIOAndInterruptedException<T> operations,
       MeasureLong latencyMeasure,
       MeasureLong errorMeasure,
       Scope scope,
@@ -241,7 +235,7 @@ public class MirroringSpanFactory {
     Stopwatch stopwatch = Stopwatch.createUnstarted();
     try (Scope scope1 = scope) {
       stopwatch.start();
-      return operationRunner.call();
+      return operations.call();
     } catch (IOException | InterruptedException e) {
       operationFailed = true;
       throw e;
