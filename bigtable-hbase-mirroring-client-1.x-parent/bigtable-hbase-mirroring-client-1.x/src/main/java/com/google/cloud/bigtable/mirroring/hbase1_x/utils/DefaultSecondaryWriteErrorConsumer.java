@@ -22,6 +22,10 @@ import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
 
+/**
+ * Default implementation of {@link SecondaryWriteErrorConsumer} which forwards write errors to
+ * {@link Logger}.
+ */
 public class DefaultSecondaryWriteErrorConsumer implements SecondaryWriteErrorConsumer {
   private static final com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger Log =
       new com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger(
