@@ -49,14 +49,21 @@ public class FlowController {
     // The cancellation may fail if the resources were already allocated by the FlowController, then
     // we should free them, or when the reservation was rejected, which we should ignore.
     if (!resourceReservationFuture.cancel(true)) {
+      // We cannot cancel the reservation future. This means that the future was already completed
+      // by calling `set()` or `setException()`.
       try {
         resourceReservationFuture.get().release();
       } catch (InterruptedException ex) {
-        // If we couldn't cancel the request, it must have already been set, we assume
-        // that we will get the reservation without problems
-        assert false;
+        // This shouldn't happen. The future was already set with `set()` or `setException()`, which
+        // means that calling `.get()` on it shouldn't block.
+        throw new IllegalStateException(
+            "A reservation future couldn't be cancelled, but obtaining its result has thrown "
+                + "InterruptedException. This is unexpected.",
+            ex);
       } catch (ExecutionException ex) {
-        // The request was rejected.
+        // The request was rejected by flow controller (e.g. cancelled).
+        // `AcquiredResourceReservation` handles such cases correctly and will release associated
+        // resources.
       }
     }
   }
@@ -74,6 +81,8 @@ public class FlowController {
    * Default implementation of {@link ResourceReservation} that can be used by {@link
    * FlowControlStrategy} implementations as an entry to be notified when resources for request are
    * available.
+   *
+   * <p>Not thread-safe.
    */
   public static class AcquiredResourceReservation implements ResourceReservation {
     final RequestResourcesDescription requestResourcesDescription;
@@ -92,7 +101,7 @@ public class FlowController {
       this.notified = false;
     }
 
-    void notifyWaiter() {
+    public void notifyWaiter() {
       assert !this.notified;
       this.notified = true;
       if (!this.notification.set(this)) {

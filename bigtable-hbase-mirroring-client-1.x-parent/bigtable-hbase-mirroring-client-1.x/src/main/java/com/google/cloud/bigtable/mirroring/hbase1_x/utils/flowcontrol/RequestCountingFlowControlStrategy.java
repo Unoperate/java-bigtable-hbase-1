@@ -46,8 +46,6 @@ import org.apache.hadoop.hbase.client.Table;
  *
  * <p>For those reasons such requests can greatly reduce concurrency and the limit should be chosen
  * with care.
- *
- * <p>Not thread-safe.
  */
 @InternalApi("For internal usage only")
 public class RequestCountingFlowControlStrategy extends SingleQueueFlowControlStrategy {
@@ -59,6 +57,7 @@ public class RequestCountingFlowControlStrategy extends SingleQueueFlowControlSt
     this(options.flowControllerMaxOutstandingRequests, options.flowControllerMaxUsedBytes);
   }
 
+  /** Not thread-safe, access is synchronized by {@link SingleQueueFlowControlStrategy}. */
   private static class Ledger implements SingleQueueFlowControlStrategy.Ledger {
     private final int maxUsedBytes;
     private final int minDifferenceToBlock;
@@ -73,7 +72,6 @@ public class RequestCountingFlowControlStrategy extends SingleQueueFlowControlSt
       this.usedBytes = 0;
     }
 
-    @Override
     public boolean canAcquireResource(RequestResourcesDescription requestResourcesDescription) {
       int neededEntries = requestResourcesDescription.numberOfResults;
       if (this.primaryReadsAdvantage == 0) {
@@ -85,9 +83,13 @@ public class RequestCountingFlowControlStrategy extends SingleQueueFlowControlSt
     }
 
     @Override
-    public void accountAcquiredResource(RequestResourcesDescription requestResourcesDescription) {
-      this.primaryReadsAdvantage += requestResourcesDescription.numberOfResults;
-      this.usedBytes += requestResourcesDescription.sizeInBytes;
+    public boolean tryAcquiredResource(RequestResourcesDescription requestResourcesDescription) {
+      if (this.canAcquireResource(requestResourcesDescription)) {
+        this.primaryReadsAdvantage += requestResourcesDescription.numberOfResults;
+        this.usedBytes += requestResourcesDescription.sizeInBytes;
+        return true;
+      }
+      return false;
     }
 
     @Override
