@@ -238,7 +238,7 @@ public class MirroringSpanFactory {
     try (Scope scope1 = scope) {
       stopwatch.start();
       return operations.call();
-    } catch (IOException | InterruptedException e) {
+    } catch (IOException | InterruptedException | RuntimeException e) {
       operationFailed = true;
       throw e;
     } finally {
