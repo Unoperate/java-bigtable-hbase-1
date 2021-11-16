@@ -495,38 +495,13 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   }
 
   @Override
-  public Configuration getConfiguration() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public long getRpcTimeout(TimeUnit timeUnit) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public long getReadRpcTimeout(TimeUnit timeUnit) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public long getWriteRpcTimeout(TimeUnit timeUnit) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public long getOperationTimeout(TimeUnit timeUnit) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public long getScanTimeout(TimeUnit timeUnit) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public CheckAndMutateBuilder checkAndMutate(byte[] row, byte[] family) {
     return new MirroringCheckAndMutateBuilder(this.primaryTable.checkAndMutate(row, family));
+  }
+
+  @Override
+  public Configuration getConfiguration() {
+    return primaryTable.getConfiguration();
   }
 
   @Override
@@ -536,20 +511,6 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
 
   @Override
   public CompletableFuture<List<Result>> scanAll(Scan scan) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public <S, R> CompletableFuture<R> coprocessorService(
-      Function<RpcChannel, S> function, ServiceCaller<S, R> serviceCaller, byte[] bytes) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public <S, R> CoprocessorServiceBuilder<S, R> coprocessorService(
-      Function<RpcChannel, S> function,
-      ServiceCaller<S, R> serviceCaller,
-      CoprocessorCallback<R> coprocessorCallback) {
     throw new UnsupportedOperationException();
   }
 
@@ -728,5 +689,44 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         }
       };
     }
+  }
+
+  @Override
+  public long getRpcTimeout(TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getReadRpcTimeout(TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getWriteRpcTimeout(TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getOperationTimeout(TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getScanTimeout(TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <S, R> CompletableFuture<R> coprocessorService(
+      Function<RpcChannel, S> function, ServiceCaller<S, R> serviceCaller, byte[] bytes) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <S, R> CoprocessorServiceBuilder<S, R> coprocessorService(
+      Function<RpcChannel, S> function,
+      ServiceCaller<S, R> serviceCaller,
+      CoprocessorCallback<R> coprocessorCallback) {
+    throw new UnsupportedOperationException();
   }
 }
