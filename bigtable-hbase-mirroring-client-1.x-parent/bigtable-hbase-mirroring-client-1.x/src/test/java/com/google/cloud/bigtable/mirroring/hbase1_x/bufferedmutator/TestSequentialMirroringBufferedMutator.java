@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
@@ -435,6 +437,7 @@ public class TestSequentialMirroringBufferedMutator {
         common.flowController,
         executorServiceRule.executorService,
         common.secondaryWriteErrorConsumerWithMetrics,
+        mock(ReferenceCounter.class),
         new MirroringTracer());
   }
 }

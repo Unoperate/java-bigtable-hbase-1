@@ -25,13 +25,13 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultSca
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.OperationStages;
@@ -468,9 +468,11 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         new AsyncResultScannerWrapper(
             this.secondaryTable.getScanner(scan),
             MoreExecutors.listeningDecorator(this.executorService),
+            this.referenceCounter,
             mirroringTracer),
         this.verificationContinuationFactory,
         this.flowController,
+        this.referenceCounter,
         this.mirroringTracer,
         this.readSampler.shouldNextReadOperationBeSampled());
   }

@@ -21,12 +21,14 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultSca
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.MultiReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
@@ -61,6 +63,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
   private final AsyncResultScannerWrapper secondaryResultScannerWrapper;
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final ListenableReferenceCounter listenableReferenceCounter;
+  private final ReferenceCounter allReferenceCounters;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   /**
    * Keeps track of number of entries already read from this scanner to provide context for
@@ -77,6 +80,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
       AsyncResultScannerWrapper secondaryResultScannerWrapper,
       VerificationContinuationFactory verificationContinuationFactory,
       FlowController flowController,
+      ReferenceCounter referenceCountersAbove,
       MirroringTracer mirroringTracer,
       boolean isVerificationEnabled) {
     this.originalScan = originalScan;
@@ -84,6 +88,8 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     this.secondaryResultScannerWrapper = secondaryResultScannerWrapper;
     this.verificationContinuationFactory = verificationContinuationFactory;
     this.listenableReferenceCounter = new ListenableReferenceCounter();
+    this.allReferenceCounters =
+        new MultiReferenceCounter(this.listenableReferenceCounter, referenceCountersAbove);
     this.flowController = flowController;
     this.readEntries = 0;
 
@@ -217,7 +223,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     if (!this.isVerificationEnabled) {
       return;
     }
-    this.listenableReferenceCounter.holdReferenceUntilCompletion(
+    this.allReferenceCounters.holdReferenceUntilCompletion(
         RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             requestResourcesDescription,
             nextSupplier,

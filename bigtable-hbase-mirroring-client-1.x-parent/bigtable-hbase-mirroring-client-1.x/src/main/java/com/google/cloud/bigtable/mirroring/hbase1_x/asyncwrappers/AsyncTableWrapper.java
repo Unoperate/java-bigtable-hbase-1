@@ -19,10 +19,12 @@ import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOAndInterruptedException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.MultiReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -71,15 +73,23 @@ public class AsyncTableWrapper implements ListenableCloseable {
    */
   private final ListenableReferenceCounter pendingOperationsReferenceCounter;
 
+  private final ReferenceCounter allReferenceCounters;
+
   private final SettableFuture<Void> closeResultFuture = SettableFuture.create();
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   public AsyncTableWrapper(
-      Table table, ListeningExecutorService executorService, MirroringTracer mirroringTracer) {
+      Table table,
+      ListeningExecutorService executorService,
+      ReferenceCounter connectionReferenceCounter,
+      MirroringTracer mirroringTracer) {
     this.table = table;
     this.executorService = executorService;
     this.mirroringTracer = mirroringTracer;
     this.pendingOperationsReferenceCounter = new ListenableReferenceCounter();
+    this.allReferenceCounters =
+        new MultiReferenceCounter(
+            this.pendingOperationsReferenceCounter, connectionReferenceCounter);
   }
 
   public Supplier<ListenableFuture<Result>> get(final Get gets) {
@@ -173,7 +183,10 @@ public class AsyncTableWrapper implements ListenableCloseable {
     Log.trace("getScanner(Scan)");
     AsyncResultScannerWrapper result =
         new AsyncResultScannerWrapper(
-            this.table.getScanner(scan), this.executorService, this.mirroringTracer);
+            this.table.getScanner(scan),
+            this.executorService,
+            this.allReferenceCounters,
+            this.mirroringTracer);
     this.pendingOperationsReferenceCounter.holdReferenceUntilClosing(result);
     return result;
   }
@@ -210,7 +223,7 @@ public class AsyncTableWrapper implements ListenableCloseable {
 
   public <T> ListenableFuture<T> submitTask(Callable<T> task) {
     ListenableFuture<T> future = this.executorService.submit(task);
-    this.pendingOperationsReferenceCounter.holdReferenceUntilCompletion(future);
+    this.allReferenceCounters.holdReferenceUntilCompletion(future);
     return future;
   }
 

@@ -18,12 +18,14 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator;
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConfiguration;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.MultiReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -66,6 +68,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       FlowController flowController,
       ExecutorService executorService,
       SecondaryWriteErrorConsumer secondaryWriteErrorConsumer,
+      ReferenceCounter connectionReferenceCounter,
       MirroringTracer mirroringTracer)
       throws IOException {
     if (concurrent) {
@@ -75,6 +78,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
           bufferedMutatorParams,
           configuration,
           executorService,
+          connectionReferenceCounter,
           mirroringTracer);
     } else {
       return new SequentialMirroringBufferedMutator(
@@ -85,6 +89,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
           flowController,
           executorService,
           secondaryWriteErrorConsumer,
+          connectionReferenceCounter,
           mirroringTracer);
     }
   }
@@ -115,7 +120,8 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
   protected final ExceptionListener userListener;
 
   private final AtomicBoolean closed = new AtomicBoolean(false);
-  private final ListenableReferenceCounter ongoingFlushesCounter = new ListenableReferenceCounter();
+  private final ListenableReferenceCounter ongoingFlushesCounter;
+  private final MultiReferenceCounter allReferenceCounters;
 
   public MirroringBufferedMutator(
       Connection primaryConnection,
@@ -123,6 +129,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       BufferedMutatorParams bufferedMutatorParams,
       MirroringConfiguration configuration,
       ExecutorService executorService,
+      ReferenceCounter connectionReferenceCounter,
       MirroringTracer mirroringTracer)
       throws IOException {
     this.userListener = bufferedMutatorParams.getListener();
@@ -161,6 +168,10 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
     this.executorService = MoreExecutors.listeningDecorator(executorService);
     this.configuration = configuration.baseConfiguration;
     this.bufferedMutatorParams = bufferedMutatorParams;
+
+    this.ongoingFlushesCounter = new ListenableReferenceCounter();
+    this.allReferenceCounters =
+        new MultiReferenceCounter(this.ongoingFlushesCounter, connectionReferenceCounter);
 
     this.mutationEntries = new BufferedMutations<>(this.mutationsBufferFlushThresholdBytes);
     this.mirroringTracer = mirroringTracer;
@@ -345,14 +356,14 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
 
   protected final FlushFutures scheduleFlush(List<BufferEntryType> dataToFlush) {
     try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
-      this.ongoingFlushesCounter.incrementReferenceCount();
+      this.allReferenceCounters.incrementReferenceCount();
 
       FlushFutures resultFutures = scheduleFlushScoped(dataToFlush);
       resultFutures.secondaryFlushFinished.addListener(
           new Runnable() {
             @Override
             public void run() {
-              ongoingFlushesCounter.decrementReferenceCount();
+              allReferenceCounters.decrementReferenceCount();
             }
           },
           MoreExecutors.directExecutor());

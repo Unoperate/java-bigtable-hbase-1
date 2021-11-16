@@ -29,7 +29,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWrite
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOAndInterruptedException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
@@ -39,6 +38,9 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.MultiReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.annotations.VisibleForTesting;
@@ -113,6 +115,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final FlowController flowController;
   private final ListenableReferenceCounter referenceCounter;
+  private final MultiReferenceCounter allReferenceCounters;
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
@@ -138,6 +141,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       ReadSampler readSampler,
       boolean performWritesConcurrently,
       boolean waitForSecondaryWrites,
+      ReferenceCounter connectionReferenceCounter,
       MirroringTracer mirroringTracer) {
     this.primaryTable = primaryTable;
     this.secondaryTable = secondaryTable;
@@ -147,9 +151,12 @@ public class MirroringTable implements Table, ListenableCloseable {
         new AsyncTableWrapper(
             this.secondaryTable,
             MoreExecutors.listeningDecorator(executorService),
+            connectionReferenceCounter,
             mirroringTracer);
     this.flowController = flowController;
     this.referenceCounter = new ListenableReferenceCounter();
+    this.allReferenceCounters =
+        new MultiReferenceCounter(this.referenceCounter, connectionReferenceCounter);
     this.referenceCounter.holdReferenceUntilClosing(this.secondaryAsyncWrapper);
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     this.performWritesConcurrently = performWritesConcurrently;
@@ -330,6 +337,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               this.secondaryAsyncWrapper.getScanner(scan),
               this.verificationContinuationFactory,
               this.flowController,
+              this.allReferenceCounters,
               this.mirroringTracer,
               this.readSampler.shouldNextReadOperationBeSampled());
       this.referenceCounter.holdReferenceUntilClosing(scanner);
@@ -636,7 +644,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       final RequestResourcesDescription resultInfo,
       final Supplier<ListenableFuture<T>> secondaryGetFutureSupplier,
       final FutureCallback<T> verificationCallback) {
-    this.referenceCounter.holdReferenceUntilCompletion(
+    this.allReferenceCounters.holdReferenceUntilCompletion(
         RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             resultInfo,
             secondaryGetFutureSupplier,
@@ -658,7 +666,7 @@ public class MirroringTable implements Table, ListenableCloseable {
           }
         };
 
-    this.referenceCounter.holdReferenceUntilCompletion(
+    this.allReferenceCounters.holdReferenceUntilCompletion(
         RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             writeOperationInfo.requestResourcesDescription,
             secondaryResultFutureSupplier,
@@ -849,7 +857,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.mirroringTracer,
             flowControlReservationErrorConsumer);
 
-    this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
+    this.allReferenceCounters.holdReferenceUntilCompletion(verificationCompleted);
 
     try {
       // Wait until all asynchronous operations are completed.
@@ -964,7 +972,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.mirroringTracer,
             resourceReservationFailureCallback);
 
-    this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
+    this.allReferenceCounters.holdReferenceUntilCompletion(verificationCompleted);
 
     verificationCompleted.addListener(
         new Runnable() {

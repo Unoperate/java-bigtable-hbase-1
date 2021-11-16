@@ -21,6 +21,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import java.util.concurrent.ExecutionException;
@@ -30,9 +31,12 @@ import org.apache.hadoop.hbase.client.ResultScanner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 
 @RunWith(JUnit4.class)
 public class TestAsyncResultScannerWrapper {
+  @Mock ReferenceCounter referenceCounter;
+
   @Test
   public void testListenersAreCalledOnClose()
       throws InterruptedException, ExecutionException, TimeoutException {
@@ -41,6 +45,7 @@ public class TestAsyncResultScannerWrapper {
         new AsyncResultScannerWrapper(
             resultScanner,
             MoreExecutors.listeningDecorator(MoreExecutors.newDirectExecutorService()),
+            referenceCounter,
             new MirroringTracer());
     final SettableFuture<Void> listenerFuture = SettableFuture.create();
     asyncResultScannerWrapper.addOnCloseListener(
@@ -62,6 +67,7 @@ public class TestAsyncResultScannerWrapper {
         new AsyncResultScannerWrapper(
             resultScanner,
             MoreExecutors.listeningDecorator(MoreExecutors.newDirectExecutorService()),
+            referenceCounter,
             new MirroringTracer());
     asyncResultScannerWrapper.asyncClose().get(3, TimeUnit.SECONDS);
     asyncResultScannerWrapper.asyncClose().get(3, TimeUnit.SECONDS);

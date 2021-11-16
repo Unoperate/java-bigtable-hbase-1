@@ -87,8 +87,8 @@ public class MirroringConnection
                 readSampler,
                 performWritesConcurrently,
                 waitForSecondaryWrites,
+                referenceCounter,
                 mirroringTracer);
-        referenceCounter.holdReferenceUntilClosing(table);
         return table;
       }
     };

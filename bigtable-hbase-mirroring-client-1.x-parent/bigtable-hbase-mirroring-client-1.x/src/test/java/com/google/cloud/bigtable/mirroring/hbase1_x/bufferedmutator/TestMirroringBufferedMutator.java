@@ -16,12 +16,14 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConfiguration;
 import com.google.cloud.bigtable.mirroring.hbase1_x.TestConnection;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.Rule;
@@ -60,6 +62,7 @@ public class TestMirroringBufferedMutator {
                 mutatorRule.flowController,
                 executorServiceRule.executorService,
                 mutatorRule.secondaryWriteErrorConsumerWithMetrics,
+                any(ReferenceCounter.class),
                 new MirroringTracer()))
         .isInstanceOf(SequentialMirroringBufferedMutator.class);
 
@@ -73,6 +76,7 @@ public class TestMirroringBufferedMutator {
                 mutatorRule.flowController,
                 executorServiceRule.executorService,
                 mutatorRule.secondaryWriteErrorConsumerWithMetrics,
+                any(ReferenceCounter.class),
                 new MirroringTracer()))
         .isInstanceOf(ConcurrentMirroringBufferedMutator.class);
   }

@@ -40,13 +40,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
@@ -109,6 +110,7 @@ public class TestMirroringTable {
   @Mock MismatchDetector mismatchDetector;
   @Mock FlowController flowController;
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
+  @Mock ReferenceCounter referenceCounter;
 
   MirroringTable mirroringTable;
 
@@ -127,6 +129,7 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 false,
                 false,
+                this.referenceCounter,
                 new MirroringTracer()));
   }
 
@@ -1170,6 +1173,7 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 true,
                 true,
+                this.referenceCounter,
                 new MirroringTracer()));
 
     Put put1 = createPut("r1", "f1", "q1", "v1");
@@ -1240,6 +1244,7 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 true,
                 true,
+                this.referenceCounter,
                 new MirroringTracer()));
   }
 
@@ -1362,6 +1367,7 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 true,
                 true,
+                this.referenceCounter,
                 new MirroringTracer()));
 
     Put put = createPut("test1", "f1", "q1", "v1");

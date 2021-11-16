@@ -29,6 +29,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultSca
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -60,6 +61,7 @@ import org.mockito.Mock;
 @RunWith(JUnit4.class)
 public class TestMirroringResultScanner {
   @Mock FlowController flowController;
+  @Mock ReferenceCounter referenceCounter;
 
   @Test
   public void testScannerCloseWhenFirstCloseThrows() throws IOException {
@@ -77,6 +79,7 @@ public class TestMirroringResultScanner {
             secondaryScannerWrapperMock,
             continuationFactoryMock,
             flowController,
+            referenceCounter,
             new MirroringTracer(),
             true);
 
@@ -113,6 +116,7 @@ public class TestMirroringResultScanner {
             secondaryScannerWrapperMock,
             continuationFactoryMock,
             flowController,
+            referenceCounter,
             new MirroringTracer(),
             true);
 
@@ -149,6 +153,7 @@ public class TestMirroringResultScanner {
             secondaryScannerWrapperMock,
             continuationFactoryMock,
             flowController,
+            referenceCounter,
             new MirroringTracer(),
             true);
 
@@ -190,6 +195,7 @@ public class TestMirroringResultScanner {
             secondaryScannerWrapperMock,
             continuationFactoryMock,
             flowController,
+            referenceCounter,
             new MirroringTracer(),
             true);
 
@@ -214,7 +220,7 @@ public class TestMirroringResultScanner {
 
     final AsyncResultScannerWrapper asyncResultScannerWrapper =
         new AsyncResultScannerWrapper(
-            resultScanner, listeningExecutorService, new MirroringTracer());
+            resultScanner, listeningExecutorService, referenceCounter, new MirroringTracer());
 
     final List<ScannerRequestContext> calls = new ArrayList<>();
 

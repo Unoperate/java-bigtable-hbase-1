@@ -22,6 +22,7 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.Mirro
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -32,6 +33,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOperationException.
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.util.Arrays;
@@ -316,6 +318,7 @@ public class TestConcurrentMirroringBufferedMutator {
         common.bufferedMutatorParams,
         makeConfigurationWithFlushThreshold(flushThreshold),
         executorServiceRule.executorService,
+        mock(ReferenceCounter.class),
         new MirroringTracer());
   }
 }

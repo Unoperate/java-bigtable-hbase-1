@@ -20,6 +20,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
@@ -38,7 +39,11 @@ public class TestAsyncTableWrapper {
       throws InterruptedException, ExecutionException, TimeoutException, IOException {
     Table table = mock(Table.class);
     AsyncTableWrapper asyncTableWrapper =
-        new AsyncTableWrapper(table, mock(ListeningExecutorService.class), new MirroringTracer());
+        new AsyncTableWrapper(
+            table,
+            mock(ListeningExecutorService.class),
+            mock(ReferenceCounter.class),
+            new MirroringTracer());
     asyncTableWrapper.asyncClose().get(3, TimeUnit.SECONDS);
     asyncTableWrapper.asyncClose().get(3, TimeUnit.SECONDS);
     verify(table, times(1)).close();

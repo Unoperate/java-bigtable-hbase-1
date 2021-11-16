@@ -19,9 +19,11 @@ import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.MultiReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -66,14 +68,19 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
    */
   private ListenableReferenceCounter pendingOperationsReferenceCounter;
 
+  private final ReferenceCounter allReferenceCounters;
+
   public AsyncResultScannerWrapper(
       ResultScanner scanner,
       ListeningExecutorService executorService,
+      ReferenceCounter referenceCountersAbove,
       MirroringTracer mirroringTracer) {
     super();
     this.scanner = scanner;
     this.mirroringTracer = mirroringTracer;
     this.pendingOperationsReferenceCounter = new ListenableReferenceCounter();
+    this.allReferenceCounters =
+        new MultiReferenceCounter(this.pendingOperationsReferenceCounter, referenceCountersAbove);
     this.executorService = executorService;
     this.nextContextQueue = new ConcurrentLinkedQueue<>();
   }

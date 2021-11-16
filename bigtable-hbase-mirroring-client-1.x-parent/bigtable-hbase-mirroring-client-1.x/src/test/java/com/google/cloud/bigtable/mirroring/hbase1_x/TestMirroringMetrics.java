@@ -47,6 +47,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanFactory;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.DefaultMismatchDetector;
 import io.opencensus.trace.Tracing;
 import java.io.IOException;
@@ -108,6 +109,7 @@ public class TestMirroringMetrics {
                 new ReadSampler(100),
                 false,
                 false,
+                mock(ReferenceCounter.class),
                 tracer));
   }
 
