@@ -56,7 +56,6 @@ public class DefaultSecondaryWriteErrorConsumer implements SecondaryWriteErrorCo
     } else if (row instanceof RowMutations) {
       consume((RowMutations) row, cause);
     } else {
-      assert false;
       throw new IllegalArgumentException("Not a write operation");
     }
   }
