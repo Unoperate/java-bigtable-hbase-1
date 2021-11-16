@@ -167,6 +167,8 @@ public class MirroringSpanFactory {
 
   public <T> WriteOperationFutureCallback<T> wrapWriteOperationCallback(
       final WriteOperationFutureCallback<T> callback) {
+    // WriteOperationFutureCallback already defines always empty `onSuccess` method, no need to wrap
+    // it.
     return new WriteOperationFutureCallback<T>() {
       @Override
       public void onFailure(Throwable throwable) {
