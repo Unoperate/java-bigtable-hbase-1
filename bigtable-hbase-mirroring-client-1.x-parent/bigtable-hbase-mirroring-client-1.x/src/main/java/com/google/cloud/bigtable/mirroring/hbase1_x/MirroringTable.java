@@ -697,6 +697,14 @@ public class MirroringTable implements Table, ListenableCloseable {
     batchWithSpan(inputOperations, results, null);
   }
 
+  /**
+   * Performs batch operation as defined by HBase API. {@code results} array will contain instances
+   * of {@link Result} for successful operations and {@code null} or {@link Throwable} for
+   * operations that have failed (this behavior is not documented, but both hbase and java-bigtable
+   * clients work this way). Moreover, if any of operations in batch have failed, {@link
+   * RetriesExhaustedWithDetailsException} will be thrown with details of failed operations (which
+   * is also not documented both clients consistently throw this exception).
+   */
   private <R> void batchWithSpan(
       final List<? extends Row> inputOperations,
       final Object[] results,
@@ -781,13 +789,17 @@ public class MirroringTable implements Table, ListenableCloseable {
 
     final BatchData primaryBatchData = new BatchData(operations, primaryResults);
     final BatchData secondaryBatchData = new BatchData(operations, secondaryResults);
-    // After the flow control resources have been obtained, we will schedule secondary operation and
-    // then run primary operation.
+    // This is a operation that will be run by
+    // `RequestScheduling.scheduleRequestAndVerificationWithFlowControl` after it acquires flow
+    // controller resources. It will schedule asynchronous secondary operation and run primary
+    // operation in the main thread, to make them run concurrently. We will wait for the secondary
+    // to finish later in this method.
     final Supplier<ListenableFuture<Void>> invokeBothOperations =
         new Supplier<ListenableFuture<Void>>() {
           @Override
           public ListenableFuture<Void> get() {
             // We are scheduling secondary batch to run concurrently.
+            // Call to `.get()` starts the asynchronous operation, it doesn't wait for it to finish.
             ListenableFuture<Void> secondaryOperationEnded =
                 secondaryAsyncWrapper.batch(operations, secondaryResults).get();
             // Primary operation is then performed synchronously.
@@ -816,6 +828,18 @@ public class MirroringTable implements Table, ListenableCloseable {
           }
         };
 
+    // If flow controller errs and won't allow the request we will handle the error using this
+    // handler.
+    Function<Throwable, Void> flowControlReservationErrorConsumer =
+        new Function<Throwable, Void>() {
+          @NullableDecl
+          @Override
+          public Void apply(@NullableDecl Throwable throwable) {
+            flowControllerException[0] = throwable;
+            return null;
+          }
+        };
+
     ListenableFuture<Void> verificationCompleted =
         RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
             requestResourcesDescription,
@@ -823,24 +847,21 @@ public class MirroringTable implements Table, ListenableCloseable {
             verification,
             this.flowController,
             this.mirroringTracer,
-            new Function<Throwable, Void>() {
-              @NullableDecl
-              @Override
-              public Void apply(@NullableDecl Throwable throwable) {
-                flowControllerException[0] = throwable;
-                return null;
-              }
-            });
+            flowControlReservationErrorConsumer);
 
     this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
 
     try {
+      // Wait until all asynchronous operations are completed.
       verificationCompleted.get();
     } catch (ExecutionException e) {
       assert false;
       throw new IllegalStateException("secondaryResult thrown unexpected exception.");
     }
 
+    // Checks results of primary and secondary operations, we consider a operation failed if at
+    // least one of the operations have failed. This method will fill `primaryResults` with errors
+    // from both operations and will throw appropriate RetriesExhaustedWithDetailsException.
     reconcileBatchResultsConcurrent(
         primaryResults, primaryBatchData, secondaryBatchData, resultIsFaultyPredicate);
 
