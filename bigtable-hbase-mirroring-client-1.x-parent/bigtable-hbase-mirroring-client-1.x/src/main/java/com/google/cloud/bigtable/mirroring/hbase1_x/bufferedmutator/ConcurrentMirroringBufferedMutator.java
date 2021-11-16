@@ -172,11 +172,14 @@ public class ConcurrentMirroringBufferedMutator
   }
 
   @Override
-  protected FlushFutures scheduleFlushScoped(final List<List<? extends Mutation>> dataToFlush) {
+  protected FlushFutures scheduleFlushScoped(
+      final List<List<? extends Mutation>> dataToFlush, FlushFutures previousFlushFutures) {
     final SettableFuture<Void> bothFlushesFinished = SettableFuture.create();
 
-    ListenableFuture<Void> primaryFlushFinished = schedulePrimaryFlush();
-    ListenableFuture<Void> secondaryFlushFinished = scheduleSecondaryFlush();
+    ListenableFuture<Void> primaryFlushFinished =
+        schedulePrimaryFlush(previousFlushFutures.primaryFlushFinished);
+    ListenableFuture<Void> secondaryFlushFinished =
+        scheduleSecondaryFlush(previousFlushFutures.secondaryFlushFinished);
 
     // This object will aggregate `IOExceptions` and `RuntimeExceptions` thrown by flush()
     // operations which were not handled by registered handlers (that is
@@ -244,20 +247,15 @@ public class ConcurrentMirroringBufferedMutator
     return new FlushFutures(primaryFlushFinished, secondaryFlushFinished, bothFlushesFinished);
   }
 
-  private ListenableFuture<Void> scheduleSecondaryFlush() {
+  private ListenableFuture<Void> scheduleSecondaryFlush(
+      final ListenableFuture<?> previousFlushCompletedFuture) {
     return this.executorService.submit(
         this.mirroringTracer.spanFactory.wrapWithCurrentSpan(
             new Callable<Void>() {
               @Override
               public Void call() throws Exception {
                 mirroringTracer.spanFactory.wrapSecondaryOperation(
-                    new CallableThrowingIOException<Void>() {
-                      @Override
-                      public Void call() throws IOException {
-                        secondaryBufferedMutator.flush();
-                        return null;
-                      }
-                    },
+                    createFlushTask(secondaryBufferedMutator, previousFlushCompletedFuture),
                     HBaseOperation.BUFFERED_MUTATOR_FLUSH);
                 return null;
               }

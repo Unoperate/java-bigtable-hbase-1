@@ -27,6 +27,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 import io.opencensus.common.Scope;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -114,6 +115,32 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
   /** ExceptionListener supplied by the user. */
   protected final ExceptionListener userListener;
 
+  /** Object used as a lock to ensure ordering of scheduling flushes. */
+  private final Object flushOrderLock = new Object();
+
+  /**
+   * We have to ensure that order of asynchronously called {@link BufferedMutator#flush()} is the
+   * same as order in which callbacks for these operations were created. To enforce this property
+   * each scheduled flush will wait for previously scheduled flush to finish before performing its
+   * operation. We are storing futures of last scheduled flush operation in this field.
+   *
+   * <p>Access to this field should be synchronized by {@code synchronized(flushOrderLock)}
+   *
+   * <p>We have to ensure the ordering to prevent the following scenario:
+   *
+   * <ol>
+   *   <li>main thread: scheduleFlush with callback using dataToFlush = [1,2,3] (flush1)
+   *   <li>main thread: scheduleFlush with callback using dataToFlush = [] (flush2).
+   *   <li>worker thread 1: call flush2, it blocks.
+   *   <li>worker thread 2: call flush1, nothing more to flush (there's no guarantee that this flush
+   *       would wait for flush2 to finish), callback with dataToFlush = [1,2,3] is called before
+   *       corresponding mutations were flushed.
+   * </ol>
+   *
+   * Ensuring the order of flushes forces to be run after flush1 is finished.
+   */
+  private FlushFutures lastFlushFutures = createCompletedFlushFutures();
+
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final ListenableReferenceCounter ongoingFlushesCounter = new ListenableReferenceCounter();
 
@@ -200,43 +227,26 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
 
   abstract void handleSecondaryException(RetriesExhaustedWithDetailsException e);
 
-  protected final synchronized void storeResourcesAndFlushIfNeeded(
+  protected final void storeResourcesAndFlushIfNeeded(
       BufferEntryType entry, RequestResourcesDescription resourcesDescription) {
     // This method is synchronized to make sure that order of scheduled flushes matches order of
     // created dataToFlush lists.
-    // TODO: problem - we are using synchronization to be sure to schedule flush in order (we want
-    // flush() to match dataToFlush), however we only synchronize scheduling and do no guarantee the
-    // order of execution of flush()es.
-    // Following scenario:
-    // Thread1: enter monitor
-    // Thread1: dataToFlush = [1, 2, 3]
-    // Thread1: scheduleFlush([1,2,3]) (flush 1)
-    // Thread1: exit monitor
-    // Thread1: enter monitor
-    // Thread1: dataToFlush = []
-    // Thread1: scheduleFlush([]) (flush 2)
-    // Thread1: exit monitor
-    // worker thread 1: flush2 (flushes [1,2,3], calls handler for [])
-    // worker thread 2: flush1 (flushes [], finishes immediately (nothing to flush), calls handler
-    // for [1,2,3])
-    // Thus the synchronization doesn't help at all.
-    List<BufferEntryType> dataToFlush =
-        this.mutationEntries.add(entry, resourcesDescription.sizeInBytes);
-    if (dataToFlush != null) {
-      // We are not afraid of multiple simultaneous asynchronous flushes:
-      // - HBase clients are thread-safe.
-      // - Each failed Row should be reported and placed in `failedPrimaryOperations` once.
-      // - Each issued Row will be consulted with `failedPrimaryOperations` only once, because
-      //   each flush sets up a clean buffer for incoming mutations.
-      scheduleFlush(dataToFlush);
+    synchronized (this.flushOrderLock) {
+      List<BufferEntryType> dataToFlush =
+          this.mutationEntries.add(entry, resourcesDescription.sizeInBytes);
+      if (dataToFlush != null) {
+        scheduleFlush(dataToFlush);
+      }
     }
   }
 
-  protected final synchronized FlushFutures scheduleFlushAll() {
+  protected final FlushFutures scheduleFlushAll() {
     // This method is synchronized to make sure that order of scheduled flushes matches order of
     // created dataToFlush lists.
-    List<BufferEntryType> dataToFlush = this.mutationEntries.flushBuffer();
-    return scheduleFlush(dataToFlush);
+    synchronized (this.flushOrderLock) {
+      List<BufferEntryType> dataToFlush = this.mutationEntries.flushBuffer();
+      return scheduleFlush(dataToFlush);
+    }
   }
 
   @Override
@@ -344,42 +354,59 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
   }
 
   protected final FlushFutures scheduleFlush(List<BufferEntryType> dataToFlush) {
-    try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
-      this.ongoingFlushesCounter.incrementReferenceCount();
+    synchronized (this.flushOrderLock) {
+      try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
+        this.ongoingFlushesCounter.incrementReferenceCount();
 
-      FlushFutures resultFutures = scheduleFlushScoped(dataToFlush);
-      resultFutures.secondaryFlushFinished.addListener(
-          new Runnable() {
-            @Override
-            public void run() {
-              ongoingFlushesCounter.decrementReferenceCount();
-            }
-          },
-          MoreExecutors.directExecutor());
-      return resultFutures;
+        FlushFutures resultFutures = scheduleFlushScoped(dataToFlush, lastFlushFutures);
+        this.lastFlushFutures = resultFutures;
+
+        resultFutures.secondaryFlushFinished.addListener(
+            new Runnable() {
+              @Override
+              public void run() {
+                ongoingFlushesCounter.decrementReferenceCount();
+              }
+            },
+            MoreExecutors.directExecutor());
+        return resultFutures;
+      }
     }
   }
 
-  protected abstract FlushFutures scheduleFlushScoped(List<BufferEntryType> dataToFlush);
+  protected abstract FlushFutures scheduleFlushScoped(
+      List<BufferEntryType> dataToFlush, FlushFutures previousFlushFutures);
 
-  protected final ListenableFuture<Void> schedulePrimaryFlush() {
+  protected final ListenableFuture<Void> schedulePrimaryFlush(
+      final ListenableFuture<?> previousFlushCompletedFuture) {
     return this.executorService.submit(
         this.mirroringTracer.spanFactory.wrapWithCurrentSpan(
             new Callable<Void>() {
               @Override
               public Void call() throws Exception {
                 mirroringTracer.spanFactory.wrapPrimaryOperation(
-                    new CallableThrowingIOException<Void>() {
-                      @Override
-                      public Void call() throws IOException {
-                        primaryBufferedMutator.flush();
-                        return null;
-                      }
-                    },
+                    createFlushTask(primaryBufferedMutator, previousFlushCompletedFuture),
                     HBaseOperation.BUFFERED_MUTATOR_FLUSH);
                 return null;
               }
             }));
+  }
+
+  protected final CallableThrowingIOException<Void> createFlushTask(
+      final BufferedMutator bufferedMutator,
+      final ListenableFuture<?> previousFlushCompletedFuture) {
+    return new CallableThrowingIOException<Void>() {
+      @Override
+      public Void call() throws IOException {
+        try {
+          previousFlushCompletedFuture.get();
+        } catch (InterruptedException | ExecutionException ignored) {
+          // We do not care about errors, just if the previous flush is over.
+        }
+        bufferedMutator.flush();
+        return null;
+      }
+    };
   }
 
   protected final void setInterruptedFlagIfInterruptedException(Exception e) {
@@ -414,5 +441,11 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       this.mutationsBufferSizeBytes = 0;
       return returnValue;
     }
+  }
+
+  protected FlushFutures createCompletedFlushFutures() {
+    SettableFuture<Void> future = SettableFuture.create();
+    future.set(null);
+    return new FlushFutures(future, future, future);
   }
 }
