@@ -186,7 +186,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new CallableThrowingIOException<Boolean>() {
                 @Override
                 public Boolean call() throws IOException {
-                  return MirroringTable.this.primaryTable.exists(get);
+                  return primaryTable.exists(get);
                 }
               },
               HBaseOperation.EXISTS);
@@ -212,7 +212,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new CallableThrowingIOException<boolean[]>() {
                 @Override
                 public boolean[] call() throws IOException {
-                  return MirroringTable.this.primaryTable.existsAll(list);
+                  return primaryTable.existsAll(list);
                 }
               },
               HBaseOperation.EXISTS_ALL);
@@ -277,7 +277,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new CallableThrowingIOException<Result>() {
                 @Override
                 public Result call() throws IOException {
-                  return MirroringTable.this.primaryTable.get(get);
+                  return primaryTable.get(get);
                 }
               },
               HBaseOperation.GET);
@@ -303,7 +303,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new CallableThrowingIOException<Result[]>() {
                 @Override
                 public Result[] call() throws IOException {
-                  return MirroringTable.this.primaryTable.get(list);
+                  return primaryTable.get(list);
                 }
               },
               HBaseOperation.GET_LIST);
@@ -372,7 +372,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             new CallableThrowingIOException<Void>() {
               @Override
               public Void call() throws IOException {
-                MirroringTable.this.primaryTable.close();
+                primaryTable.close();
                 return null;
               }
             },
@@ -519,7 +519,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new CallableThrowingIOException<Result>() {
                 @Override
                 public Result call() throws IOException {
-                  return MirroringTable.this.primaryTable.append(append);
+                  return primaryTable.append(append);
                 }
               },
               HBaseOperation.APPEND);
@@ -546,7 +546,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               new CallableThrowingIOException<Result>() {
                 @Override
                 public Result call() throws IOException {
-                  return MirroringTable.this.primaryTable.increment(increment);
+                  return primaryTable.increment(increment);
                 }
               },
               HBaseOperation.INCREMENT);
@@ -646,7 +646,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             new CallableThrowingIOException<Boolean>() {
               @Override
               public Boolean call() throws IOException {
-                return MirroringTable.this.primaryTable.checkAndMutate(
+                return primaryTable.checkAndMutate(
                     row, family, qualifier, compareOp, value, rowMutations);
               }
             },
@@ -808,10 +808,9 @@ public class MirroringTable implements Table, ListenableCloseable {
           @Override
           public Void call() throws IOException, InterruptedException {
             if (callback == null) {
-              MirroringTable.this.primaryTable.batch(actions.operations, internalPrimaryResults);
+              primaryTable.batch(actions.operations, internalPrimaryResults);
             } else {
-              MirroringTable.this.primaryTable.batchCallback(
-                  actions.operations, internalPrimaryResults, callback);
+              primaryTable.batchCallback(actions.operations, internalPrimaryResults, callback);
             }
             return null;
           }
