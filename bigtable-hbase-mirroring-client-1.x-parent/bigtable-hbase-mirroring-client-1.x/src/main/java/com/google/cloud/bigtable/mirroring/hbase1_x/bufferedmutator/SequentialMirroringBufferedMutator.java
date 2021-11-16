@@ -18,6 +18,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator;
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConfiguration;
 import com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.SequentialMirroringBufferedMutator.Entry;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -165,7 +166,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
 
   @Override
   protected void mutateScoped(final List<? extends Mutation> list) throws IOException {
-    IOException primaryException = null;
+    AccumulatedExceptions primaryExceptions = new AccumulatedExceptions();
     try {
       this.mirroringTracer.spanFactory.wrapPrimaryOperation(
           new CallableThrowingIOException<Void>() {
@@ -177,11 +178,21 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
           },
           HBaseOperation.BUFFERED_MUTATOR_MUTATE_LIST);
     } catch (IOException e) {
-      primaryException = e;
+      primaryExceptions.add(e);
+    } catch (RuntimeException e) {
+      primaryExceptions.add(e);
     } finally {
-      // This call might block - we have confirmed that mutate() calls on BufferedMutator from
-      // HBase client library might also block.
-      addSecondaryMutation(list, primaryException);
+      try {
+        // This call might block - we have confirmed that mutate() calls on BufferedMutator from
+        // HBase client library might also block.
+        addSecondaryMutation(list);
+      } catch (InterruptedException | ExecutionException e) {
+        setInterruptedFlagIfInterruptedException(e);
+        primaryExceptions.add(new IOException(e));
+      } catch (RuntimeException e) {
+        primaryExceptions.add(e);
+      }
+      primaryExceptions.rethrowIfCaptured();
     }
     // If primary #mutate() has thrown, the exception is propagated to the user and we don't reach
     // here.
@@ -195,8 +206,8 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
    * passed in primaryException, if any. This method shouldn't throw any exception if
    * primaryException != null.
    */
-  private void addSecondaryMutation(
-      List<? extends Mutation> mutations, IOException primaryException) throws IOException {
+  private void addSecondaryMutation(List<? extends Mutation> mutations)
+      throws ExecutionException, InterruptedException {
     RequestResourcesDescription resourcesDescription = new RequestResourcesDescription(mutations);
     ListenableFuture<ResourceReservation> reservationFuture =
         flowController.asyncRequestResource(resourcesDescription);
@@ -210,16 +221,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
       // We won't write those mutations to secondary database, they should be reported to
       // secondaryWriteErrorConsumer.
       reportWriteErrors(mutations, e);
-
-      setInterruptedFlagIfInterruptedException(e);
-      // TODO: use AccumulatedException instead.
-      if (primaryException != null) {
-        // We are currently in a finally block handling an exception, we shouldn't throw anything.
-        primaryException.addSuppressed(e);
-        return;
-      } else {
-        throw new IOException(e);
-      }
+      throw e;
     }
 
     storeResourcesAndFlushIfNeeded(new Entry(mutations, reservation), resourcesDescription);
