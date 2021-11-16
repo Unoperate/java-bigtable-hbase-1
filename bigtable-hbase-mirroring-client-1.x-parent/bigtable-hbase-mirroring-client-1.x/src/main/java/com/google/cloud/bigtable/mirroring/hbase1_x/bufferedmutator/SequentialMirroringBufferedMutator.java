@@ -256,10 +256,12 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
   }
 
   @Override
-  protected FlushFutures scheduleFlushScoped(final List<Entry> dataToFlush) {
+  protected FlushFutures scheduleFlushScoped(
+      final List<Entry> dataToFlush, final FlushFutures previousFlushFutures) {
     final SettableFuture<Void> secondaryFlushFinished = SettableFuture.create();
 
-    ListenableFuture<Void> primaryFlushFinished = schedulePrimaryFlush();
+    final ListenableFuture<Void> primaryFlushFinished =
+        schedulePrimaryFlush(previousFlushFutures.primaryFlushFinished);
 
     Futures.addCallback(
         primaryFlushFinished,
@@ -267,7 +269,10 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
             new FutureCallback<Void>() {
               @Override
               public void onSuccess(@NullableDecl Void aVoid) {
-                performSecondaryFlush(dataToFlush, secondaryFlushFinished);
+                performSecondaryFlush(
+                    dataToFlush,
+                    secondaryFlushFinished,
+                    previousFlushFutures.secondaryFlushFinished);
               }
 
               @Override
@@ -280,7 +285,10 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
                   // calls mutate/flush the next time.
                   saveExceptionToBeThrown((RetriesExhaustedWithDetailsException) throwable);
 
-                  performSecondaryFlush(dataToFlush, secondaryFlushFinished);
+                  performSecondaryFlush(
+                      dataToFlush,
+                      secondaryFlushFinished,
+                      previousFlushFutures.secondaryFlushFinished);
                 } else {
                   // In other cases, we do not know what caused the error and we have no idea
                   // what was really written to the primary DB. We will behave as if nothing was
@@ -298,10 +306,22 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
   }
 
   private void performSecondaryFlush(
-      List<Entry> dataToFlush, SettableFuture<Void> completionFuture) {
+      List<Entry> dataToFlush,
+      SettableFuture<Void> completionFuture,
+      ListenableFuture<?> previousFlushCompletedFuture) {
+
     List<Mutation> mutations = Entry.mergeMutations(dataToFlush);
     final List<? extends Mutation> successfulOperations = removeFailedMutations(mutations);
+
     try {
+      try {
+        previousFlushCompletedFuture.get();
+      } catch (ExecutionException ignored) {
+        // InterruptedExceptions are threaded as failed mutations.
+        // ExecutionExceptions are ignored, we only care if the previous flush finished, not its
+        // result.
+      }
+
       if (!successfulOperations.isEmpty()) {
         this.mirroringTracer.spanFactory.wrapSecondaryOperation(
             new CallableThrowingIOException<Void>() {
@@ -336,7 +356,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     }
   }
 
-  private void releaseReservations(List<Entry> entries) {
+  private static void releaseReservations(List<Entry> entries) {
     for (Entry entry : entries) {
       entry.reservation.release();
     }
