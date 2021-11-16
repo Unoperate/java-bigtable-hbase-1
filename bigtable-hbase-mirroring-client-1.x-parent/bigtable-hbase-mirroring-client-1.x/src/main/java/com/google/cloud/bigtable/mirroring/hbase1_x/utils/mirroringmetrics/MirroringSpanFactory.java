@@ -40,6 +40,12 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
+/**
+ * Used to create named spans for tracing (using {@link #tracer}) and recording metrics related to
+ * those spans (using {@link #mirroringMetricsRecorder}).
+ *
+ * <p>Created by {@link MirroringTracer}.
+ */
 @InternalApi("For internal usage only")
 public class MirroringSpanFactory {
   private final Tracer tracer;

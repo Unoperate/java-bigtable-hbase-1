@@ -28,6 +28,13 @@ import io.opencensus.tags.TagContext;
 import io.opencensus.tags.TagContextBuilder;
 import io.opencensus.tags.Tagger;
 
+/**
+ * Used to record metrics related to operations (by {@link MirroringSpanFactory}) and to record read
+ * mismatches and secondary write errors (in these cases accessed from {@link
+ * com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection}'s {@link MirroringTracer}).
+ *
+ * <p>Created by {@link MirroringTracer}.
+ */
 @InternalApi("For internal usage only")
 public class MirroringMetricsRecorder {
   private final Tagger tagger;
