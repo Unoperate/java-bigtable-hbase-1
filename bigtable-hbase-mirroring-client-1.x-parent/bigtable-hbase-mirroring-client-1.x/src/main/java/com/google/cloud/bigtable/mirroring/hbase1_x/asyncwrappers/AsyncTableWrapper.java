@@ -181,14 +181,11 @@ public class AsyncTableWrapper implements ListenableCloseable {
 
   public AsyncResultScannerWrapper getScanner(Scan scan) throws IOException {
     Log.trace("getScanner(Scan)");
-    AsyncResultScannerWrapper result =
-        new AsyncResultScannerWrapper(
-            this.table.getScanner(scan),
-            this.executorService,
-            this.allReferenceCounters,
-            this.mirroringTracer);
-    this.pendingOperationsReferenceCounter.holdReferenceUntilClosing(result);
-    return result;
+    return new AsyncResultScannerWrapper(
+        this.table.getScanner(scan),
+        this.executorService,
+        this.allReferenceCounters,
+        this.mirroringTracer);
   }
 
   public <T> Supplier<ListenableFuture<T>> createSubmitTaskSupplier(

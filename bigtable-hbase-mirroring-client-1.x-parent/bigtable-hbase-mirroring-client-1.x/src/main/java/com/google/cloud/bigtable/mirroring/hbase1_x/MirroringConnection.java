@@ -161,21 +161,18 @@ public class MirroringConnection implements Connection {
               },
               HBaseOperation.GET_TABLE);
       Table secondaryTable = this.secondaryConnection.getTable(tableName);
-      MirroringTable table =
-          new MirroringTable(
-              primaryTable,
-              secondaryTable,
-              executorService,
-              this.mismatchDetector,
-              this.flowController,
-              this.secondaryWriteErrorConsumer,
-              this.readSampler,
-              this.performWritesConcurrently,
-              this.waitForSecondaryWrites,
-              this.referenceCounter,
-              this.mirroringTracer);
-      this.referenceCounter.holdReferenceUntilClosing(table);
-      return table;
+      return new MirroringTable(
+          primaryTable,
+          secondaryTable,
+          executorService,
+          this.mismatchDetector,
+          this.flowController,
+          this.secondaryWriteErrorConsumer,
+          this.readSampler,
+          this.performWritesConcurrently,
+          this.waitForSecondaryWrites,
+          this.referenceCounter,
+          this.mirroringTracer);
     }
   }
 

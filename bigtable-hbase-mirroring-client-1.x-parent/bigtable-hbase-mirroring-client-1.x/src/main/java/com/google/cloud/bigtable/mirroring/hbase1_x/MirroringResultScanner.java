@@ -93,7 +93,6 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     this.flowController = flowController;
     this.readEntries = 0;
 
-    this.listenableReferenceCounter.holdReferenceUntilClosing(this.secondaryResultScannerWrapper);
     this.mirroringTracer = mirroringTracer;
     this.isVerificationEnabled = isVerificationEnabled;
   }
@@ -101,7 +100,6 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
   @Override
   public Result next() throws IOException {
     try (Scope scope = this.mirroringTracer.spanFactory.operationScope(HBaseOperation.NEXT)) {
-
       Result result =
           this.mirroringTracer.spanFactory.wrapPrimaryOperation(
               new CallableThrowingIOException<Result>() {

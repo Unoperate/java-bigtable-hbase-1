@@ -17,6 +17,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting;
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import java.util.concurrent.Executor;
@@ -56,6 +57,7 @@ public class ListenableReferenceCounter extends ReferenceCounter {
   }
 
   /** Increments the reference counter and decrements it after the provided object is closed. */
+  @VisibleForTesting
   public void holdReferenceUntilClosing(ListenableCloseable listenableCloseable) {
     this.incrementReferenceCount();
     listenableCloseable.addOnCloseListener(
