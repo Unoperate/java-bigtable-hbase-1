@@ -580,53 +580,6 @@ public class MirroringTable implements Table, ListenableCloseable {
     return Bytes.toLong(CellUtil.cloneValue(cell));
   }
 
-  @Override
-  public CoprocessorRpcChannel coprocessorService(byte[] bytes) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public <T extends Service, R> Map<byte[], R> coprocessorService(
-      Class<T> aClass, byte[] bytes, byte[] bytes1, Call<T, R> call) throws Throwable {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public <T extends Service, R> void coprocessorService(
-      Class<T> aClass, byte[] bytes, byte[] bytes1, Call<T, R> call, Callback<R> callback)
-      throws Throwable {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public long getWriteBufferSize() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void setWriteBufferSize(long l) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public <R extends Message> Map<byte[], R> batchCoprocessorService(
-      MethodDescriptor methodDescriptor, Message message, byte[] bytes, byte[] bytes1, R r)
-      throws Throwable {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public <R extends Message> void batchCoprocessorService(
-      MethodDescriptor methodDescriptor,
-      Message message,
-      byte[] bytes,
-      byte[] bytes1,
-      R r,
-      Callback<R> callback)
-      throws Throwable {
-    throw new UnsupportedOperationException();
-  }
-
   private boolean checkAndMutateWithSpan(
       final byte[] row,
       final byte[] family,
@@ -670,46 +623,6 @@ public class MirroringTable implements Table, ListenableCloseable {
 
       return checkAndMutateWithSpan(row, family, qualifier, compareOp, value, rowMutations);
     }
-  }
-
-  @Override
-  public void setOperationTimeout(int i) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int getOperationTimeout() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int getRpcTimeout() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void setRpcTimeout(int i) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int getReadRpcTimeout() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void setReadRpcTimeout(int i) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int getWriteRpcTimeout() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void setWriteRpcTimeout(int i) {
-    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -1077,5 +990,92 @@ public class MirroringTable implements Table, ListenableCloseable {
       this.operations = Collections.singletonList(operation);
       this.hBaseOperation = hBaseOperation;
     }
+  }
+
+  @Override
+  public CoprocessorRpcChannel coprocessorService(byte[] bytes) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <T extends Service, R> Map<byte[], R> coprocessorService(
+      Class<T> aClass, byte[] bytes, byte[] bytes1, Call<T, R> call) throws Throwable {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <T extends Service, R> void coprocessorService(
+      Class<T> aClass, byte[] bytes, byte[] bytes1, Call<T, R> call, Callback<R> callback)
+      throws Throwable {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long getWriteBufferSize() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void setWriteBufferSize(long l) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <R extends Message> Map<byte[], R> batchCoprocessorService(
+      MethodDescriptor methodDescriptor, Message message, byte[] bytes, byte[] bytes1, R r)
+      throws Throwable {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <R extends Message> void batchCoprocessorService(
+      MethodDescriptor methodDescriptor,
+      Message message,
+      byte[] bytes,
+      byte[] bytes1,
+      R r,
+      Callback<R> callback)
+      throws Throwable {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void setOperationTimeout(int i) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int getOperationTimeout() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int getRpcTimeout() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void setRpcTimeout(int i) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int getReadRpcTimeout() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void setReadRpcTimeout(int i) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int getWriteRpcTimeout() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public void setWriteRpcTimeout(int i) {
+    throw new UnsupportedOperationException();
   }
 }
