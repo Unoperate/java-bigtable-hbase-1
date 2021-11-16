@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
+package com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting;
 
 import com.google.api.core.InternalApi;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * closing these resources while they have some scheduled or ongoing asynchronous operations.
  */
 @InternalApi
-public class ListenableReferenceCounter {
+public class ListenableReferenceCounter extends ReferenceCounter {
   private AtomicInteger referenceCount;
   private SettableFuture<Void> onLastReferenceClosed;
 
@@ -53,19 +53,6 @@ public class ListenableReferenceCounter {
 
   public ListenableFuture<Void> getOnLastReferenceClosed() {
     return this.onLastReferenceClosed;
-  }
-
-  /** Increments the reference counter and decrements it after the future is resolved. */
-  public void holdReferenceUntilCompletion(ListenableFuture<?> future) {
-    this.incrementReferenceCount();
-    future.addListener(
-        new Runnable() {
-          @Override
-          public void run() {
-            ListenableReferenceCounter.this.decrementReferenceCount();
-          }
-        },
-        MoreExecutors.directExecutor());
   }
 
   /** Increments the reference counter and decrements it after the provided object is closed. */

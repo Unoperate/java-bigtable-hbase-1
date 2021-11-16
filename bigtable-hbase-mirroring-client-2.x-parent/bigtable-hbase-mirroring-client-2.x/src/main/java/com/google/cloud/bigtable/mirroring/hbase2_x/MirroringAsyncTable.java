@@ -25,7 +25,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultSca
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;

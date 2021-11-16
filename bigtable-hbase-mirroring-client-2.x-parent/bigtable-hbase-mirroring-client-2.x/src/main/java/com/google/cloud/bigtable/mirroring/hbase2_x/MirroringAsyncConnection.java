@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;

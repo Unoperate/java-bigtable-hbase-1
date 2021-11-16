@@ -18,7 +18,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutator;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
@@ -172,6 +172,7 @@ public class MirroringConnection implements Connection {
               this.readSampler,
               this.performWritesConcurrently,
               this.waitForSecondaryWrites,
+              this.referenceCounter,
               this.mirroringTracer);
       this.referenceCounter.holdReferenceUntilClosing(table);
       return table;

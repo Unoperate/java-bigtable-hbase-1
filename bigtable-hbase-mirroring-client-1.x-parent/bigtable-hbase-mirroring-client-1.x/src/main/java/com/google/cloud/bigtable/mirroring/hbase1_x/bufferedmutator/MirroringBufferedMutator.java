@@ -18,7 +18,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator;
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConfiguration;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;

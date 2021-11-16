@@ -21,7 +21,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultSca
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;

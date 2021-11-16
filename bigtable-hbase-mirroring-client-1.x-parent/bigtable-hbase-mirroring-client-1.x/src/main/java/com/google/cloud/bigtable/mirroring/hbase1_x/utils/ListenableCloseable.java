@@ -15,6 +15,8 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+
 /**
  * Objects that can run registered listeners after they are closed. Facilitates reference counting
  * using {@link ListenableReferenceCounter}, objects of classes implementing this interface can be

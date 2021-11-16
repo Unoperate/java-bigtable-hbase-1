@@ -19,7 +19,7 @@ import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.common.base.Supplier;

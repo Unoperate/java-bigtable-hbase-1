@@ -29,7 +29,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWrite
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOAndInterruptedException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;

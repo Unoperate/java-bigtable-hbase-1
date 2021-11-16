@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
