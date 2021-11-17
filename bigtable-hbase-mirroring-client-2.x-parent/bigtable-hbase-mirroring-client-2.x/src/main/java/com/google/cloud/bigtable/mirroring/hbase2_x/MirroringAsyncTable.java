@@ -19,6 +19,7 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.
 import static com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.reserveFlowControlResourcesThenScheduleSecondary;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable.RequestScheduler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.WriteOperationFutureCallback;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
@@ -27,9 +28,9 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWrite
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -84,6 +85,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private final ListenableReferenceCounter referenceCounter;
   private final ReadSampler readSampler;
   private final ExecutorService executorService;
+  private final RequestScheduler requestScheduler;
 
   public MirroringAsyncTable(
       AsyncTable<C> primaryTable,
@@ -104,6 +106,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.referenceCounter = referenceCounter;
     this.readSampler = readSampler;
     this.executorService = executorService;
+    this.requestScheduler = new RequestScheduler(this.flowController, this.mirroringTracer);
   }
 
   @Override
@@ -470,9 +473,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
             MoreExecutors.listeningDecorator(this.executorService),
             mirroringTracer),
         this.verificationContinuationFactory,
-        this.flowController,
         this.mirroringTracer,
-        this.readSampler.shouldNextReadOperationBeSampled());
+        this.readSampler.shouldNextReadOperationBeSampled(),
+        this.requestScheduler);
   }
 
   @Override

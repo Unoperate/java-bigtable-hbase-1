@@ -122,6 +122,9 @@ public class MirroringTable implements Table, ListenableCloseable {
   private final ReadSampler readSampler;
   private final boolean performWritesConcurrently;
   private final boolean waitForSecondaryWrites;
+
+  private final RequestScheduler requestScheduler;
+
   /**
    * @param executorService ExecutorService is used to perform operations on secondaryTable and
    *     verification tasks.
@@ -159,6 +162,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         !(this.performWritesConcurrently && !this.waitForSecondaryWrites),
         "If concurrent writes are enabled, then waiting for secondary writes should also be enabled.");
     this.mirroringTracer = mirroringTracer;
+    this.requestScheduler = new RequestScheduler(this.flowController, this.mirroringTracer);
   }
 
   // -------- READ OPS
@@ -276,9 +280,9 @@ public class MirroringTable implements Table, ListenableCloseable {
               this.primaryTable.getScanner(scan),
               this.secondaryAsyncWrapper.getScanner(scan),
               this.verificationContinuationFactory,
-              this.flowController,
               this.mirroringTracer,
-              this.readSampler.shouldNextReadOperationBeSampled());
+              this.readSampler.shouldNextReadOperationBeSampled(),
+              this.requestScheduler);
       this.referenceCounter.holdReferenceUntilClosing(scanner);
       return scanner;
     }
@@ -532,12 +536,10 @@ public class MirroringTable implements Table, ListenableCloseable {
       final Supplier<ListenableFuture<T>> secondaryGetFutureSupplier,
       final FutureCallback<T> verificationCallback) {
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleRequestWithCallback(
+        this.requestScheduler.scheduleRequestWithCallback(
             resultInfo,
             secondaryGetFutureSupplier,
-            this.mirroringTracer.spanFactory.wrapReadVerificationCallback(verificationCallback),
-            this.flowController,
-            this.mirroringTracer));
+            this.mirroringTracer.spanFactory.wrapReadVerificationCallback(verificationCallback)));
   }
 
   private <T> void scheduleSequentialWriteOperation(
@@ -566,12 +568,10 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleRequestWithCallback(
+        this.requestScheduler.scheduleRequestWithCallback(
             writeOperationInfo.requestResourcesDescription,
             secondaryResultFutureSupplier,
             this.mirroringTracer.spanFactory.wrapWriteOperationCallback(writeErrorCallback),
-            flowController,
-            this.mirroringTracer,
             flowControlReservationErrorConsumer));
   }
 
@@ -803,12 +803,10 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     ListenableFuture<Void> verificationCompleted =
-        RequestScheduling.scheduleRequestWithCallback(
+        this.requestScheduler.scheduleRequestWithCallback(
             requestResourcesDescription,
             this.secondaryAsyncWrapper.batch(operationsToScheduleOnSecondary, resultsSecondary),
             verificationCallback,
-            this.flowController,
-            this.mirroringTracer,
             flowControlReservationErrorConsumer);
 
     this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
@@ -840,7 +838,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     final BatchData primaryBatchData = new BatchData(operations, primaryResults);
     final BatchData secondaryBatchData = new BatchData(operations, secondaryResults);
     // This is a operation that will be run by
-    // `RequestScheduling.scheduleRequestWithCallback` after it acquires flow controller resources.
+    // `RequestScheduler#scheduleRequestWithCallback` after it acquires flow controller resources.
     // It will schedule asynchronous secondary operation and run primary operation in the main
     // thread, to make them run concurrently. We will wait for the secondary to finish later in this
     // method.
@@ -891,12 +889,10 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     ListenableFuture<Void> verificationCompleted =
-        RequestScheduling.scheduleRequestWithCallback(
+        this.requestScheduler.scheduleRequestWithCallback(
             requestResourcesDescription,
             invokeBothOperations,
             verification,
-            this.flowController,
-            this.mirroringTracer,
             flowControlReservationErrorConsumer);
 
     this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
@@ -1084,5 +1080,52 @@ public class MirroringTable implements Table, ListenableCloseable {
   @Override
   public void setWriteRpcTimeout(int i) {
     throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Helper class that holds common parameters to {@link
+   * RequestScheduling#scheduleRequestWithCallback(RequestResourcesDescription, Supplier,
+   * FutureCallback, FlowController, MirroringTracer, Function)} for single instance of {@link
+   * com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable}.
+   */
+  public static class RequestScheduler {
+    final FlowController flowController;
+    final MirroringTracer mirroringTracer;
+
+    public RequestScheduler(FlowController flowController, MirroringTracer mirroringTracer) {
+      this.flowController = flowController;
+      this.mirroringTracer = mirroringTracer;
+    }
+
+    public <T> ListenableFuture<Void> scheduleRequestWithCallback(
+        final RequestResourcesDescription requestResourcesDescription,
+        final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
+        final FutureCallback<T> verificationCallback) {
+      return this.scheduleRequestWithCallback(
+          requestResourcesDescription,
+          secondaryResultFutureSupplier,
+          verificationCallback,
+          // noop flowControlReservationErrorConsumer
+          new Function<Throwable, Void>() {
+            @Override
+            public Void apply(Throwable t) {
+              return null;
+            }
+          });
+    }
+
+    public <T> ListenableFuture<Void> scheduleRequestWithCallback(
+        final RequestResourcesDescription requestResourcesDescription,
+        final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
+        final FutureCallback<T> verificationCallback,
+        final Function<Throwable, Void> flowControlReservationErrorConsumer) {
+      return RequestScheduling.scheduleRequestWithCallback(
+          requestResourcesDescription,
+          secondaryResultFutureSupplier,
+          verificationCallback,
+          this.flowController,
+          this.mirroringTracer,
+          flowControlReservationErrorConsumer);
+    }
   }
 }

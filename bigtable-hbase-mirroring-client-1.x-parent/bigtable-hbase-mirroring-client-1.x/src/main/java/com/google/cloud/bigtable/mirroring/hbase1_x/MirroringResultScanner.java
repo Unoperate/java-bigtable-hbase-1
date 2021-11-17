@@ -16,14 +16,13 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import com.google.api.core.InternalApi;
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable.RequestScheduler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
@@ -62,29 +61,28 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final ListenableReferenceCounter listenableReferenceCounter;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final boolean isVerificationEnabled;
+  private final RequestScheduler requestScheduler;
   /**
    * Keeps track of number of entries already read from this scanner to provide context for
    * MismatchDetectors.
    */
   private int readEntries;
 
-  private FlowController flowController;
-  private boolean isVerificationEnabled;
-
   public MirroringResultScanner(
       Scan originalScan,
       ResultScanner primaryResultScanner,
       AsyncResultScannerWrapper secondaryResultScannerWrapper,
       VerificationContinuationFactory verificationContinuationFactory,
-      FlowController flowController,
       MirroringTracer mirroringTracer,
-      boolean isVerificationEnabled) {
+      boolean isVerificationEnabled,
+      RequestScheduler requestScheduler) {
     this.originalScan = originalScan;
     this.primaryResultScanner = primaryResultScanner;
     this.secondaryResultScannerWrapper = secondaryResultScannerWrapper;
     this.verificationContinuationFactory = verificationContinuationFactory;
+    this.requestScheduler = requestScheduler;
     this.listenableReferenceCounter = new ListenableReferenceCounter();
-    this.flowController = flowController;
     this.readEntries = 0;
 
     this.listenableReferenceCounter.holdReferenceUntilClosing(this.secondaryResultScannerWrapper);
@@ -218,12 +216,10 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
       return;
     }
     this.listenableReferenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleRequestWithCallback(
+        this.requestScheduler.scheduleRequestWithCallback(
             requestResourcesDescription,
             nextSupplier,
-            this.mirroringTracer.spanFactory.wrapReadVerificationCallback(scannerNext),
-            this.flowController,
-            this.mirroringTracer));
+            this.mirroringTracer.spanFactory.wrapReadVerificationCallback(scannerNext)));
   }
 
   @Override
