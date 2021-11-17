@@ -291,14 +291,6 @@ public class BatchHelpers {
     }
   }
 
-  private static ExceptionDetails getExceptionDetails(Map<Row, ExceptionDetails> map, Row key) {
-    ExceptionDetails value = map.get(key);
-    if (value == null) {
-      return new ExceptionDetails(new IOException("no details"));
-    }
-    return value;
-  }
-
   public static void reconcileBatchResultsConcurrent(
       Object[] outputResults,
       BatchData primaryBatchData,
@@ -448,7 +440,15 @@ public class BatchHelpers {
     }
   }
 
-  public static Map<Row, ExceptionDetails> makeMapOfFailedRows(BatchData primaryBatchData) {
+  private static ExceptionDetails getExceptionDetails(Map<Row, ExceptionDetails> map, Row key) {
+    ExceptionDetails value = map.get(key);
+    if (value == null) {
+      return new ExceptionDetails(new IOException("no details"));
+    }
+    return value;
+  }
+
+  private static Map<Row, ExceptionDetails> makeMapOfFailedRows(BatchData primaryBatchData) {
     IdentityHashMap<Row, ExceptionDetails> result = new IdentityHashMap<>();
 
     if (primaryBatchData.exception == null) {

@@ -39,6 +39,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -161,20 +162,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     this.mirroringTracer = mirroringTracer;
   }
 
-  @Override
-  public TableName getName() {
-    return this.primaryTable.getName();
-  }
-
-  @Override
-  public Configuration getConfiguration() {
-    return this.primaryTable.getConfiguration();
-  }
-
-  @Override
-  public HTableDescriptor getTableDescriptor() throws IOException {
-    return this.primaryTable.getTableDescriptor();
-  }
+  // -------- READ OPS
 
   @Override
   public boolean exists(final Get get) throws IOException {
@@ -225,46 +213,6 @@ public class MirroringTable implements Table, ListenableCloseable {
       }
       return result;
     }
-  }
-
-  @Override
-  public void batch(List<? extends Row> operations, Object[] results)
-      throws IOException, InterruptedException {
-    try (Scope scope = this.mirroringTracer.spanFactory.operationScope(HBaseOperation.BATCH)) {
-      batchWithSpan(operations, results);
-    }
-  }
-
-  @Override
-  public Object[] batch(List<? extends Row> operations) throws IOException, InterruptedException {
-    Log.trace("[%s] batch(operations=%s)", this.getName(), operations);
-    Object[] results = new Object[operations.size()];
-    this.batch(operations, results);
-    return results;
-  }
-
-  @Override
-  public <R> void batchCallback(
-      List<? extends Row> inputOperations, Object[] results, final Callback<R> callback)
-      throws IOException, InterruptedException {
-    try (Scope scope =
-        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.BATCH_CALLBACK)) {
-      Log.trace(
-          "[%s] batchCallback(operations=%s, results, callback=%s)",
-          this.getName(), inputOperations, callback);
-
-      batchWithSpan(inputOperations, results, callback);
-    }
-  }
-
-  @Override
-  public <R> Object[] batchCallback(List<? extends Row> operations, Callback<R> callback)
-      throws IOException, InterruptedException {
-    Log.trace(
-        "[%s] batchCallback(operations=%s, callback=%s)", this.getName(), operations, callback);
-    Object[] results = new Object[operations.size()];
-    this.batchCallback(operations, results, callback);
-    return results;
   }
 
   @Override
@@ -347,53 +295,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     return getScanner(new Scan().addColumn(family, qualifier));
   }
 
-  /**
-   * `close()` won't perform the actual close if there are any in-flight requests, in such a case
-   * the `close` operation is scheduled and will be performed after all requests have finished.
-   */
-  @Override
-  public void close() throws IOException {
-    this.asyncClose();
-  }
-
-  @VisibleForTesting
-  ListenableFuture<Void> asyncClose() throws IOException {
-    try (Scope scope =
-        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.TABLE_CLOSE)) {
-      if (this.closed.getAndSet(true)) {
-        return this.referenceCounter.getOnLastReferenceClosed();
-      }
-
-      this.referenceCounter.decrementReferenceCount();
-
-      AccumulatedExceptions exceptionsList = new AccumulatedExceptions();
-      try {
-        this.mirroringTracer.spanFactory.wrapPrimaryOperation(
-            new CallableThrowingIOException<Void>() {
-              @Override
-              public Void call() throws IOException {
-                primaryTable.close();
-                return null;
-              }
-            },
-            HBaseOperation.TABLE_CLOSE);
-      } catch (IOException e) {
-        exceptionsList.add(e);
-      }
-
-      try {
-        this.secondaryAsyncWrapper.asyncClose();
-      } catch (RuntimeException e) {
-        exceptionsList.add(e);
-      }
-
-      exceptionsList.rethrowIfCaptured();
-      return this.referenceCounter.getOnLastReferenceClosed();
-    } finally {
-      this.mirroringTracer.spanFactory.asyncCloseSpanWhenCompleted(
-          this.referenceCounter.getOnLastReferenceClosed());
-    }
-  }
+  // WRITE OPS
 
   @Override
   public void put(final Put put) throws IOException {
@@ -419,30 +321,6 @@ public class MirroringTable implements Table, ListenableCloseable {
   }
 
   @Override
-  public boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier, byte[] value, Put put)
-      throws IOException {
-    Log.trace(
-        "[%s] checkAndPut(row=%s, family=%s, qualifier=%s, value=%s, put=%s)",
-        this.getName(), row, family, qualifier, value, put);
-    return this.checkAndPut(row, family, qualifier, CompareOp.EQUAL, value, put);
-  }
-
-  @Override
-  public boolean checkAndPut(
-      byte[] row, byte[] family, byte[] qualifier, CompareOp compareOp, byte[] value, Put put)
-      throws IOException {
-    try (Scope scope =
-        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.CHECK_AND_PUT)) {
-      Log.trace(
-          "[%s] checkAndPut(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, put=%s)",
-          this.getName(), row, family, qualifier, compareOp, value, put);
-      RowMutations mutations = new RowMutations(row);
-      mutations.add(put);
-      return this.checkAndMutateWithSpan(row, family, qualifier, compareOp, value, mutations);
-    }
-  }
-
-  @Override
   public void delete(final Delete delete) throws IOException {
     try (Scope scope = this.mirroringTracer.spanFactory.operationScope(HBaseOperation.DELETE)) {
       Log.trace("[%s] delete(delete=%s)", this.getName(), delete);
@@ -455,7 +333,6 @@ public class MirroringTable implements Table, ListenableCloseable {
     try (Scope scope =
         this.mirroringTracer.spanFactory.operationScope(HBaseOperation.DELETE_LIST)) {
       Log.trace("[%s] delete(deletes=%s)", this.getName(), deletes);
-      // Delete should remove successfully deleted rows from input list.
       Object[] results = new Object[deletes.size()];
       try {
         this.batchWithSpan(deletes, results);
@@ -472,30 +349,6 @@ public class MirroringTable implements Table, ListenableCloseable {
         deletes.clear();
         deletes.addAll(failedSuccessfulSplit.failedOperations);
       }
-    }
-  }
-
-  @Override
-  public boolean checkAndDelete(
-      byte[] row, byte[] family, byte[] qualifier, byte[] value, Delete delete) throws IOException {
-    Log.trace(
-        "[%s] checkAndDelete(row=%s, family=%s, qualifier=%s, value=%s, delete=%s)",
-        this.getName(), row, family, qualifier, value, delete);
-    return this.checkAndDelete(row, family, qualifier, CompareOp.EQUAL, value, delete);
-  }
-
-  @Override
-  public boolean checkAndDelete(
-      byte[] row, byte[] family, byte[] qualifier, CompareOp compareOp, byte[] value, Delete delete)
-      throws IOException {
-    try (Scope scope =
-        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.CHECK_AND_DELETE)) {
-      Log.trace(
-          "[%s] checkAndDelete(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, delete=%s)",
-          this.getName(), row, family, qualifier, compareOp, value, delete);
-      RowMutations mutations = new RowMutations(row);
-      mutations.add(delete);
-      return this.checkAndMutateWithSpan(row, family, qualifier, compareOp, value, mutations);
     }
   }
 
@@ -586,6 +439,73 @@ public class MirroringTable implements Table, ListenableCloseable {
     return Bytes.toLong(CellUtil.cloneValue(cell));
   }
 
+  @Override
+  public boolean checkAndMutate(
+      byte[] row,
+      byte[] family,
+      byte[] qualifier,
+      CompareOp compareOp,
+      byte[] value,
+      RowMutations rowMutations)
+      throws IOException {
+    try (Scope scope =
+        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.CHECK_AND_MUTATE)) {
+      Log.trace(
+          "[%s] checkAndMutate(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, rowMutations=%s)",
+          this.getName(), row, family, qualifier, compareOp, value, rowMutations);
+
+      return checkAndMutateWithSpan(row, family, qualifier, compareOp, value, rowMutations);
+    }
+  }
+
+  @Override
+  public boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier, byte[] value, Put put)
+      throws IOException {
+    Log.trace(
+        "[%s] checkAndPut(row=%s, family=%s, qualifier=%s, value=%s, put=%s)",
+        this.getName(), row, family, qualifier, value, put);
+    return this.checkAndPut(row, family, qualifier, CompareOp.EQUAL, value, put);
+  }
+
+  @Override
+  public boolean checkAndPut(
+      byte[] row, byte[] family, byte[] qualifier, CompareOp compareOp, byte[] value, Put put)
+      throws IOException {
+    try (Scope scope =
+        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.CHECK_AND_PUT)) {
+      Log.trace(
+          "[%s] checkAndPut(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, put=%s)",
+          this.getName(), row, family, qualifier, compareOp, value, put);
+      RowMutations mutations = new RowMutations(row);
+      mutations.add(put);
+      return this.checkAndMutateWithSpan(row, family, qualifier, compareOp, value, mutations);
+    }
+  }
+
+  @Override
+  public boolean checkAndDelete(
+      byte[] row, byte[] family, byte[] qualifier, byte[] value, Delete delete) throws IOException {
+    Log.trace(
+        "[%s] checkAndDelete(row=%s, family=%s, qualifier=%s, value=%s, delete=%s)",
+        this.getName(), row, family, qualifier, value, delete);
+    return this.checkAndDelete(row, family, qualifier, CompareOp.EQUAL, value, delete);
+  }
+
+  @Override
+  public boolean checkAndDelete(
+      byte[] row, byte[] family, byte[] qualifier, CompareOp compareOp, byte[] value, Delete delete)
+      throws IOException {
+    try (Scope scope =
+        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.CHECK_AND_DELETE)) {
+      Log.trace(
+          "[%s] checkAndDelete(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, delete=%s)",
+          this.getName(), row, family, qualifier, compareOp, value, delete);
+      RowMutations mutations = new RowMutations(row);
+      mutations.add(delete);
+      return this.checkAndMutateWithSpan(row, family, qualifier, compareOp, value, mutations);
+    }
+  }
+
   private boolean checkAndMutateWithSpan(
       final byte[] row,
       final byte[] family,
@@ -612,31 +532,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     return wereMutationsApplied;
   }
 
-  @Override
-  public boolean checkAndMutate(
-      byte[] row,
-      byte[] family,
-      byte[] qualifier,
-      CompareOp compareOp,
-      byte[] value,
-      RowMutations rowMutations)
-      throws IOException {
-    try (Scope scope =
-        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.CHECK_AND_MUTATE)) {
-      Log.trace(
-          "[%s] checkAndMutate(row=%s, family=%s, qualifier=%s, compareOp=%s, value=%s, rowMutations=%s)",
-          this.getName(), row, family, qualifier, compareOp, value, rowMutations);
-
-      return checkAndMutateWithSpan(row, family, qualifier, compareOp, value, rowMutations);
-    }
-  }
-
-  @Override
-  public void addOnCloseListener(Runnable listener) {
-    this.referenceCounter
-        .getOnLastReferenceClosed()
-        .addListener(listener, MoreExecutors.directExecutor());
-  }
+  // ------------- SCHEDULING SINGLE OPS
 
   private <T> void scheduleSequentialReadOperationWithVerification(
       final RequestResourcesDescription resultInfo,
@@ -685,6 +581,50 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.mirroringTracer,
             flowControlReservationErrorConsumer));
   }
+
+  // ------------- BATCH
+  @Override
+  public void batch(List<? extends Row> operations, Object[] results)
+      throws IOException, InterruptedException {
+    try (Scope scope = this.mirroringTracer.spanFactory.operationScope(HBaseOperation.BATCH)) {
+      batchWithSpan(operations, results);
+    }
+  }
+
+  @Override
+  public Object[] batch(List<? extends Row> operations) throws IOException, InterruptedException {
+    Log.trace("[%s] batch(operations=%s)", this.getName(), operations);
+    Object[] results = new Object[operations.size()];
+    this.batch(operations, results);
+    return results;
+  }
+
+  @Override
+  public <R> void batchCallback(
+      List<? extends Row> inputOperations, Object[] results, final Callback<R> callback)
+      throws IOException, InterruptedException {
+    final List<? extends Row> operations = new ArrayList<>(inputOperations);
+    try (Scope scope =
+        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.BATCH_CALLBACK)) {
+      Log.trace(
+          "[%s] batchCallback(operations=%s, results, callback=%s)",
+          this.getName(), operations, callback);
+
+      batchWithSpan(operations, results, callback);
+    }
+  }
+
+  @Override
+  public <R> Object[] batchCallback(List<? extends Row> operations, Callback<R> callback)
+      throws IOException, InterruptedException {
+    Log.trace(
+        "[%s] batchCallback(operations=%s, callback=%s)", this.getName(), operations, callback);
+    Object[] results = new Object[operations.size()];
+    this.batchCallback(operations, results, callback);
+    return results;
+  }
+
+  // BATCH HELPERS v2
 
   private void batchSingleWriteOperation(Row operation) throws IOException {
     Object[] results = new Object[1];
@@ -787,104 +727,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     }
   }
 
-  private void concurrentBatch(
-      final Object[] primaryResults,
-      final List<? extends Row> operations,
-      final CallableThrowingIOAndInterruptedException<Void> primaryOperation)
-      throws IOException, InterruptedException {
-    Preconditions.checkArgument(this.waitForSecondaryWrites && this.performWritesConcurrently);
-
-    RequestResourcesDescription requestResourcesDescription =
-        new RequestResourcesDescription(operations, new Result[0]);
-    final Object[] secondaryResults = new Object[operations.size()];
-    final Throwable[] flowControllerException = new Throwable[1];
-
-    final BatchData primaryBatchData = new BatchData(operations, primaryResults);
-    final BatchData secondaryBatchData = new BatchData(operations, secondaryResults);
-    // This is a operation that will be run by
-    // `RequestScheduling.scheduleRequestWithCallback` after it acquires flow controller resources.
-    // It will schedule asynchronous secondary operation and run primary operation in the main
-    // thread, to make them run concurrently. We will wait for the secondary to finish later in this
-    // method.
-    final Supplier<ListenableFuture<Void>> invokeBothOperations =
-        new Supplier<ListenableFuture<Void>>() {
-          @Override
-          public ListenableFuture<Void> get() {
-            // We are scheduling secondary batch to run concurrently.
-            // Call to `.get()` starts the asynchronous operation, it doesn't wait for it to finish.
-            ListenableFuture<Void> secondaryOperationEnded =
-                secondaryAsyncWrapper.batch(operations, secondaryResults).get();
-            // Primary operation is then performed synchronously.
-            try {
-              primaryOperation.call();
-            } catch (IOException | InterruptedException e) {
-              primaryBatchData.setException(e);
-            }
-            // Primary operation has ended and its results are available to the user.
-
-            // We want the schedule verification to after the secondary operation.
-            return secondaryOperationEnded;
-          }
-        };
-
-    // Concurrent writes are also synchronous, errors will be thrown to the user after both ops
-    // finish.
-    FutureCallback<Void> verification =
-        new FutureCallback<Void>() {
-          @Override
-          public void onSuccess(@NullableDecl Void result) {}
-
-          @Override
-          public void onFailure(Throwable throwable) {
-            secondaryBatchData.setException(throwable);
-          }
-        };
-
-    // If flow controller errs and won't allow the request we will handle the error using this
-    // handler.
-    Function<Throwable, Void> flowControlReservationErrorConsumer =
-        new Function<Throwable, Void>() {
-          @NullableDecl
-          @Override
-          public Void apply(@NullableDecl Throwable throwable) {
-            flowControllerException[0] = throwable;
-            return null;
-          }
-        };
-
-    ListenableFuture<Void> verificationCompleted =
-        RequestScheduling.scheduleRequestWithCallback(
-            requestResourcesDescription,
-            invokeBothOperations,
-            verification,
-            this.flowController,
-            this.mirroringTracer,
-            flowControlReservationErrorConsumer);
-
-    this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
-
-    try {
-      // Wait until all asynchronous operations are completed.
-      verificationCompleted.get();
-    } catch (ExecutionException e) {
-      throw new IllegalStateException("secondaryResult thrown unexpected exception.");
-    }
-
-    // Checks results of primary and secondary operations, we consider a operation failed if at
-    // least one of the operations have failed. This method will fill `primaryResults` with errors
-    // from both operations and will throw appropriate RetriesExhaustedWithDetailsException.
-    reconcileBatchResultsConcurrent(
-        primaryResults, primaryBatchData, secondaryBatchData, resultIsFaultyPredicate);
-
-    if (flowControllerException[0] != null) {
-      throw MirroringOperationException.markedAsBothException(
-          new IOException("FlowController rejected the request", flowControllerException[0]),
-          null,
-          null);
-    }
-  }
-
-  private void throwBatchDataExceptionIfPresent(BatchData primaryBatchData)
+  private static void throwBatchDataExceptionIfPresent(BatchData primaryBatchData)
       throws InterruptedException, IOException {
     Throwable exception = primaryBatchData.getException();
     if (exception != null) {
@@ -991,40 +834,179 @@ public class MirroringTable implements Table, ListenableCloseable {
     return result;
   }
 
-  public static class WriteOperationInfo {
-    public final RequestResourcesDescription requestResourcesDescription;
-    public final List<? extends Row> operations;
-    public final HBaseOperation hBaseOperation;
+  private void concurrentBatch(
+      final Object[] primaryResults,
+      final List<? extends Row> operations,
+      final CallableThrowingIOAndInterruptedException<Void> primaryOperation)
+      throws IOException, InterruptedException {
+    Preconditions.checkArgument(this.waitForSecondaryWrites && this.performWritesConcurrently);
 
-    public WriteOperationInfo(Put operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.PUT);
+    RequestResourcesDescription requestResourcesDescription =
+        new RequestResourcesDescription(operations, new Result[0]);
+    final Object[] secondaryResults = new Object[operations.size()];
+    final Throwable[] flowControllerException = new Throwable[1];
+
+    final BatchData primaryBatchData = new BatchData(operations, primaryResults);
+    final BatchData secondaryBatchData = new BatchData(operations, secondaryResults);
+    // This is a operation that will be run by
+    // `RequestScheduling.scheduleRequestWithCallback` after it acquires flow controller resources.
+    // It will schedule asynchronous secondary operation and run primary operation in the main
+    // thread, to make them run concurrently. We will wait for the secondary to finish later in this
+    // method.
+    final Supplier<ListenableFuture<Void>> invokeBothOperations =
+        new Supplier<ListenableFuture<Void>>() {
+          @Override
+          public ListenableFuture<Void> get() {
+            // We are scheduling secondary batch to run concurrently.
+            // Call to `.get()` starts the asynchronous operation, it doesn't wait for it to finish.
+            ListenableFuture<Void> secondaryOperationEnded =
+                secondaryAsyncWrapper.batch(operations, secondaryResults).get();
+            // Primary operation is then performed synchronously.
+            try {
+              primaryOperation.call();
+            } catch (IOException | InterruptedException e) {
+              primaryBatchData.setException(e);
+            }
+            // Primary operation has ended and its results are available to the user.
+
+            // We want the schedule verification to after the secondary operation.
+            return secondaryOperationEnded;
+          }
+        };
+
+    // Concurrent writes are also synchronous, errors will be thrown to the user after both ops
+    // finish.
+    FutureCallback<Void> verification =
+        new FutureCallback<Void>() {
+          @Override
+          public void onSuccess(@NullableDecl Void result) {}
+
+          @Override
+          public void onFailure(Throwable throwable) {
+            secondaryBatchData.setException(throwable);
+          }
+        };
+
+    // If flow controller errs and won't allow the request we will handle the error using this
+    // handler.
+    Function<Throwable, Void> flowControlReservationErrorConsumer =
+        new Function<Throwable, Void>() {
+          @NullableDecl
+          @Override
+          public Void apply(@NullableDecl Throwable throwable) {
+            flowControllerException[0] = throwable;
+            return null;
+          }
+        };
+
+    ListenableFuture<Void> verificationCompleted =
+        RequestScheduling.scheduleRequestWithCallback(
+            requestResourcesDescription,
+            invokeBothOperations,
+            verification,
+            this.flowController,
+            this.mirroringTracer,
+            flowControlReservationErrorConsumer);
+
+    this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
+
+    try {
+      // Wait until all asynchronous operations are completed.
+      verificationCompleted.get();
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("secondaryResult thrown unexpected exception.");
     }
 
-    public WriteOperationInfo(Delete operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.DELETE);
-    }
+    // Checks results of primary and secondary operations, we consider a operation failed if at
+    // least one of the operations have failed. This method will fill `primaryResults` with errors
+    // from both operations and will throw appropriate RetriesExhaustedWithDetailsException.
+    reconcileBatchResultsConcurrent(
+        primaryResults, primaryBatchData, secondaryBatchData, resultIsFaultyPredicate);
 
-    public WriteOperationInfo(Append operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.APPEND);
-    }
-
-    public WriteOperationInfo(Increment operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.INCREMENT);
-    }
-
-    public WriteOperationInfo(RowMutations operation) {
-      this(new RequestResourcesDescription(operation), operation, HBaseOperation.MUTATE_ROW);
-    }
-
-    private WriteOperationInfo(
-        RequestResourcesDescription requestResourcesDescription,
-        Row operation,
-        HBaseOperation hBaseOperation) {
-      this.requestResourcesDescription = requestResourcesDescription;
-      this.operations = Collections.singletonList(operation);
-      this.hBaseOperation = hBaseOperation;
+    if (flowControllerException[0] != null) {
+      throw MirroringOperationException.markedAsBothException(
+          new IOException("FlowController rejected the request", flowControllerException[0]),
+          null,
+          null);
     }
   }
+
+  // ---------------- CLOSE
+
+  /**
+   * Synchronously {@link Table#close()}s primary table and schedules closing of the secondary table
+   * after finishing all secondary requests that are yet in-flight ({@link
+   * AsyncTableWrapper#asyncClose()}).
+   */
+  @Override
+  public void close() throws IOException {
+    this.asyncClose();
+  }
+
+  @VisibleForTesting
+  ListenableFuture<Void> asyncClose() throws IOException {
+    try (Scope scope =
+        this.mirroringTracer.spanFactory.operationScope(HBaseOperation.TABLE_CLOSE)) {
+      if (this.closed.getAndSet(true)) {
+        return this.referenceCounter.getOnLastReferenceClosed();
+      }
+
+      this.referenceCounter.decrementReferenceCount();
+
+      AccumulatedExceptions exceptionsList = new AccumulatedExceptions();
+      try {
+        this.mirroringTracer.spanFactory.wrapPrimaryOperation(
+            new CallableThrowingIOException<Void>() {
+              @Override
+              public Void call() throws IOException {
+                primaryTable.close();
+                return null;
+              }
+            },
+            HBaseOperation.TABLE_CLOSE);
+      } catch (IOException e) {
+        exceptionsList.add(e);
+      }
+
+      try {
+        this.secondaryAsyncWrapper.asyncClose();
+      } catch (RuntimeException e) {
+        exceptionsList.add(e);
+      }
+
+      exceptionsList.rethrowIfCaptured();
+      return this.referenceCounter.getOnLastReferenceClosed();
+    } finally {
+      this.mirroringTracer.spanFactory.asyncCloseSpanWhenCompleted(
+          this.referenceCounter.getOnLastReferenceClosed());
+    }
+  }
+
+  @Override
+  public void addOnCloseListener(Runnable listener) {
+    this.referenceCounter
+        .getOnLastReferenceClosed()
+        .addListener(listener, MoreExecutors.directExecutor());
+  }
+
+  // ---------- GETTERS
+
+  @Override
+  public TableName getName() {
+    return this.primaryTable.getName();
+  }
+
+  @Override
+  public Configuration getConfiguration() {
+    return this.primaryTable.getConfiguration();
+  }
+
+  @Override
+  public HTableDescriptor getTableDescriptor() throws IOException {
+    return this.primaryTable.getTableDescriptor();
+  }
+
+  // ------------- UNSUPPORTED
 
   @Override
   public CoprocessorRpcChannel coprocessorService(byte[] bytes) {
