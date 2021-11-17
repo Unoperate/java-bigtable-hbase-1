@@ -152,25 +152,4 @@ public class RequestScheduling {
       return null;
     }
   }
-
-  public static <T> ListenableFuture<Void> scheduleRequestWithCallback(
-      final RequestResourcesDescription requestResourcesDescription,
-      final Supplier<ListenableFuture<T>> secondaryResultFutureSupplier,
-      final FutureCallback<T> verificationCallback,
-      final FlowController flowController,
-      final MirroringTracer mirroringTracer) {
-    return scheduleRequestWithCallback(
-        requestResourcesDescription,
-        secondaryResultFutureSupplier,
-        verificationCallback,
-        flowController,
-        mirroringTracer,
-        // noop flowControlReservationErrorConsumer
-        new Function<Throwable, Void>() {
-          @Override
-          public Void apply(Throwable t) {
-            return null;
-          }
-        });
-  }
 }

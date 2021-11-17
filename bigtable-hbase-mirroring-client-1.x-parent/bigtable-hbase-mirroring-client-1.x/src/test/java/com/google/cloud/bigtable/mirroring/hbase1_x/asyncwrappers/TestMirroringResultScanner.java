@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable.RequestScheduler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.AsyncScannerVerificationPayload;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -76,9 +77,9 @@ public class TestMirroringResultScanner {
             primaryScannerMock,
             secondaryScannerWrapperMock,
             continuationFactoryMock,
-            flowController,
             new MirroringTracer(),
-            true);
+            true,
+            new RequestScheduler(flowController, new MirroringTracer()));
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
 
@@ -112,9 +113,9 @@ public class TestMirroringResultScanner {
             primaryScannerMock,
             secondaryScannerWrapperMock,
             continuationFactoryMock,
-            flowController,
             new MirroringTracer(),
-            true);
+            true,
+            new RequestScheduler(flowController, new MirroringTracer()));
 
     doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
 
@@ -148,9 +149,9 @@ public class TestMirroringResultScanner {
             primaryScannerMock,
             secondaryScannerWrapperMock,
             continuationFactoryMock,
-            flowController,
             new MirroringTracer(),
-            true);
+            true,
+            new RequestScheduler(flowController, new MirroringTracer()));
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
     doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
@@ -189,9 +190,9 @@ public class TestMirroringResultScanner {
             primaryScannerMock,
             secondaryScannerWrapperMock,
             continuationFactoryMock,
-            flowController,
             new MirroringTracer(),
-            true);
+            true,
+            new RequestScheduler(flowController, new MirroringTracer()));
 
     mirroringScanner.close();
     mirroringScanner.close();
