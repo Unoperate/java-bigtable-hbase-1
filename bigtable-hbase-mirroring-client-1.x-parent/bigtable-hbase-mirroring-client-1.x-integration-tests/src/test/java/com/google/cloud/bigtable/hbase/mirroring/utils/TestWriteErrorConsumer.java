@@ -19,6 +19,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.DefaultSecondaryWriteE
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.common.base.Preconditions;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.hadoop.hbase.client.Mutation;
@@ -43,7 +44,7 @@ public class TestWriteErrorConsumer implements SecondaryWriteErrorConsumer {
 
   @Override
   public void consume(HBaseOperation operation, Row row, Throwable cause) {
-    assert row instanceof Mutation || row instanceof RowMutations;
+    Preconditions.checkArgument(row instanceof Mutation || row instanceof RowMutations);
     errorCount.addAndGet(1);
     this.secondaryWriteErrorConsumer.consume(operation, row, cause);
   }
@@ -51,7 +52,7 @@ public class TestWriteErrorConsumer implements SecondaryWriteErrorConsumer {
   @Override
   public void consume(HBaseOperation operation, List<? extends Row> operations, Throwable cause) {
     for (Row row : operations) {
-      assert row instanceof Mutation || row instanceof RowMutations;
+      Preconditions.checkArgument(row instanceof Mutation || row instanceof RowMutations);
     }
     errorCount.addAndGet(operations.size());
     this.secondaryWriteErrorConsumer.consume(operation, operations, cause);

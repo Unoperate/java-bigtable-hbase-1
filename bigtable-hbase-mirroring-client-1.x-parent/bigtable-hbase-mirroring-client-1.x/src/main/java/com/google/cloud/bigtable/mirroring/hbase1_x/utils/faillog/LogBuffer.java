@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 
+import com.google.common.base.Preconditions;
 import java.io.Closeable;
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -151,7 +152,7 @@ public class LogBuffer implements Closeable {
         notEmpty.await();
       }
       if (buffers.isEmpty()) {
-        assert shutdown;
+        Preconditions.checkState(shutdown);
         // We've been instructed to shut down and have already been drained from any buffers.
         return null;
       }
