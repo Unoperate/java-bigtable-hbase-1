@@ -147,16 +147,16 @@ public class MirroringTable implements Table, ListenableCloseable {
     this.secondaryTable = secondaryTable;
     this.verificationContinuationFactory = new VerificationContinuationFactory(mismatchDetector);
     this.readSampler = readSampler;
-    this.secondaryAsyncWrapper =
-        new AsyncTableWrapper(
-            this.secondaryTable,
-            MoreExecutors.listeningDecorator(executorService),
-            connectionReferenceCounter,
-            mirroringTracer);
     this.flowController = flowController;
     this.referenceCounter = new ListenableReferenceCounter();
     this.allReferenceCounters =
         new MultiReferenceCounter(this.referenceCounter, connectionReferenceCounter);
+    this.secondaryAsyncWrapper =
+        new AsyncTableWrapper(
+            this.secondaryTable,
+            MoreExecutors.listeningDecorator(executorService),
+            this.allReferenceCounters,
+            mirroringTracer);
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     this.performWritesConcurrently = performWritesConcurrently;
     this.waitForSecondaryWrites = waitForSecondaryWrites;
