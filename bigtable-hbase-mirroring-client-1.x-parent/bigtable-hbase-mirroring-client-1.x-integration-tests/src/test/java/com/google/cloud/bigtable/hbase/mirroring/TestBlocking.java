@@ -69,7 +69,8 @@ public class TestBlocking {
     long afterConnectionClose;
 
     Configuration config = ConfigurationHelper.newConfiguration();
-    config.set(MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.class.getName());
+    config.set(
+        MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.Factory.class.getName());
     SlowMismatchDetector.sleepTime = 1000;
 
     TableName tableName;
@@ -99,7 +100,8 @@ public class TestBlocking {
   @Test
   public void testSlowSecondaryConnection() throws IOException {
     Configuration config = ConfigurationHelper.newConfiguration();
-    config.set(MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.class.getName());
+    config.set(
+        MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS, SlowMismatchDetector.Factory.class.getName());
     SlowMismatchDetector.sleepTime = 100;
     config.set(MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS, "10");
 
