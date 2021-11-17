@@ -643,7 +643,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       final Supplier<ListenableFuture<T>> secondaryGetFutureSupplier,
       final FutureCallback<T> verificationCallback) {
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
+        RequestScheduling.scheduleRequestWithCallback(
             resultInfo,
             secondaryGetFutureSupplier,
             this.mirroringTracer.spanFactory.wrapReadVerificationCallback(verificationCallback),
@@ -665,7 +665,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     this.referenceCounter.holdReferenceUntilCompletion(
-        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
+        RequestScheduling.scheduleRequestWithCallback(
             writeOperationInfo.requestResourcesDescription,
             secondaryResultFutureSupplier,
             this.mirroringTracer.spanFactory.wrapWriteOperationCallback(writeErrorCallback),
@@ -797,10 +797,10 @@ public class MirroringTable implements Table, ListenableCloseable {
     final BatchData primaryBatchData = new BatchData(operations, primaryResults);
     final BatchData secondaryBatchData = new BatchData(operations, secondaryResults);
     // This is a operation that will be run by
-    // `RequestScheduling.scheduleRequestAndVerificationWithFlowControl` after it acquires flow
-    // controller resources. It will schedule asynchronous secondary operation and run primary
-    // operation in the main thread, to make them run concurrently. We will wait for the secondary
-    // to finish later in this method.
+    // `RequestScheduling.scheduleRequestWithCallback` after it acquires flow controller resources.
+    // It will schedule asynchronous secondary operation and run primary operation in the main
+    // thread, to make them run concurrently. We will wait for the secondary to finish later in this
+    // method.
     final Supplier<ListenableFuture<Void>> invokeBothOperations =
         new Supplier<ListenableFuture<Void>>() {
           @Override
@@ -848,7 +848,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     ListenableFuture<Void> verificationCompleted =
-        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
+        RequestScheduling.scheduleRequestWithCallback(
             requestResourcesDescription,
             invokeBothOperations,
             verification,
@@ -962,7 +962,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         };
 
     ListenableFuture<Void> verificationCompleted =
-        RequestScheduling.scheduleRequestAndVerificationWithFlowControl(
+        RequestScheduling.scheduleRequestWithCallback(
             requestResourcesDescription,
             this.secondaryAsyncWrapper.batch(operationsToScheduleOnSecondary, resultsSecondary),
             verificationCallback,
