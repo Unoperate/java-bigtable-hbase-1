@@ -658,6 +658,18 @@ public class MirroringTable implements Table, ListenableCloseable {
           }
         };
 
+    // If flow controller errs and won't allow the request we will handle the error using this
+    // handler.
+    Function<Throwable, Void> flowControlReservationErrorConsumer =
+        new Function<Throwable, Void>() {
+          @Override
+          public Void apply(Throwable throwable) {
+            secondaryWriteErrorConsumer.consume(
+                writeOperationInfo.hBaseOperation, writeOperationInfo.operations, throwable);
+            return null;
+          }
+        };
+
     this.referenceCounter.holdReferenceUntilCompletion(
         RequestScheduling.scheduleRequestWithCallback(
             writeOperationInfo.requestResourcesDescription,
@@ -665,14 +677,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             this.mirroringTracer.spanFactory.wrapWriteOperationCallback(writeErrorCallback),
             flowController,
             this.mirroringTracer,
-            new Function<Throwable, Void>() {
-              @Override
-              public Void apply(Throwable throwable) {
-                secondaryWriteErrorConsumer.consume(
-                    writeOperationInfo.hBaseOperation, writeOperationInfo.operations, throwable);
-                return null;
-              }
-            }));
+            flowControlReservationErrorConsumer));
   }
 
   private void batchSingleWriteOperation(Row operation) throws IOException {
@@ -942,7 +947,9 @@ public class MirroringTable implements Table, ListenableCloseable {
         new RequestResourcesDescription(
             operationsToScheduleOnSecondary, successfulReadWriteSplit.readResults);
 
-    Function<Throwable, Void> resourceReservationFailureCallback =
+    // If flow controller errs and won't allow the request we will handle the error using this
+    // handler.
+    Function<Throwable, Void> flowControlReservationErrorConsumer =
         new Function<Throwable, Void>() {
           @Override
           public Void apply(Throwable throwable) {
@@ -960,7 +967,7 @@ public class MirroringTable implements Table, ListenableCloseable {
             verificationCallback,
             this.flowController,
             this.mirroringTracer,
-            resourceReservationFailureCallback);
+            flowControlReservationErrorConsumer);
 
     this.referenceCounter.holdReferenceUntilCompletion(verificationCompleted);
 
