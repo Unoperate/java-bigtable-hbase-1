@@ -19,9 +19,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 
 public abstract class ReferenceCounter {
-  abstract void incrementReferenceCount();
+  public abstract void incrementReferenceCount();
 
-  abstract void decrementReferenceCount();
+  public abstract void decrementReferenceCount();
 
   /** Increments the reference counter and decrements it after the future is resolved. */
   public void holdReferenceUntilCompletion(ListenableFuture<?> future) {
