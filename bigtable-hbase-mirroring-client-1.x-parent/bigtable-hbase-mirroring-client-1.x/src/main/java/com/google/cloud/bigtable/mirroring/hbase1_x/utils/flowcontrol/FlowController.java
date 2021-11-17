@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol;
 
 import com.google.api.core.InternalApi;
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import java.util.concurrent.ExecutionException;
@@ -102,10 +103,10 @@ public class FlowController {
     }
 
     public void notifyWaiter() {
-      assert !this.notified;
+      Preconditions.checkState(!this.notified);
       this.notified = true;
       if (!this.notification.set(this)) {
-        assert this.notification.isCancelled();
+        Preconditions.checkState(this.notification.isCancelled());
         // The notification was cancelled, we should release its resources.
         this.release();
       }

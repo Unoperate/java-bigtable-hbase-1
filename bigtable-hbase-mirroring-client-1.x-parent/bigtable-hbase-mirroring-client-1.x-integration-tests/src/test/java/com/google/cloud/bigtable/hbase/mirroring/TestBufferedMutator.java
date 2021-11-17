@@ -22,6 +22,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConfigurationHelper;
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConnectionRule;
@@ -231,7 +232,7 @@ public class TestBufferedMutator {
           if (e instanceof RetriesExhaustedWithDetailsException) {
             flushExceptions = ((RetriesExhaustedWithDetailsException) e).getCauses();
           } else {
-            assert false;
+            fail();
           }
         }
       }
@@ -251,7 +252,7 @@ public class TestBufferedMutator {
               MirroringOperationException.DatabaseIdentifier.Secondary,
               ((MirroringOperationException) cause).databaseIdentifier);
         } else {
-          assert false;
+          fail();
         }
       }
     } else {
@@ -341,7 +342,7 @@ public class TestBufferedMutator {
               MirroringOperationException.DatabaseIdentifier.Primary,
               ((MirroringOperationException) cause).databaseIdentifier);
         } else {
-          assert false;
+          fail();
         }
       }
       assertThat(secondaryRows).containsExactly(0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L);

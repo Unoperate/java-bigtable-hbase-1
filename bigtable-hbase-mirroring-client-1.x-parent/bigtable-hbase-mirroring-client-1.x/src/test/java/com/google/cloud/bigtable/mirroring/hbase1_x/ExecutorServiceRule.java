@@ -17,6 +17,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import static org.mockito.Mockito.spy;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.util.concurrent.ExecutorService;
@@ -49,7 +50,7 @@ public class ExecutorServiceRule extends ExternalResource {
   }
 
   public static ExecutorServiceRule fixedPoolExecutor(int numThreads) {
-    assert numThreads > 0;
+    Preconditions.checkArgument(numThreads > 0);
     return new ExecutorServiceRule(Type.Fixed, numThreads);
   }
 

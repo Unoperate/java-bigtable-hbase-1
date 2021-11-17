@@ -120,8 +120,8 @@ public class MirroringSpanFactory {
     try {
       return wrapPrimaryOperationAndMeasure(operations, operationName);
     } catch (InterruptedException e) {
-      assert false;
-      throw new IllegalStateException();
+      throw new IllegalStateException(
+          "CallableThrowingIOException shouldn't throw InterruptedException.");
     }
   }
 
@@ -136,8 +136,8 @@ public class MirroringSpanFactory {
     try {
       return wrapSecondaryOperationAndMeasure(operations, operationName);
     } catch (InterruptedException e) {
-      assert false;
-      throw new IllegalStateException();
+      throw new IllegalStateException(
+          "CallableThrowingIOException shouldn't throw InterruptedException.");
     }
   }
 

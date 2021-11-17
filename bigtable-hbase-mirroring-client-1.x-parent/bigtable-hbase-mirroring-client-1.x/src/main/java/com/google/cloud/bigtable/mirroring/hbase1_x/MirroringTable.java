@@ -567,7 +567,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         this.getName(), row, family, qualifier, amount);
     Result result = increment((new Increment(row)).addColumn(family, qualifier, amount));
     Cell cell = result.getColumnLatestCell(family, qualifier);
-    assert cell != null;
+    Preconditions.checkNotNull(cell);
     return Bytes.toLong(CellUtil.cloneValue(cell));
   }
 
@@ -582,7 +582,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         increment(
             (new Increment(row)).addColumn(family, qualifier, amount).setDurability(durability));
     Cell cell = result.getColumnLatestCell(family, qualifier);
-    assert cell != null;
+    Preconditions.checkNotNull(cell);
     return Bytes.toLong(CellUtil.cloneValue(cell));
   }
 
@@ -773,7 +773,6 @@ public class MirroringTable implements Table, ListenableCloseable {
       try {
         secondaryBatchData = secondaryResult.get();
       } catch (ExecutionException e) {
-        assert false;
         throw new IllegalStateException("secondaryResult thrown unexpected exception.");
       }
       reconcileBatchResultsSequential(
@@ -788,7 +787,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       final List<? extends Row> operations,
       final CallableThrowingIOAndInterruptedException<Void> primaryOperation)
       throws IOException, InterruptedException {
-    assert this.waitForSecondaryWrites && this.performWritesConcurrently;
+    Preconditions.checkArgument(this.waitForSecondaryWrites && this.performWritesConcurrently);
 
     RequestResourcesDescription requestResourcesDescription =
         new RequestResourcesDescription(operations, new Result[0]);
@@ -863,7 +862,6 @@ public class MirroringTable implements Table, ListenableCloseable {
       // Wait until all asynchronous operations are completed.
       verificationCompleted.get();
     } catch (ExecutionException e) {
-      assert false;
       throw new IllegalStateException("secondaryResult thrown unexpected exception.");
     }
 

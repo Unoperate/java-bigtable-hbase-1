@@ -40,8 +40,7 @@ public class Comparators {
         cellComparator =
             (CellComparatorCompat) Class.forName(comparatorCompat1xImplClass).newInstance();
       } catch (ClassNotFoundException | InstantiationException | IllegalAccessException ex) {
-        assert false;
-        throw new RuntimeException(ex);
+        throw new IllegalStateException(ex);
       }
     }
   }

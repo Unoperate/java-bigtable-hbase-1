@@ -22,6 +22,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOperationException.
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.FutureCallback;
 import io.opencensus.common.Scope;
@@ -187,8 +188,8 @@ public class BatchHelpers {
       Object[] primaryResults,
       Object[] secondaryResults,
       Predicate<Object> resultIsFaultyPredicate) {
-    assert operations.size() == secondaryResults.length;
-    assert primaryResults.length == secondaryResults.length;
+    Preconditions.checkArgument(operations.size() == secondaryResults.length);
+    Preconditions.checkArgument(primaryResults.length == secondaryResults.length);
 
     List<Result> primaryMatchingReads = new ArrayList<>();
     List<Result> secondaryMatchingReads = new ArrayList<>();
@@ -317,7 +318,8 @@ public class BatchHelpers {
       return;
     }
 
-    assert primaryBatchData.operations.size() == secondaryBatchData.operations.size();
+    Preconditions.checkArgument(
+        primaryBatchData.operations.size() == secondaryBatchData.operations.size());
     for (int index = 0; index < primaryBatchData.operations.size(); index++) {
       Object primaryResult = primaryBatchData.results[index];
       Object secondaryResult = secondaryBatchData.results[index];
@@ -380,7 +382,8 @@ public class BatchHelpers {
       return;
     }
 
-    assert primaryBatchData.operations.size() >= secondaryBatchData.operations.size();
+    Preconditions.checkArgument(
+        primaryBatchData.operations.size() >= secondaryBatchData.operations.size());
 
     // sizes are not equal, one or more of the following is possible
     // - primary has reads that were excluded from secondary,
@@ -420,7 +423,7 @@ public class BatchHelpers {
       }
 
       // Otherwise a successful write was excluded, which is not possible.
-      assert primaryIsRead == secondaryIsRead;
+      Preconditions.checkState(primaryIsRead == secondaryIsRead);
 
       boolean secondaryOperationFailed =
           resultIsFaultyPredicate.apply(secondaryBatchData.results[secondaryIndex]);
