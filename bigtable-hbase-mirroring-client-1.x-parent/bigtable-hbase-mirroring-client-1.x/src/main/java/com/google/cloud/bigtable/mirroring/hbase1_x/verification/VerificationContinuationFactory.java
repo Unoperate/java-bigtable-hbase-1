@@ -152,7 +152,7 @@ public class VerificationContinuationFactory {
           }
         } else {
           Log.error(
-              "scannerNext.onFailure received an exception that is not a AsyncScannerExceptionWithContext: %s",
+              "scannerNext.onFailure received an exception that is not a AsyncScannerExceptionWithContext.",
               throwable);
         }
       }
