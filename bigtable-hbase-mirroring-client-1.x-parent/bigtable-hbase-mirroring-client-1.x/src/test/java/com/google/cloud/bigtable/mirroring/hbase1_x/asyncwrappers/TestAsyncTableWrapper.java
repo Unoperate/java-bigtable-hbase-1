@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,8 +45,8 @@ public class TestAsyncTableWrapper {
             mock(ListeningExecutorService.class),
             mock(ReferenceCounter.class),
             new MirroringTracer());
-    asyncTableWrapper.asyncClose().get(3, TimeUnit.SECONDS);
-    asyncTableWrapper.asyncClose().get(3, TimeUnit.SECONDS);
+    asyncTableWrapper.asyncClose(any(ReferenceCounter.class)).get(3, TimeUnit.SECONDS);
+    asyncTableWrapper.asyncClose(any(ReferenceCounter.class)).get(3, TimeUnit.SECONDS);
     verify(table, times(1)).close();
   }
 }

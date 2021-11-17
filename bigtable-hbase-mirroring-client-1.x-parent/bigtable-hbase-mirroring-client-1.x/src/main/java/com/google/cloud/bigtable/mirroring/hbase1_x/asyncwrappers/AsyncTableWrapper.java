@@ -140,7 +140,7 @@ public class AsyncTableWrapper implements ListenableCloseable {
         HBaseOperation.EXISTS_ALL);
   }
 
-  public ListenableFuture<Void> asyncClose() {
+  public ListenableFuture<Void> asyncClose(final ReferenceCounter toDecrement) {
     if (this.closed.getAndSet(true)) {
       return this.closeResultFuture;
     }
@@ -171,6 +171,7 @@ public class AsyncTableWrapper implements ListenableCloseable {
                     } catch (IOException e) {
                       AsyncTableWrapper.this.closeResultFuture.setException(e);
                     } finally {
+                      toDecrement.decrementReferenceCount();
                       Log.trace("asyncClose() completed");
                     }
                   }

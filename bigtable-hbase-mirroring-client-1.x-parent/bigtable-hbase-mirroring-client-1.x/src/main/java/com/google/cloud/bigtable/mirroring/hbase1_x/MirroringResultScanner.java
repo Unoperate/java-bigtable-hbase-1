@@ -63,6 +63,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
   private final AsyncResultScannerWrapper secondaryResultScannerWrapper;
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final ListenableReferenceCounter listenableReferenceCounter;
+  private final ReferenceCounter referenceCountersAbove;
   private final ReferenceCounter allReferenceCounters;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   /**
@@ -88,6 +89,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     this.secondaryResultScannerWrapper = secondaryResultScannerWrapper;
     this.verificationContinuationFactory = verificationContinuationFactory;
     this.listenableReferenceCounter = new ListenableReferenceCounter();
+    this.referenceCountersAbove = referenceCountersAbove;
     this.allReferenceCounters =
         new MultiReferenceCounter(this.listenableReferenceCounter, referenceCountersAbove);
     this.flowController = flowController;
@@ -165,6 +167,8 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     }
 
     AccumulatedExceptions exceptionsList = new AccumulatedExceptions();
+    this.referenceCountersAbove.incrementReferenceCount();
+
     try {
       this.primaryResultScanner.close();
     } catch (RuntimeException e) {
@@ -183,7 +187,7 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
 
   @VisibleForTesting
   ListenableFuture<Void> asyncClose() {
-    this.secondaryResultScannerWrapper.asyncClose();
+    this.secondaryResultScannerWrapper.asyncClose(this.referenceCountersAbove);
     this.listenableReferenceCounter.decrementReferenceCount();
     return this.listenableReferenceCounter.getOnLastReferenceClosed();
   }

@@ -171,7 +171,7 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
         });
   }
 
-  public ListenableFuture<Void> asyncClose() {
+  public ListenableFuture<Void> asyncClose(final ReferenceCounter toDecrement) {
     if (this.closed.getAndSet(true)) {
       return this.pendingOperationsReferenceCounter.getOnLastReferenceClosed();
     }
@@ -186,6 +186,7 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
                 synchronized (AsyncResultScannerWrapper.this) {
                   scanner.close();
                 }
+                toDecrement.decrementReferenceCount();
               }
             },
             MoreExecutors.directExecutor());

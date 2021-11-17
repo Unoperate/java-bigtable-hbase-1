@@ -115,6 +115,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   private final VerificationContinuationFactory verificationContinuationFactory;
   private final FlowController flowController;
   private final ListenableReferenceCounter referenceCounter;
+  private final ReferenceCounter parentReferenceCounters;
   private final MultiReferenceCounter allReferenceCounters;
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
@@ -149,6 +150,7 @@ public class MirroringTable implements Table, ListenableCloseable {
     this.readSampler = readSampler;
     this.flowController = flowController;
     this.referenceCounter = new ListenableReferenceCounter();
+    this.parentReferenceCounters = connectionReferenceCounter;
     this.allReferenceCounters =
         new MultiReferenceCounter(this.referenceCounter, connectionReferenceCounter);
     this.secondaryAsyncWrapper =
@@ -368,6 +370,7 @@ public class MirroringTable implements Table, ListenableCloseable {
         return this.referenceCounter.getOnLastReferenceClosed();
       }
 
+      this.parentReferenceCounters.incrementReferenceCount();
       this.referenceCounter.decrementReferenceCount();
 
       AccumulatedExceptions exceptionsList = new AccumulatedExceptions();
@@ -386,7 +389,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       }
 
       try {
-        this.secondaryAsyncWrapper.asyncClose();
+        this.secondaryAsyncWrapper.asyncClose(this.parentReferenceCounters);
       } catch (RuntimeException e) {
         exceptionsList.add(e);
       }

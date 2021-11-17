@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,7 +56,7 @@ public class TestAsyncResultScannerWrapper {
             listenerFuture.set(null);
           }
         });
-    asyncResultScannerWrapper.asyncClose().get(3, TimeUnit.SECONDS);
+    asyncResultScannerWrapper.asyncClose(any(ReferenceCounter.class)).get(3, TimeUnit.SECONDS);
     assertThat(listenerFuture.get(3, TimeUnit.SECONDS)).isNull();
   }
 
@@ -69,8 +70,8 @@ public class TestAsyncResultScannerWrapper {
             MoreExecutors.listeningDecorator(MoreExecutors.newDirectExecutorService()),
             referenceCounter,
             new MirroringTracer());
-    asyncResultScannerWrapper.asyncClose().get(3, TimeUnit.SECONDS);
-    asyncResultScannerWrapper.asyncClose().get(3, TimeUnit.SECONDS);
+    asyncResultScannerWrapper.asyncClose(any(ReferenceCounter.class)).get(3, TimeUnit.SECONDS);
+    asyncResultScannerWrapper.asyncClose(any(ReferenceCounter.class)).get(3, TimeUnit.SECONDS);
     verify(resultScanner, times(1)).close();
   }
 }

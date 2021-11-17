@@ -96,7 +96,7 @@ public class TestMirroringResultScanner {
             });
 
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
+    verify(secondaryScannerWrapperMock, times(1)).asyncClose(any(ReferenceCounter.class));
     assertThat(thrown).hasMessageThat().contains("first");
   }
 
@@ -120,7 +120,9 @@ public class TestMirroringResultScanner {
             new MirroringTracer(),
             true);
 
-    doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
+    doThrow(new RuntimeException("second"))
+        .when(secondaryScannerWrapperMock)
+        .asyncClose(any(ReferenceCounter.class));
 
     Exception thrown =
         assertThrows(
@@ -133,7 +135,7 @@ public class TestMirroringResultScanner {
             });
 
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
+    verify(secondaryScannerWrapperMock, times(1)).asyncClose(any(ReferenceCounter.class));
     assertThat(thrown).hasMessageThat().contains("second");
   }
 
@@ -158,7 +160,9 @@ public class TestMirroringResultScanner {
             true);
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
-    doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
+    doThrow(new RuntimeException("second"))
+        .when(secondaryScannerWrapperMock)
+        .asyncClose(any(ReferenceCounter.class));
 
     RuntimeException thrown =
         assertThrows(
@@ -171,7 +175,7 @@ public class TestMirroringResultScanner {
             });
 
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
+    verify(secondaryScannerWrapperMock, times(1)).asyncClose(any(ReferenceCounter.class));
     assertThat(thrown).hasMessageThat().contains("first");
     assertThat(thrown.getSuppressed()).hasLength(1);
     assertThat(thrown.getSuppressed()[0]).hasMessageThat().contains("second");
@@ -186,7 +190,8 @@ public class TestMirroringResultScanner {
     AsyncResultScannerWrapper secondaryScannerWrapperMock = mock(AsyncResultScannerWrapper.class);
     SettableFuture<Void> closedFuture = SettableFuture.create();
     closedFuture.set(null);
-    when(secondaryScannerWrapperMock.asyncClose()).thenReturn(closedFuture);
+    when(secondaryScannerWrapperMock.asyncClose(any(ReferenceCounter.class)))
+        .thenReturn(closedFuture);
 
     final ResultScanner mirroringScanner =
         new MirroringResultScanner(
@@ -202,7 +207,7 @@ public class TestMirroringResultScanner {
     mirroringScanner.close();
     mirroringScanner.close();
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
+    verify(secondaryScannerWrapperMock, times(1)).asyncClose(any(ReferenceCounter.class));
   }
 
   @Test
