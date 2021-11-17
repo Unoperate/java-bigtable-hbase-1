@@ -130,6 +130,7 @@ public class AsyncTableWrapper implements ListenableCloseable {
         HBaseOperation.EXISTS_ALL);
   }
 
+  /** Schedules secondary table to be closed after all in-flight requests are finished. */
   public ListenableFuture<Void> asyncClose() {
     if (this.closed.getAndSet(true)) {
       return this.closeResultFuture;

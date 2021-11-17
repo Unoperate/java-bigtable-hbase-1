@@ -19,7 +19,6 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.
 import static com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.reserveFlowControlResourcesThenScheduleSecondary;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.WriteOperationFutureCallback;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
@@ -28,6 +27,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWrite
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
@@ -137,7 +137,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   public CompletableFuture<Void> put(Put put) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.put(put);
     return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(put),
+            new WriteOperationInfo(put),
             primaryFuture,
             () -> this.secondaryTable.put(put))
         .userNotified;
@@ -147,7 +147,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   public CompletableFuture<Void> delete(Delete delete) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.delete(delete);
     return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(delete),
+            new WriteOperationInfo(delete),
             primaryFuture,
             () -> this.secondaryTable.delete(delete))
         .userNotified;
@@ -169,7 +169,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   public CompletableFuture<Void> mutateRow(RowMutations rowMutations) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.mutateRow(rowMutations);
     return writeWithFlowControl(
-            new MirroringTable.WriteOperationInfo(rowMutations),
+            new WriteOperationInfo(rowMutations),
             primaryFuture,
             () -> this.secondaryTable.mutateRow(rowMutations))
         .userNotified;
@@ -378,7 +378,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
               Put put = makePutFromResult(primaryResult);
               FutureUtils.forwardResult(
                   writeWithFlowControl(
-                      new MirroringTable.WriteOperationInfo(put),
+                      new WriteOperationInfo(put),
                       CompletableFuture.completedFuture(primaryResult),
                       () -> this.secondaryTable.put(put).thenApply(ignored -> null)),
                   returnedValue);
@@ -425,7 +425,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   }
 
   private <T> OperationStages<CompletableFuture<T>> writeWithFlowControl(
-      final MirroringTable.WriteOperationInfo writeOperationInfo,
+      final WriteOperationInfo writeOperationInfo,
       final CompletableFuture<T> primaryFuture,
       final Supplier<CompletableFuture<T>> secondaryFutureSupplier) {
     final Consumer<Throwable> secondaryWriteErrorHandler =
@@ -503,7 +503,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     }
 
     private OperationStages<CompletableFuture<Boolean>> checkAndMutate(
-        MirroringTable.WriteOperationInfo writeOperationInfo,
+        WriteOperationInfo writeOperationInfo,
         CompletableFuture<Boolean> primary,
         Supplier<CompletableFuture<Void>> secondary) {
       OperationStages<CompletableFuture<Boolean>> returnedValue =
@@ -535,7 +535,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     @Override
     public CompletableFuture<Boolean> thenPut(Put put) {
       return checkAndMutate(
-              new MirroringTable.WriteOperationInfo(put),
+              new WriteOperationInfo(put),
               this.primaryBuilder.thenPut(put),
               () -> secondaryTable.put(put))
           .userNotified;
@@ -544,7 +544,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     @Override
     public CompletableFuture<Boolean> thenDelete(Delete delete) {
       return checkAndMutate(
-              new MirroringTable.WriteOperationInfo(delete),
+              new WriteOperationInfo(delete),
               this.primaryBuilder.thenDelete(delete),
               () -> secondaryTable.delete(delete))
           .userNotified;
@@ -553,7 +553,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     @Override
     public CompletableFuture<Boolean> thenMutate(RowMutations rowMutations) {
       return checkAndMutate(
-              new MirroringTable.WriteOperationInfo(rowMutations),
+              new WriteOperationInfo(rowMutations),
               this.primaryBuilder.thenMutate(rowMutations),
               () -> secondaryTable.mutateRow(rowMutations))
           .userNotified;
