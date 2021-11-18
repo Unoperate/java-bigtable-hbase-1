@@ -150,18 +150,14 @@ public class AsyncResultScannerWrapper implements ListenableCloseable {
     return new AsyncScannerVerificationPayload(requestContext, result);
   }
 
-  public ListenableFuture<Boolean> renewLease() {
-    return submitTask(
-        new Callable<Boolean>() {
-          @Override
-          public Boolean call() {
-            boolean result;
-            synchronized (AsyncResultScannerWrapper.this) {
-              result = scanner.renewLease();
-            }
-            return result;
-          }
-        });
+  /**
+   * This operation is thread-safe, but not asynchronous, because there is no need to invoke it
+   * asynchronously.
+   */
+  public boolean renewLease() {
+    synchronized (this) {
+      return scanner.renewLease();
+    }
   }
 
   public ListenableFuture<Void> asyncClose() {
