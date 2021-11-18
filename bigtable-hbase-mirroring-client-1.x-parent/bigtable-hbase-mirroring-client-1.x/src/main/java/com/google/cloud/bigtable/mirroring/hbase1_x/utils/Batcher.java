@@ -168,6 +168,58 @@ public class Batcher {
       List<? extends Row> operations,
       CallableThrowingIOAndInterruptedException<Void> primaryOperation)
       throws IOException, InterruptedException {
+    if (this.waitForSecondaryWrites) {
+      sequentialSynchronousBatch(results, operations, primaryOperation);
+    } else {
+      sequentialAsynchronousBatch(results, operations, primaryOperation);
+    }
+  }
+
+  /**
+   * Performs batch of {@code operations} synchronously on primary and asynchronously on secondary.
+   *
+   * <p>Operations that failed on primary are not mirrored on secondary to prevent ghost writes to
+   * secondary.
+   *
+   * <p>{@code results} contains results of primary batch and any exception thrown by primary batch
+   * is forwarded to the user as-is.
+   *
+   * <p>This mode doesn't incur any additional latency and prevents ghost writes, but the user
+   * cannot handle secondary errors manually, they are always handled by {@link
+   * SecondaryWriteErrorConsumer}.
+   */
+  private void sequentialAsynchronousBatch(
+      Object[] results,
+      List<? extends Row> operations,
+      CallableThrowingIOAndInterruptedException<Void> primaryOperation)
+      throws IOException, InterruptedException {
+    try {
+      this.mirroringTracer.spanFactory.wrapPrimaryOperation(primaryOperation, HBaseOperation.BATCH);
+    } finally {
+      scheduleSecondaryWriteBatchOperations(operations, results);
+    }
+  }
+
+  /**
+   * Performs batch of {@code operations} synchronously on primary and on secondary.
+   *
+   * <p>Operations that failed on primary are not mirrored on secondary to prevent ghost writes to
+   * secondary.
+   *
+   * <p>{@code results} contains results of operations that succeeded on both databases and {@link
+   * Throwable}s for operations that failed on one of the databases. {@code Throwable}s are marked
+   * with {@link MirroringOperationException} denoting which database rejected the operation. {@link
+   * RetriesExhaustedWithDetailsException} is thrown by this method in case of any failures, causes
+   * in that exception are also marked with {@link MirroringOperationException}.
+   *
+   * <p>This mode incurs additional latency and prevents ghost writes, but the user can handle
+   * secondary errors manually, but they are also passed to {@link SecondaryWriteErrorConsumer}.
+   */
+  private void sequentialSynchronousBatch(
+      Object[] results,
+      List<? extends Row> operations,
+      CallableThrowingIOAndInterruptedException<Void> primaryOperation)
+      throws IOException, InterruptedException {
     BatchData primaryBatchData = new BatchData(operations, results);
     try {
       this.mirroringTracer.spanFactory.wrapPrimaryOperation(primaryOperation, HBaseOperation.BATCH);
@@ -182,18 +234,14 @@ public class Batcher {
     ListenableFuture<BatchData> secondaryResult =
         scheduleSecondaryWriteBatchOperations(operations, results);
 
-    if (this.waitForSecondaryWrites) {
-      BatchData secondaryBatchData;
-      try {
-        secondaryBatchData = secondaryResult.get();
-      } catch (ExecutionException e) {
-        throw new IllegalStateException("secondaryResult thrown unexpected exception.");
-      }
-      reconcileBatchResultsSequential(
-          results, primaryBatchData, secondaryBatchData, resultIsFaultyPredicate);
-    } else {
-      throwBatchDataExceptionIfPresent(primaryBatchData);
+    BatchData secondaryBatchData;
+    try {
+      secondaryBatchData = secondaryResult.get();
+    } catch (ExecutionException e) {
+      throw new IllegalStateException("secondaryResult thrown unexpected exception.");
     }
+    reconcileBatchResultsSequential(
+        results, primaryBatchData, secondaryBatchData, resultIsFaultyPredicate);
   }
 
   private static void throwBatchDataExceptionIfPresent(BatchData primaryBatchData)
@@ -299,6 +347,28 @@ public class Batcher {
     return result;
   }
 
+  /**
+   * Runs batch operation concurrently on both primary and secondary databases and waits for both of
+   * them to finish. {@code primaryResults} parameter will contain correct {@link Result}s if
+   * corresponding operation was successful on both databases and a {@link Throwable} marked with
+   * {@link MirroringOperationException} if the operation failed on any database. If any operation
+   * failed this method will throw appropriate {@link RetriesExhaustedWithDetailsException} with
+   * causes marked with {@link MirroringOperationException}. The user can use those markers to
+   * handle exceptions on primary and secondary database according to their needs.
+   *
+   * <p>This mode allows the user to manually handle errors on secondary database without additional
+   * latency introduced by sequential synchronous mode, but it comes at a price of additional
+   * inconsistency between primary and secondary databases - some of the writes might fail on
+   * primary but succeed on primary.
+   *
+   * <p>This mode doesn't use {@link SecondaryWriteErrorConsumer} to handle failed writes on
+   * secondary, errors are reported to the user as exceptions.
+   *
+   * <p>Only {@link org.apache.hadoop.hbase.client.Put}s, {@link
+   * org.apache.hadoop.hbase.client.Delete}s and {@link org.apache.hadoop.hbase.client.RowMutations}
+   * that consist of them can be executed concurrently, if {@code operations} contain any other
+   * operation this method shouldn't be called.
+   */
   private void concurrentBatch(
       final Object[] primaryResults,
       final List<? extends Row> operations,
