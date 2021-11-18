@@ -28,13 +28,15 @@ import java.util.Queue;
 /**
  * A {@link FlowControlStrategy} that keeps a queue of requests and admits then in order of
  * appearance.
+ *
+ * <p>Thread-safe.
  */
 @InternalApi("For internal usage only")
 public class SingleQueueFlowControlStrategy implements FlowControlStrategy {
   // Used to prevent starving big requests by a lot of smaller ones.
   private final Queue<AcquiredResourceReservation> waitingRequestsQueue = new ArrayDeque<>();
-  // Counts in-flight requests and decides if new requests can be allowed.
-  // Assumed to be non-thread safe and accessed with synchronized(this.ledger).
+  // Counts resources used by in-flight requests and decides if resources for new requests can be
+  // reserved. Assumed to be non-thread safe and accessed with synchronized(this.ledger).
   private final Ledger ledger;
 
   protected SingleQueueFlowControlStrategy(Ledger ledger) {
