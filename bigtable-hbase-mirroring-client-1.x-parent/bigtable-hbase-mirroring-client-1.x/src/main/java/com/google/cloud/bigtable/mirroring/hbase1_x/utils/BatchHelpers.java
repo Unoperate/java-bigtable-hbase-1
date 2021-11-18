@@ -291,6 +291,15 @@ public class BatchHelpers {
     }
   }
 
+  /**
+   * Analyses results of two batch operations run concurrently and gathers results into {@code
+   * outputResult} array.
+   *
+   * <p>If there were any failed operations in one of the batches a {@link
+   * RetriesExhaustedWithDetailsException} is thrown. Exceptions stored inside the thrown exception
+   * and in {@code outputResults} are marked with {@link MirroringOperationException} denoting
+   * whether operation have failed on primary, on secondary or on both databases.
+   */
   public static void reconcileBatchResultsConcurrent(
       Object[] outputResults,
       BatchData primaryBatchData,
@@ -355,6 +364,15 @@ public class BatchHelpers {
     }
   }
 
+  /**
+   * Analyses results of two batch operations run sequentially (failed primary operation were not
+   * mirrored to secondary) and gathers results and errors in {@code outputResults} array.
+   *
+   * <p>If there were any failed operations in one of the batches a {@link
+   * RetriesExhaustedWithDetailsException} is thrown. Exceptions stored inside the thrown exception
+   * and in {@code outputResults} are marked with {@link MirroringOperationException} denoting
+   * whether operation have failed on primary or on secondary database.
+   */
   public static void reconcileBatchResultsSequential(
       Object[] outputResults,
       BatchData primaryBatchData,
