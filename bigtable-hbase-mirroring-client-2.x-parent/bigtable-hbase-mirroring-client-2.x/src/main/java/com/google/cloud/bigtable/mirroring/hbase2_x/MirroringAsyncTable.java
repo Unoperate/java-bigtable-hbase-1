@@ -109,7 +109,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.referenceCounter = referenceCounter;
     this.readSampler = readSampler;
     this.executorService = executorService;
-    this.requestScheduler = new RequestScheduler(this.flowController, this.mirroringTracer);
+    this.requestScheduler =
+        new RequestScheduler(this.flowController, this.mirroringTracer, referenceCounter);
   }
 
   @Override
@@ -143,9 +144,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   public CompletableFuture<Void> put(Put put) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.put(put);
     return writeWithFlowControl(
-            new WriteOperationInfo(put),
-            primaryFuture,
-            () -> this.secondaryTable.put(put))
+            new WriteOperationInfo(put), primaryFuture, () -> this.secondaryTable.put(put))
         .userNotified;
   }
 
@@ -153,9 +152,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   public CompletableFuture<Void> delete(Delete delete) {
     CompletableFuture<Void> primaryFuture = this.primaryTable.delete(delete);
     return writeWithFlowControl(
-            new WriteOperationInfo(delete),
-            primaryFuture,
-            () -> this.secondaryTable.delete(delete))
+            new WriteOperationInfo(delete), primaryFuture, () -> this.secondaryTable.delete(delete))
         .userNotified;
   }
 

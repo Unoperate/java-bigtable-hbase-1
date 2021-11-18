@@ -28,6 +28,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable.RequestScheduler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.AsyncScannerVerificationPayload;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
@@ -79,7 +80,8 @@ public class TestMirroringResultScanner {
             continuationFactoryMock,
             new MirroringTracer(),
             true,
-            new RequestScheduler(flowController, new MirroringTracer()));
+            new RequestScheduler(
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
 
@@ -115,7 +117,8 @@ public class TestMirroringResultScanner {
             continuationFactoryMock,
             new MirroringTracer(),
             true,
-            new RequestScheduler(flowController, new MirroringTracer()));
+            new RequestScheduler(
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
 
     doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
 
@@ -151,7 +154,8 @@ public class TestMirroringResultScanner {
             continuationFactoryMock,
             new MirroringTracer(),
             true,
-            new RequestScheduler(flowController, new MirroringTracer()));
+            new RequestScheduler(
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
     doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
@@ -192,7 +196,8 @@ public class TestMirroringResultScanner {
             continuationFactoryMock,
             new MirroringTracer(),
             true,
-            new RequestScheduler(flowController, new MirroringTracer()));
+            new RequestScheduler(
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
 
     mirroringScanner.close();
     mirroringScanner.close();
