@@ -427,7 +427,7 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testScannerRenewLease()
+  public void testScannerRenewLeaseSecondaryFailed()
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
     ResultScanner primaryScannerMock = mock(ResultScanner.class);
     when(primaryScannerMock.renewLease()).thenReturn(true);
@@ -442,6 +442,55 @@ public class TestMirroringTable {
 
     // primary scanner lease was renewed, so we waited for the second one, and it returned false.
     assertThat(mirroringScanner.renewLease()).isFalse();
+
+    waitForMirroringScanner(mirroringScanner);
+    executorServiceRule.waitForExecutor();
+    verify(secondaryScannerMock, times(1)).renewLease();
+  }
+
+  @Test
+  public void testScannerRenewLeaseSecondaryUnsupported()
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    ResultScanner primaryScannerMock = mock(ResultScanner.class);
+    when(primaryScannerMock.renewLease()).thenReturn(true);
+    when(primaryTable.getScanner((Scan) any())).thenReturn(primaryScannerMock);
+
+    ResultScanner secondaryScannerMock = mock(ResultScanner.class);
+    when(secondaryScannerMock.renewLease())
+        .thenThrow(new UnsupportedOperationException("expected"));
+    when(secondaryTable.getScanner((Scan) any())).thenReturn(secondaryScannerMock);
+
+    Scan scan = new Scan();
+    ResultScanner mirroringScanner = mirroringTable.getScanner(scan);
+
+    // Secondary's renewLease thrown UnsupportedOperationException, thus we assume that it is a
+    // Bigtable scanner and renewing the lease is not needed. Primary succeeded and we should
+    // return true.
+    assertThat(mirroringScanner.renewLease()).isTrue();
+
+    waitForMirroringScanner(mirroringScanner);
+    executorServiceRule.waitForExecutor();
+    verify(secondaryScannerMock, times(1)).renewLease();
+  }
+
+  @Test
+  public void testScannerRenewLeasePrimaryUnsupported()
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    ResultScanner primaryScannerMock = mock(ResultScanner.class);
+    when(primaryScannerMock.renewLease()).thenThrow(new UnsupportedOperationException("expected"));
+    when(primaryTable.getScanner((Scan) any())).thenReturn(primaryScannerMock);
+
+    ResultScanner secondaryScannerMock = mock(ResultScanner.class);
+    when(secondaryScannerMock.renewLease()).thenReturn(true);
+    when(secondaryTable.getScanner((Scan) any())).thenReturn(secondaryScannerMock);
+
+    Scan scan = new Scan();
+    ResultScanner mirroringScanner = mirroringTable.getScanner(scan);
+
+    // Primary's renewLease thrown UnsupportedOperationException, thus we assume that it is a
+    // Bigtable scanner and renewing the lease is not needed. Secondary succeeded and we should
+    // return true.
+    assertThat(mirroringScanner.renewLease()).isTrue();
 
     waitForMirroringScanner(mirroringScanner);
     executorServiceRule.waitForExecutor();

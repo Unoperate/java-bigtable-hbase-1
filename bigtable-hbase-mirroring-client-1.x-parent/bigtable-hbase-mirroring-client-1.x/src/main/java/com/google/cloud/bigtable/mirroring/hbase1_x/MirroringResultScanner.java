@@ -34,7 +34,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.opencensus.common.Scope;
 import java.io.IOException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -182,24 +181,43 @@ public class MirroringResultScanner extends AbstractClientScanner implements Lis
     return this.listenableReferenceCounter.getOnLastReferenceClosed();
   }
 
+  /**
+   * Renews the lease on primary and secondary scanners, synchronously. If any of the {@link
+   * ResultScanner#renewLease()} calls returns a {@code false} we return {@code false}. If primary
+   * {@code renewLease()} succeeds and secondary fails we still return {@code false} and leave
+   * primary with renewed lease because we have no way of cancelling it - we assume that it will be
+   * cleaned up after it expires or when scanner is closed.
+   *
+   * <p>Bigtable client doesn't support this operation and throws {@link
+   * UnsupportedOperationException}, but in fact renewing leases is not needed in Bigtable, thus
+   * whenever we encounter {@link UnsupportedOperationException} we assume that is was bigtable
+   * throwing it and it means that renewing the lease is not needed and we treat as if it returned
+   * {@code true}.
+   */
   @Override
   public boolean renewLease() {
-    boolean primaryLease = this.primaryResultScanner.renewLease();
-    if (!primaryLease) {
-      return false;
+    try {
+      boolean primaryLease = this.primaryResultScanner.renewLease();
+      if (!primaryLease) {
+        return false;
+      }
+    } catch (UnsupportedOperationException e) {
+      // We assume that UnsupportedOperationExceptions are thrown by Bigtable client and Bigtable
+      // doesn't need to renew scanner's leases. We are behaving as if it returned true.
     }
 
     try {
-      return this.secondaryResultScannerWrapper.renewLease().get();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      return false;
-    } catch (ExecutionException e) {
-      log.error("Execution exception in secondaryResultScannerWrapper.renewLease().", e.getCause());
-      return false;
-    } catch (Exception e) {
-      log.error("Exception while scheduling secondaryResultScannerWrapper.renewLease().", e);
-      return false;
+      // If secondary won't renew the lease we will return false even though primary has managed to
+      // renewed its lease. There is no way of cancelling it so we are just leaving it up to HBase
+      // to collect if after it expires again.
+      // This operation is not asynchronous because we need to forward its result and forward it
+      // to the user. Unfortunately we have to wait until mutex guarding the secondaryScanner is
+      // released.
+      return this.secondaryResultScannerWrapper.renewLease();
+    } catch (UnsupportedOperationException e) {
+      // We assume that UnsupportedOperationExceptions are thrown by Bigtable client and Bigtable
+      // doesn't need to renew scanner's leases. We are behaving as if it returned true.
+      return true;
     }
   }
 
