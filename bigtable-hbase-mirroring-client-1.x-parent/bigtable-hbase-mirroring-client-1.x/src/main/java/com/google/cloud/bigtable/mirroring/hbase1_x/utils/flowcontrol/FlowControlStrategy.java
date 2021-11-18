@@ -23,6 +23,8 @@ import com.google.common.util.concurrent.ListenableFuture;
 /**
  * Interface used by {@link FlowController} to decide whether resources needed for performing a
  * secondary database request can be acquired.
+ *
+ * <p>Implementations of this class should be thread-safe.
  */
 @InternalApi("For internal usage only")
 public interface FlowControlStrategy {
