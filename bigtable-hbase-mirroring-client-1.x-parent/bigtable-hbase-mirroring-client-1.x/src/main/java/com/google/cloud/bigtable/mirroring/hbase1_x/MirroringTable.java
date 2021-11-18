@@ -174,12 +174,10 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.EXISTS);
 
-      if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleSequentialReadOperationWithVerification(
-            new RequestResourcesDescription(result),
-            this.secondaryAsyncWrapper.exists(get),
-            this.verificationContinuationFactory.exists(get, result));
-      }
+      scheduleSequentialReadOperationWithVerification(
+          new RequestResourcesDescription(result),
+          this.secondaryAsyncWrapper.exists(get),
+          this.verificationContinuationFactory.exists(get, result));
       return result;
     }
   }
@@ -200,12 +198,10 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.EXISTS_ALL);
 
-      if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleSequentialReadOperationWithVerification(
-            new RequestResourcesDescription(result),
-            this.secondaryAsyncWrapper.existsAll(list),
-            this.verificationContinuationFactory.existsAll(list, result));
-      }
+      scheduleSequentialReadOperationWithVerification(
+          new RequestResourcesDescription(result),
+          this.secondaryAsyncWrapper.existsAll(list),
+          this.verificationContinuationFactory.existsAll(list, result));
       return result;
     }
   }
@@ -225,12 +221,10 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.GET);
 
-      if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleSequentialReadOperationWithVerification(
-            new RequestResourcesDescription(result),
-            this.secondaryAsyncWrapper.get(get),
-            this.verificationContinuationFactory.get(get, result));
-      }
+      scheduleSequentialReadOperationWithVerification(
+          new RequestResourcesDescription(result),
+          this.secondaryAsyncWrapper.get(get),
+          this.verificationContinuationFactory.get(get, result));
       return result;
     }
   }
@@ -251,12 +245,10 @@ public class MirroringTable implements Table, ListenableCloseable {
               },
               HBaseOperation.GET_LIST);
 
-      if (this.readSampler.shouldNextReadOperationBeSampled()) {
-        scheduleSequentialReadOperationWithVerification(
-            new RequestResourcesDescription(result),
-            this.secondaryAsyncWrapper.get(list),
-            this.verificationContinuationFactory.get(list, result));
-      }
+      scheduleSequentialReadOperationWithVerification(
+          new RequestResourcesDescription(result),
+          this.secondaryAsyncWrapper.get(list),
+          this.verificationContinuationFactory.get(list, result));
       return result;
     }
   }
@@ -628,6 +620,9 @@ public class MirroringTable implements Table, ListenableCloseable {
       final RequestResourcesDescription resourcesDescription,
       final Supplier<ListenableFuture<T>> secondaryOperationSupplier,
       final FutureCallback<T> verificationCallback) {
+    if (!this.readSampler.shouldNextReadOperationBeSampled()) {
+      return;
+    }
     this.requestScheduler.scheduleRequestWithCallback(
         resourcesDescription,
         secondaryOperationSupplier,
