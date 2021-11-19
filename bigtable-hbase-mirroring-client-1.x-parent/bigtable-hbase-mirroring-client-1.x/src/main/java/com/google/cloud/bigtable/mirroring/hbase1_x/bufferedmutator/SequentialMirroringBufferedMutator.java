@@ -47,7 +47,6 @@ import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Row;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 /**
  * {@link MirroringBufferedMutator} implementation that performs mutations on secondary database
@@ -268,7 +267,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
         this.mirroringTracer.spanFactory.wrapWithCurrentSpan(
             new FutureCallback<Void>() {
               @Override
-              public void onSuccess(@NullableDecl Void aVoid) {
+              public void onSuccess(Void aVoid) {
                 performSecondaryFlush(
                     dataToFlush,
                     secondaryFlushFinished,

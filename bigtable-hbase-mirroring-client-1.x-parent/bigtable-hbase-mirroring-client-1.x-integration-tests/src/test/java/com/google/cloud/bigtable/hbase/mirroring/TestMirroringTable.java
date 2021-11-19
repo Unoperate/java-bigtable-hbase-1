@@ -49,7 +49,6 @@ import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.shaded.org.apache.commons.io.FileUtils;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.junit.Assume;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -77,7 +76,7 @@ public class TestMirroringTable {
   final Predicate<byte[]> failPredicate =
       new Predicate<byte[]>() {
         @Override
-        public boolean apply(@NullableDecl byte[] bytes) {
+        public boolean apply(byte[] bytes) {
           return bytes.length == 8 && Longs.fromByteArray(bytes) % 2 == 0;
         }
       };

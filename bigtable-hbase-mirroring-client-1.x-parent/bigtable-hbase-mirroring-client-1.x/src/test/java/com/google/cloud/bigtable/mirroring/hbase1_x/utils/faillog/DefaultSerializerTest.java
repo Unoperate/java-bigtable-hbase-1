@@ -18,11 +18,9 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertTrue;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.BaseEncoding;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
@@ -57,7 +55,7 @@ class FakeCellScanner implements CellScanner {
 public class DefaultSerializerTest {
   private ClientProtos.MutationProto verifyAndExtractMutation(
       Date beforeTest, String expectedRowKey, String expectedMutationType, String jsonText)
-      throws InvalidProtocolBufferException, JsonProcessingException {
+      throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     JsonNode deserialized = mapper.readTree(jsonText);
     final JsonNode timestampJson = deserialized.get("timestamp");

@@ -37,7 +37,6 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 public class DatabaseHelpers {
   private final ExecutorServiceRule executorServiceRule;
@@ -138,7 +137,7 @@ public class DatabaseHelpers {
         tableName,
         new Predicate<byte[]>() {
           @Override
-          public boolean apply(@NullableDecl byte[] bytes) {
+          public boolean apply(byte[] bytes) {
             return false;
           }
         });

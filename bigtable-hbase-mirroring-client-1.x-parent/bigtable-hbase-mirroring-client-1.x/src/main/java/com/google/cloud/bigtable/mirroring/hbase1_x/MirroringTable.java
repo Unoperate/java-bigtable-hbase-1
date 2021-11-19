@@ -43,6 +43,9 @@ import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.protobuf.Descriptors.MethodDescriptor;
+import com.google.protobuf.Message;
+import com.google.protobuf.Service;
 import io.opencensus.common.Scope;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -72,11 +75,7 @@ import org.apache.hadoop.hbase.client.coprocessor.Batch.Call;
 import org.apache.hadoop.hbase.client.coprocessor.Batch.Callback;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
 import org.apache.hadoop.hbase.ipc.CoprocessorRpcChannel;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.MethodDescriptor;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.Message;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.Service;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 /**
  * Table which mirrors every two mutations to two underlying tables.
@@ -91,7 +90,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   private static final Predicate<Object> resultIsFaultyPredicate =
       new Predicate<Object>() {
         @Override
-        public boolean apply(@NullableDecl Object o) {
+        public boolean apply(Object o) {
           return o == null || o instanceof Throwable;
         }
       };

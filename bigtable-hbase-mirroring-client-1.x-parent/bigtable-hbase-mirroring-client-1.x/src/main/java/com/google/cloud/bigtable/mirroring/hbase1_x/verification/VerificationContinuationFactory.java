@@ -24,7 +24,6 @@ import java.util.List;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 @InternalApi("For internal usage only")
 public class VerificationContinuationFactory {
@@ -42,7 +41,7 @@ public class VerificationContinuationFactory {
   public FutureCallback<Boolean> exists(final Get request, final boolean expectation) {
     return new FutureCallback<Boolean>() {
       @Override
-      public void onSuccess(@NullableDecl Boolean secondary) {
+      public void onSuccess(Boolean secondary) {
         Log.trace("verification onSuccess exists(Get)");
         VerificationContinuationFactory.this.mismatchDetector.exists(
             request, expectation, secondary);
@@ -59,7 +58,7 @@ public class VerificationContinuationFactory {
   public FutureCallback<boolean[]> existsAll(final List<Get> request, final boolean[] expectation) {
     return new FutureCallback<boolean[]>() {
       @Override
-      public void onSuccess(@NullableDecl boolean[] secondary) {
+      public void onSuccess(boolean[] secondary) {
         Log.trace("verification onSuccess existsAll(List<Get>)");
         VerificationContinuationFactory.this.mismatchDetector.existsAll(
             request, expectation, secondary);
@@ -76,7 +75,7 @@ public class VerificationContinuationFactory {
   public FutureCallback<Result> get(final Get request, final Result expectation) {
     return new FutureCallback<Result>() {
       @Override
-      public void onSuccess(@NullableDecl Result secondary) {
+      public void onSuccess(Result secondary) {
         Log.trace("verification onSuccess get(Get)");
         VerificationContinuationFactory.this.mismatchDetector.get(request, expectation, secondary);
       }
@@ -92,7 +91,7 @@ public class VerificationContinuationFactory {
   public FutureCallback<Result[]> get(final List<Get> request, final Result[] expectation) {
     return new FutureCallback<Result[]>() {
       @Override
-      public void onSuccess(@NullableDecl Result[] secondary) {
+      public void onSuccess(Result[] secondary) {
         Log.trace("verification onSuccess get(List<Get>)");
         VerificationContinuationFactory.this.mismatchDetector.get(request, expectation, secondary);
       }
@@ -118,7 +117,7 @@ public class VerificationContinuationFactory {
   public FutureCallback<AsyncScannerVerificationPayload> scannerNext() {
     return new FutureCallback<AsyncScannerVerificationPayload>() {
       @Override
-      public void onSuccess(@NullableDecl AsyncScannerVerificationPayload results) {
+      public void onSuccess(AsyncScannerVerificationPayload results) {
         Log.trace("verification onSuccess scannerNext(Scan, int)");
         Scan request = results.context.scan;
         if (results.context.singleNext) {
