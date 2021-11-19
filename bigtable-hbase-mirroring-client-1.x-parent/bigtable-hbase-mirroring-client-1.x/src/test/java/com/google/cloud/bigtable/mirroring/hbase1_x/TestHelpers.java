@@ -144,8 +144,21 @@ public class TestHelpers {
     return thrownException;
   }
 
+  /**
+   * A helper function that blocks method on a mock until a future is set or default timeout is
+   * reached.
+   *
+   * <p>Once unblocked either by timeout or {@link SettableFuture#set} it just lets further calls
+   * through without waiting.
+   *
+   * @param mock mock whose method is blocked
+   * @param futureToWaitFor future which unblocks method calls
+   * @param before action to be called before waiting for {@param futureToWaitFor}
+   * @param <T> - type of {@param mock}
+   * @return {@param mock}
+   */
   public static <T> T blockMethodCall(
-      T table, final SettableFuture<Void> futureToWaitFor, final Runnable before) {
+      T mock, final SettableFuture<Void> futureToWaitFor, final Runnable before) {
     return doAnswer(
             new Answer<Object>() {
               @Override
@@ -160,13 +173,13 @@ public class TestHelpers {
                 }
               }
             })
-        .when(table);
+        .when(mock);
   }
 
   public static <T> T blockMethodCall(
-      T table, final SettableFuture<Void> secondaryOperationAllowedFuture) {
+      T mock, final SettableFuture<Void> secondaryOperationAllowedFuture) {
     return blockMethodCall(
-        table,
+        mock,
         secondaryOperationAllowedFuture,
         new Runnable() {
           @Override
@@ -175,11 +188,11 @@ public class TestHelpers {
   }
 
   public static <T> T blockMethodCall(
-      T table,
+      T mock,
       final SettableFuture<Void> secondaryOperationAllowedFuture,
       final SettableFuture<Void> startedFuture) {
     return blockMethodCall(
-        table,
+        mock,
         secondaryOperationAllowedFuture,
         new Runnable() {
           @Override
@@ -190,11 +203,11 @@ public class TestHelpers {
   }
 
   public static <T> T blockMethodCall(
-      T table,
+      T mock,
       final SettableFuture<Void> secondaryOperationAllowedFuture,
       final Semaphore startedSemaphore) {
     return blockMethodCall(
-        table,
+        mock,
         secondaryOperationAllowedFuture,
         new Runnable() {
           @Override
@@ -223,7 +236,7 @@ public class TestHelpers {
     return secondaryOperationAllowedFuture;
   }
 
-  public static <T> T delayMethodCall(T table, final int ms) {
+  public static <T> T delayMethodCall(T mock, final int ms) {
     return doAnswer(
             new Answer<Object>() {
               @Override
@@ -237,7 +250,7 @@ public class TestHelpers {
                 }
               }
             })
-        .when(table);
+        .when(mock);
   }
 
   public static void assertPutsAreEqual(
