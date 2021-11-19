@@ -1273,7 +1273,7 @@ public class TestMirroringTable {
   @Test
   public void testNonConcurrentOpsWontBePerformedConcurrently()
       throws IOException, InterruptedException {
-    setupMirroringTableWithDirectExecutor();
+    setupConcurrentMirroringTableWithDirectExecutor();
     Get get = createGet("get1");
     Increment increment = new Increment("row".getBytes());
     Append append = new Append("row".getBytes());
@@ -1304,7 +1304,7 @@ public class TestMirroringTable {
     checkBatchCalledSequentially(Arrays.asList(put, delete, append));
   }
 
-  private void setupMirroringTableWithDirectExecutor() {
+  private void setupConcurrentMirroringTableWithDirectExecutor() {
     boolean performWritesConcurrently = true;
     boolean waitForSecondaryWrites = true;
     this.mirroringTable =
@@ -1343,7 +1343,7 @@ public class TestMirroringTable {
 
   @Test
   public void testConcurrentWritesWithErrors() throws IOException, InterruptedException {
-    setupMirroringTableWithDirectExecutor();
+    setupConcurrentMirroringTableWithDirectExecutor();
 
     Put put1 = createPut("test1", "f1", "q1", "v1");
     Put put2 = createPut("test2", "f2", "q2", "v2");
@@ -1487,7 +1487,7 @@ public class TestMirroringTable {
   public void testConcurrentOpsAreNotPerformedWhenFlowControllerRejectsRequest()
       throws IOException, InterruptedException {
     IOException flowControllerExpection = setupFlowControllerToRejectRequests(flowController);
-    setupMirroringTableWithDirectExecutor();
+    setupConcurrentMirroringTableWithDirectExecutor();
 
     Put put = createPut("test1", "f1", "q1", "v1");
     try {
