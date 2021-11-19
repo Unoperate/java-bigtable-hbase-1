@@ -156,6 +156,24 @@ public class TestMirroringTable {
   }
 
   @Test
+  public void testPrimaryReadExceptionDoesntCallSecondaryNorVerification() throws IOException {
+    Get request = createGet("test");
+    IOException expectedException = new IOException("expected");
+    when(primaryTable.get(request)).thenThrow(expectedException);
+
+    try {
+      mirroringTable.get(request);
+      fail("should have thrown");
+    } catch (IOException e) {
+      assertThat(e).isEqualTo(expectedException);
+    }
+    executorServiceRule.waitForExecutor();
+
+    verify(secondaryTable, never()).get(any(Get.class));
+    verify(mismatchDetector, never()).get(request, expectedException);
+  }
+
+  @Test
   public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnSingleGet()
       throws IOException {
     Get request = createGet("test");
