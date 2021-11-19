@@ -75,7 +75,7 @@ public class TestMirroringAsyncTableInputModification {
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
   CompletableFuture<Void> letPrimaryThroughFuture;
-  SettableFuture<Void> secondaryOperationAllowedFuture;
+  SettableFuture<Void> secondaryOperationBlockedOnFuture;
 
   @Before
   public void setUp() {
@@ -94,12 +94,12 @@ public class TestMirroringAsyncTableInputModification {
                 referenceCounter,
                 executorService));
 
-    secondaryOperationAllowedFuture = SettableFuture.create();
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).exists(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).get(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).put(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).delete(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).batch(anyList());
+    secondaryOperationBlockedOnFuture = SettableFuture.create();
+    blockMethodCall(secondaryTable, secondaryOperationBlockedOnFuture).exists(anyList());
+    blockMethodCall(secondaryTable, secondaryOperationBlockedOnFuture).get(anyList());
+    blockMethodCall(secondaryTable, secondaryOperationBlockedOnFuture).put(anyList());
+    blockMethodCall(secondaryTable, secondaryOperationBlockedOnFuture).delete(anyList());
+    blockMethodCall(secondaryTable, secondaryOperationBlockedOnFuture).batch(anyList());
 
     lenient().doAnswer(this::answerWithSuccessfulNulls).when(primaryTable).exists(anyList());
     lenient().doAnswer(this::answerWithSuccessfulNulls).when(primaryTable).get(anyList());
@@ -131,7 +131,7 @@ public class TestMirroringAsyncTableInputModification {
     List<CompletableFuture<Boolean>> expectedResult =
         Collections.nCopies(gets.size(), letExistsThroughFuture);
 
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).exists(anyList());
+    blockMethodCall(secondaryTable, secondaryOperationBlockedOnFuture).exists(anyList());
     doAnswer(ignored -> expectedResult).when(primaryTable).exists(anyList());
     doAnswer(ignored -> expectedResult).when(secondaryTable).exists(anyList());
 
@@ -143,7 +143,7 @@ public class TestMirroringAsyncTableInputModification {
     results.get(0).get(3, TimeUnit.SECONDS);
     verify(this.primaryTable, times(1)).exists(gets);
 
-    secondaryOperationAllowedFuture.set(null);
+    secondaryOperationBlockedOnFuture.set(null);
     verify(this.secondaryTable, times(1)).exists(gets);
   }
 
@@ -160,7 +160,7 @@ public class TestMirroringAsyncTableInputModification {
     results.get(0).get(3, TimeUnit.SECONDS);
     verify(this.primaryTable, times(1)).get(gets);
 
-    secondaryOperationAllowedFuture.set(null);
+    secondaryOperationBlockedOnFuture.set(null);
     verify(this.secondaryTable, times(1)).get(gets);
   }
 
@@ -177,7 +177,7 @@ public class TestMirroringAsyncTableInputModification {
     results.get(0).get(3, TimeUnit.SECONDS);
     verify(this.primaryTable, times(1)).put(puts);
 
-    secondaryOperationAllowedFuture.set(null);
+    secondaryOperationBlockedOnFuture.set(null);
     verify(this.secondaryTable, times(1)).put(puts);
   }
 
@@ -194,7 +194,7 @@ public class TestMirroringAsyncTableInputModification {
     results.get(0).get(3, TimeUnit.SECONDS);
     verify(this.primaryTable, times(1)).delete(puts);
 
-    secondaryOperationAllowedFuture.set(null);
+    secondaryOperationBlockedOnFuture.set(null);
     verify(this.primaryTable, times(1)).delete(puts);
   }
 
@@ -211,7 +211,7 @@ public class TestMirroringAsyncTableInputModification {
     results.get(0).get(3, TimeUnit.SECONDS);
     verify(this.primaryTable, times(1)).batch(ops);
 
-    secondaryOperationAllowedFuture.set(null);
+    secondaryOperationBlockedOnFuture.set(null);
     verify(this.secondaryTable, times(1)).batch(ops);
   }
 }
