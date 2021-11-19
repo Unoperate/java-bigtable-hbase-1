@@ -78,6 +78,7 @@ public class TestConcurrentMirroringBufferedMutator {
     executorServiceRule.waitForExecutor();
     verify(common.primaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
     verify(common.secondaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(1)).flush();
     verify(common.secondaryBufferedMutator, times(1)).flush();
     verify(common.flowController, never())
         .asyncRequestResource(any(RequestResourcesDescription.class));
