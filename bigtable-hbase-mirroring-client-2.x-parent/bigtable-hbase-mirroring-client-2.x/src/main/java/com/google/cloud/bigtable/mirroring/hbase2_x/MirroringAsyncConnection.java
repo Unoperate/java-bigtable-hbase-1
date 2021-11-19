@@ -19,7 +19,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCou
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutationLogger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
@@ -106,15 +106,18 @@ public class MirroringAsyncConnection implements AsyncConnection {
             .newInstance()
             .create(this.mirroringTracer);
 
-    Logger failedWritesLogger =
-        new Logger(
+    FailedMutationLogger failedMutationLogger =
+        new FailedMutationLogger(
+            mirroringTracer,
             this.configuration
                 .mirroringOptions
+                .faillog
                 .writeErrorLogAppenderFactoryClass
                 .newInstance()
-                .create(this.configuration.baseConfiguration),
+                .create(this.configuration.mirroringOptions.faillog),
             this.configuration
                 .mirroringOptions
+                .faillog
                 .writeErrorLogSerializerFactoryClass
                 .newInstance()
                 .create());
@@ -124,7 +127,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
             .mirroringOptions
             .writeErrorConsumerFactoryClass
             .newInstance()
-            .create(failedWritesLogger);
+            .create(failedMutationLogger);
 
     this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(this.mirroringTracer, writeErrorConsumer);
