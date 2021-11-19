@@ -43,7 +43,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TestBlocking {
   @ClassRule public static ConnectionRule connectionRule = new ConnectionRule();
-  @Rule public ExecutorServiceRule executorServiceRule = ExecutorServiceRule.fixedPoolExecutor(3);
+  @Rule public ExecutorServiceRule executorServiceRule = ExecutorServiceRule.cachedPoolExecutor();
   private DatabaseHelpers databaseHelpers =
       new DatabaseHelpers(connectionRule, executorServiceRule);
 
