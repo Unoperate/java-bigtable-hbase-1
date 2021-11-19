@@ -270,6 +270,9 @@ public class TestSequentialMirroringBufferedMutator {
     verify(common.secondaryBufferedMutator, never()).flush();
     verify(common.resourceReservation, times(3)).release();
 
+    // We previously used mutate() and thus scheduled asynchronous mutations.
+    // In this scenario asynchronous flush() on primary threw an exception after mutate() returned.
+    // Because of that we throw an exception the next time mutate() is called.
     try {
       bm.mutate(mutations[0]);
       verify(executorServiceRule.executorService, times(1)).submit(any(Callable.class));
