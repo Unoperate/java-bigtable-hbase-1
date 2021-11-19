@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -138,7 +137,8 @@ public class TestHelpers {
         SettableFuture.create();
     resourceReservationFuture.setException(thrownException);
 
-    doReturn(resourceReservationFuture)
+    lenient()
+        .doReturn(resourceReservationFuture)
         .when(flowController)
         .asyncRequestResource(any(RequestResourcesDescription.class));
     return thrownException;
