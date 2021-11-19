@@ -33,6 +33,7 @@ import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -65,27 +66,31 @@ public class TestSequentialMirroringBufferedMutator {
 
   public final MirroringBufferedMutatorCommon common = new MirroringBufferedMutatorCommon();
 
+  private final List<Mutation> singletonMutation1 = Collections.singletonList(common.mutation1);
+
   @Test
   public void testBufferedWritesWithoutErrors() throws IOException, InterruptedException {
     BufferedMutator bm = getBufferedMutator((long) (common.mutationSize * 3.5));
 
     bm.mutate(common.mutation1);
-    verify(common.primaryBufferedMutator, times(1)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(1)).mutate(singletonMutation1);
     verify(common.secondaryBufferedMutator, never()).mutate(ArgumentMatchers.<Mutation>anyList());
     verify(common.secondaryBufferedMutator, never()).mutate(any(Mutation.class));
     bm.mutate(common.mutation1);
-    verify(common.primaryBufferedMutator, times(2)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(2)).mutate(singletonMutation1);
     verify(common.secondaryBufferedMutator, never()).mutate(ArgumentMatchers.<Mutation>anyList());
     verify(common.secondaryBufferedMutator, never()).mutate(any(Mutation.class));
     bm.mutate(common.mutation1);
-    verify(common.primaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(3)).mutate(singletonMutation1);
     verify(common.secondaryBufferedMutator, never()).mutate(ArgumentMatchers.<Mutation>anyList());
     verify(common.secondaryBufferedMutator, never()).mutate(any(Mutation.class));
     bm.mutate(common.mutation1);
     Thread.sleep(300);
     executorServiceRule.waitForExecutor();
-    verify(common.primaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(1)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(4)).mutate(singletonMutation1);
+    verify(common.secondaryBufferedMutator, times(1))
+        .mutate(
+            Arrays.asList(common.mutation1, common.mutation1, common.mutation1, common.mutation1));
     verify(common.secondaryBufferedMutator, never()).mutate(any(Mutation.class));
     verify(common.primaryBufferedMutator, times(1)).flush();
     verify(common.secondaryBufferedMutator, times(1)).flush();
@@ -101,8 +106,9 @@ public class TestSequentialMirroringBufferedMutator {
     bm.mutate(common.mutation1);
     bm.flush();
     executorServiceRule.waitForExecutor();
-    verify(common.primaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(1)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(3)).mutate(singletonMutation1);
+    verify(common.secondaryBufferedMutator, times(1))
+        .mutate(Arrays.asList(common.mutation1, common.mutation1, common.mutation1));
     verify(common.secondaryBufferedMutator, never()).mutate(any(Mutation.class));
     verify(common.secondaryBufferedMutator, times(1)).flush();
     verify(common.resourceReservation, times(3)).release();
@@ -116,8 +122,9 @@ public class TestSequentialMirroringBufferedMutator {
     bm.mutate(common.mutation1);
     bm.mutate(common.mutation1);
     bm.close();
-    verify(common.primaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(1)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(3)).mutate(singletonMutation1);
+    verify(common.secondaryBufferedMutator, times(1))
+        .mutate(Arrays.asList(common.mutation1, common.mutation1, common.mutation1));
     verify(common.secondaryBufferedMutator, times(1)).flush();
     verify(common.resourceReservation, times(3)).release();
   }
@@ -163,6 +170,7 @@ public class TestSequentialMirroringBufferedMutator {
     inOrder2.verify(common.secondaryBufferedMutator).mutate(Arrays.asList(common.mutation3));
     inOrder2.verify(common.secondaryBufferedMutator).mutate(Arrays.asList(common.mutation4));
 
+    verify(common.primaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
     verify(common.secondaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
     verify(common.resourceReservation, times(4)).release();
   }
