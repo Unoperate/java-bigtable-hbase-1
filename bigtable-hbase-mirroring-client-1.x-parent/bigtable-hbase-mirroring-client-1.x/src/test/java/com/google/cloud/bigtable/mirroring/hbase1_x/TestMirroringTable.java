@@ -1258,6 +1258,12 @@ public class TestMirroringTable {
     Put put = createPut("test1", "f1", "q1", "v1");
     Delete delete = createDelete("test2");
 
+    Put putMutation = createPut("test3", "f1", "q1", "v1");
+    Delete deleteMutation = createDelete("test3");
+    RowMutations rowMutations = new RowMutations("test3".getBytes());
+    rowMutations.add(putMutation);
+    rowMutations.add(deleteMutation);
+
     mockBatch(
         primaryTable,
         secondaryTable,
@@ -1268,17 +1274,27 @@ public class TestMirroringTable {
         append,
         createResult("row", "v2"));
 
+    // Only Puts and Deletes (and RowMutations which can contain only Puts and Deletes)
+    // can be performed concurrently. Other operations force us to wait for primary result
+    // (e.g. we implement Increment on secondary as a Put of result from primary).
+    // We expect that even though our MirroringTable is concurrent, the operations which cannot be
+    // performed concurrently will be performed sequentially.
+
+    // Batch contains an operation which causes the batch to be performed sequentially.
     checkBatchCalledSequentially(Arrays.asList(get));
     checkBatchCalledSequentially(Arrays.asList(increment));
     checkBatchCalledSequentially(Arrays.asList(append));
 
+    // Batch contains only operations which can be performed concurrently.
     checkBatchCalledConcurrently(Arrays.asList(put));
     checkBatchCalledConcurrently(Arrays.asList(delete));
-    checkBatchCalledConcurrently(Arrays.asList(put, delete));
+    checkBatchCalledConcurrently(Arrays.asList(rowMutations));
+    checkBatchCalledConcurrently(Arrays.asList(put, delete, rowMutations));
 
-    checkBatchCalledSequentially(Arrays.asList(put, delete, get));
-    checkBatchCalledSequentially(Arrays.asList(put, delete, increment));
-    checkBatchCalledSequentially(Arrays.asList(put, delete, append));
+    // Batch contains an operation which causes the batch to be performed sequentially.
+    checkBatchCalledSequentially(Arrays.asList(put, delete, rowMutations, get));
+    checkBatchCalledSequentially(Arrays.asList(put, delete, rowMutations, increment));
+    checkBatchCalledSequentially(Arrays.asList(put, delete, rowMutations, append));
   }
 
   private void setupConcurrentMirroringTableWithDirectExecutor() {
@@ -1313,6 +1329,12 @@ public class TestMirroringTable {
     InOrder inOrder = Mockito.inOrder(primaryTable, flowController, secondaryTable);
     this.mirroringTable.batch(requests, new Object[requests.size()]);
     inOrder.verify(flowController).asyncRequestResource(any(RequestResourcesDescription.class));
+    // When batch is performed concurrently first secondary database request is scheduled
+    // asynchronously, then primary request is executed synchronously.
+    // Then depending on configuration the mirroring client may wait for secondary result.
+    // In order to be able to verify that the batch is called concurrently we configure the
+    // MirroringTable to wait for secondary results and use DirectExecutor.
+    // That guarantees us that the method on secondary table is called first.
     inOrder.verify(secondaryTable).batch(eq(requests), any(Object[].class));
     inOrder.verify(primaryTable).batch(eq(requests), any(Object[].class));
   }
