@@ -296,13 +296,24 @@ public class TestHelpers {
         .batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
   }
 
+  /**
+   * Function used to mock Table.batch(operations, results) call by filling the result Array.
+   *
+   * <p>For objects in {@param keyValuePairs} returns a provided value, otherwise constructs a
+   * default one.
+   *
+   * <p>Throws iff any of the values returned to caller of batch is a Throwable.
+   *
+   * @param keyValuePairs - key:value pairs of objects, key may be either operation or operation
+   *     class
+   * @return {@link Answer} for use in {@link org.mockito.stubbing.BaseStubber#doAnswer(Answer)}
+   */
   public static Answer<Void> createMockBatchAnswer(final Object... keyValuePairs) {
     final Map<Object, Object> mapping = mapOf(keyValuePairs);
 
     return new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-        boolean shouldThrow = false;
         Object[] args = invocationOnMock.getArguments();
         List<? extends Row> operations = (List<? extends Row>) args[0];
         Object[] result = (Object[]) args[1];
