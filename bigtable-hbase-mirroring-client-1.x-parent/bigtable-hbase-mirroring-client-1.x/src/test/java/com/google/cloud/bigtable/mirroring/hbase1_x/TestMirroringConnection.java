@@ -27,12 +27,20 @@ import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class TestMirroringConnection {
+  private Connection connection;
+
+  @Before
+  public void setUp() throws IOException {
+    TestConnection.mocks.clear();
+    connection = ConnectionFactory.createConnection(createConfiguration());
+  }
 
   private Configuration createConfiguration() {
     Configuration configuration = new Configuration();
@@ -53,8 +61,6 @@ public class TestMirroringConnection {
 
   @Test
   public void testConnectionFactoryCreatesMirroringConnection() throws IOException {
-    Configuration configuration = createConfiguration();
-    Connection connection = ConnectionFactory.createConnection(configuration);
     assertThat(connection).isInstanceOf(MirroringConnection.class);
     assertThat(((MirroringConnection) connection).getPrimaryConnection())
         .isInstanceOf(TestConnection.class);
@@ -64,10 +70,6 @@ public class TestMirroringConnection {
 
   @Test
   public void testCloseClosesUnderlyingConnections() throws IOException {
-    TestConnection.mocks.clear();
-    Configuration configuration = createConfiguration();
-    Connection connection = ConnectionFactory.createConnection(configuration);
-
     assertThat(TestConnection.mocks.size()).isEqualTo(2);
     connection.close();
     assertThat(connection.isClosed()).isTrue();
@@ -77,10 +79,6 @@ public class TestMirroringConnection {
 
   @Test
   public void testAbortAbortsUnderlyingConnections() throws IOException {
-    TestConnection.mocks.clear();
-    Configuration configuration = createConfiguration();
-    Connection connection = ConnectionFactory.createConnection(configuration);
-
     assertThat(TestConnection.mocks.size()).isEqualTo(2);
     String expectedString = "expected";
     Throwable expectedThrowable = new Exception();
