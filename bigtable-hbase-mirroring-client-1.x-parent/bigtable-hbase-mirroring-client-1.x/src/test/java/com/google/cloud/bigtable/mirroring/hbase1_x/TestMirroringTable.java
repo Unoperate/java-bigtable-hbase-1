@@ -514,7 +514,7 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testClosingTableWithFutureDecreasesListenableCounter()
+  public void testClosingTableNormallyDecreasesListenableCounter()
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
     ListenableReferenceCounter listenableReferenceCounter = spy(new ListenableReferenceCounter());
     listenableReferenceCounter.holdReferenceUntilClosing(mirroringTable);
@@ -527,7 +527,7 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testClosingTableWithoutFutureDecreasesListenableCounter() throws IOException {
+  public void testClosingTableExceptionallyDecreasesListenableCounter() throws IOException {
     ListenableReferenceCounter listenableReferenceCounter = spy(new ListenableReferenceCounter());
     listenableReferenceCounter.holdReferenceUntilClosing(mirroringTable);
 
