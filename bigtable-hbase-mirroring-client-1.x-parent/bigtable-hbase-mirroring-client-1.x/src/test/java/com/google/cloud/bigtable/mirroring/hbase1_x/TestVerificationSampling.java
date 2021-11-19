@@ -190,6 +190,7 @@ public class TestVerificationSampling {
     mirroringTable.batch(ops);
     verify(readSampler, times(1)).shouldNextReadOperationBeSampled();
     verify(primaryTable, times(1)).batch(eq(ops), any(Object[].class));
+    verify(secondaryTable, times(1)).batch(eq(ImmutableList.of(put)), any(Object[].class));
 
     withSamplingEnabled(true);
     mirroringTable.batch(ops);
@@ -197,7 +198,6 @@ public class TestVerificationSampling {
     verify(readSampler, times(2)).shouldNextReadOperationBeSampled();
     verify(primaryTable, times(2)).batch(eq(ops), any(Object[].class));
     verify(secondaryTable, times(1)).batch(eq(ops), any(Object[].class));
-    verify(secondaryTable, times(1)).batch(eq(ImmutableList.of(put)), any(Object[].class));
   }
 
   @Test
