@@ -254,12 +254,9 @@ public class TestSequentialMirroringBufferedMutator {
     flushesStarted.get(1, TimeUnit.SECONDS);
     performFlush.set(null);
 
+    // It waits for ExecutorService by shutting it down synchronously.
+    // After this call we can't send new tasks to it.
     executorServiceRule.waitForExecutor();
-
-    verify(common.secondaryBufferedMutator, never()).flush();
-    verify(common.resourceReservation, times(3)).release();
-
-    // We have killed the executor, mock next submits.
     doAnswer(
             new Answer() {
               @Override
@@ -269,6 +266,9 @@ public class TestSequentialMirroringBufferedMutator {
             })
         .when(executorServiceRule.executorService)
         .submit(any(Callable.class));
+
+    verify(common.secondaryBufferedMutator, never()).flush();
+    verify(common.resourceReservation, times(3)).release();
 
     try {
       bm.mutate(mutations[0]);
