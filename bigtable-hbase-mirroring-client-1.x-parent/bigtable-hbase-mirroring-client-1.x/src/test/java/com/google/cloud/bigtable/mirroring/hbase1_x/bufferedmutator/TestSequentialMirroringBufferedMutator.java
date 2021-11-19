@@ -246,7 +246,7 @@ public class TestSequentialMirroringBufferedMutator {
 
     final BufferedMutator bm = getBufferedMutator(1);
 
-    // Wait until flush is started to ensure to ensure that flushes are scheduled in the same order
+    // Wait until flush is started to ensure that flushes are scheduled in the same order
     // as mutations.
     bm.mutate(mutations[2]);
     bm.mutate(mutations[1]);
