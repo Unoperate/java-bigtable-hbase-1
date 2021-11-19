@@ -1210,6 +1210,8 @@ public class TestMirroringTable {
   @Test
   public void testConcurrentWritesAreFlowControlledBeforePrimaryAction()
       throws IOException, InterruptedException {
+    boolean performWritesConcurrently = true;
+    boolean waitForSecondaryWrites = true;
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -1220,8 +1222,8 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
-                true,
-                true,
+                performWritesConcurrently,
+                waitForSecondaryWrites,
                 new MirroringTracer()));
 
     Put put1 = createPut("r1", "f1", "q1", "v1");
@@ -1280,6 +1282,8 @@ public class TestMirroringTable {
   }
 
   private void setupMirroringTableWithDirectExecutor() {
+    boolean performWritesConcurrently = true;
+    boolean waitForSecondaryWrites = true;
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -1290,8 +1294,8 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
-                true,
-                true,
+                performWritesConcurrently,
+                waitForSecondaryWrites,
                 new MirroringTracer()));
   }
 
@@ -1402,6 +1406,8 @@ public class TestMirroringTable {
 
   @Test
   public void testConcurrentOpsAreRunConcurrently() throws IOException, InterruptedException {
+    boolean performWritesConcurrently = true;
+    boolean waitForSecondaryWrites = true;
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -1412,8 +1418,8 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
-                true,
-                true,
+                performWritesConcurrently,
+                waitForSecondaryWrites,
                 new MirroringTracer()));
 
     Put put = createPut("test1", "f1", "q1", "v1");
