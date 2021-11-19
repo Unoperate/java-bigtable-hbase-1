@@ -629,7 +629,7 @@ public class TestMirroringTable {
     verify(secondaryTable, times(1)).batch(eq(secondaryRequests), argument.capture());
     assertThat(argument.getValue().length).isEqualTo(2);
 
-    // successful secondary reads were reported
+    // failed secondary reads were reported
     verify(mismatchDetector, times(1))
         .batch(Arrays.asList(get1), new Result[] {get1Result}, new Result[] {get1Result});
   }
@@ -703,11 +703,11 @@ public class TestMirroringTable {
     verify(secondaryWriteErrorConsumer, times(1))
         .consume(eq(HBaseOperation.BATCH), eq(put1), (Throwable) isNull());
 
-    // successful secondary reads were reported
+    // failed secondary reads were reported
     verify(mismatchDetector, times(1))
         .batch(Arrays.asList(get3), new Result[] {get3Result}, new Result[] {get3Result});
 
-    // successful secondary reads were reported
+    // failed secondary reads were reported
     verify(mismatchDetector, times(1)).batch(eq(Arrays.asList(get1)), any(IOException.class));
   }
 
@@ -744,7 +744,7 @@ public class TestMirroringTable {
     verify(secondaryTable, times(1)).batch(eq(secondaryRequests), argument.capture());
     assertThat(argument.getValue().length).isEqualTo(1);
 
-    // successful secondary reads were reported
+    // failed secondary reads were reported
     verify(mismatchDetector, times(1))
         .batch(Arrays.asList(get2), new Result[] {get2Result}, new Result[] {get2Result});
 
