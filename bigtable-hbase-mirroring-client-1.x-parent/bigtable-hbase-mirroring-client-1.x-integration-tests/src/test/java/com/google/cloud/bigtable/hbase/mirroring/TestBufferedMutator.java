@@ -163,7 +163,7 @@ public class TestBufferedMutator {
           thread.propagatingJoin();
         }
       }
-    } // wait for secondary writes
+    } // connection close will wait for secondary writes
 
     long readEntries = 0;
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
@@ -236,7 +236,7 @@ public class TestBufferedMutator {
           }
         }
       }
-    } // wait for secondary writes
+    } // connection close will wait for secondary writes
 
     if (this.mutateConcurrently) {
       // ConcurrentBufferedMutator does not report secondary write errors.
@@ -317,7 +317,7 @@ public class TestBufferedMutator {
         }
         bm.flush();
       }
-    } // wait for secondary writes
+    } // connection close will wait for secondary writes
 
     List<Long> secondaryRows = new ArrayList<>();
     try (MirroringConnection mirroringConnection = databaseHelpers.createConnection()) {
