@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.assertListCaptorsHaveEqualFlattenedLength;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.blockMethodCall;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutatorCommon.flushWithErrors;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutatorCommon.makeConfigurationWithFlushThreshold;
@@ -45,6 +46,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -60,24 +62,33 @@ public class TestConcurrentMirroringBufferedMutator {
 
   public final MirroringBufferedMutatorCommon common = new MirroringBufferedMutatorCommon();
 
+  private ArgumentCaptor<List<Mutation>> primaryMutationsCaptor =
+      ArgumentCaptor.forClass(List.class);
+  private ArgumentCaptor<List<Mutation>> secondaryMutationsCaptor =
+      ArgumentCaptor.forClass(List.class);
+
   @Test
   public void testBufferedWritesWithoutErrors() throws IOException, InterruptedException {
     BufferedMutator bm = getBufferedMutator((long) (common.mutationSize * 3.5));
 
     bm.mutate(common.mutation1);
-    verify(common.primaryBufferedMutator, times(1)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(1)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(1)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(1)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
     bm.mutate(common.mutation1);
-    verify(common.primaryBufferedMutator, times(2)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(2)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(2)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(2)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
     bm.mutate(common.mutation1);
-    verify(common.primaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(3)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(3)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
     bm.mutate(common.mutation1);
     Thread.sleep(300);
     executorServiceRule.waitForExecutor();
-    verify(common.primaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(4)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(4)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
     verify(common.primaryBufferedMutator, times(1)).flush();
     verify(common.secondaryBufferedMutator, times(1)).flush();
     verify(common.flowController, never())
@@ -94,8 +105,11 @@ public class TestConcurrentMirroringBufferedMutator {
     bm.mutate(common.mutation1);
     bm.flush();
     executorServiceRule.waitForExecutor();
-    verify(common.primaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
+
+    verify(common.primaryBufferedMutator, times(3)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(3)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
+
     verify(common.primaryBufferedMutator, times(1)).flush();
     verify(common.secondaryBufferedMutator, times(1)).flush();
     verify(common.flowController, never())
@@ -111,8 +125,9 @@ public class TestConcurrentMirroringBufferedMutator {
     bm.mutate(common.mutation1);
     bm.mutate(common.mutation1);
     bm.close();
-    verify(common.primaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(3)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(3)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(3)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
     verify(common.primaryBufferedMutator, times(1)).flush();
     verify(common.secondaryBufferedMutator, times(1)).flush();
     verify(common.flowController, never())
@@ -204,8 +219,9 @@ public class TestConcurrentMirroringBufferedMutator {
     inOrder2.verify(common.secondaryBufferedMutator).mutate(Arrays.asList(common.mutation3));
     inOrder2.verify(common.secondaryBufferedMutator).mutate(Arrays.asList(common.mutation4));
 
-    verify(common.primaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
-    verify(common.secondaryBufferedMutator, times(4)).mutate(ArgumentMatchers.<Mutation>anyList());
+    verify(common.primaryBufferedMutator, times(4)).mutate(primaryMutationsCaptor.capture());
+    verify(common.secondaryBufferedMutator, times(4)).mutate(secondaryMutationsCaptor.capture());
+    assertListCaptorsHaveEqualFlattenedLength(primaryMutationsCaptor, secondaryMutationsCaptor);
     verify(common.secondaryBufferedMutator, times(4)).flush();
     verify(common.flowController, never())
         .asyncRequestResource(any(RequestResourcesDescription.class));

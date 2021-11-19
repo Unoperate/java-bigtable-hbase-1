@@ -46,6 +46,7 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.Table;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.exceptions.base.MockitoException;
 import org.mockito.invocation.InvocationOnMock;
@@ -326,5 +327,18 @@ public class TestHelpers {
         return null;
       }
     };
+  }
+
+  public static <T> void assertListCaptorsHaveEqualFlattenedLength(
+      ArgumentCaptor<List<T>> captor1, ArgumentCaptor<List<T>> captor2) {
+    assertThat(sumLengths(captor1.getAllValues())).isEqualTo(sumLengths(captor2.getAllValues()));
+  }
+
+  private static <T> int sumLengths(List<List<T>> lists) {
+    int sum = 0;
+    for (List list : lists) {
+      sum += list.size();
+    }
+    return sum;
   }
 }
