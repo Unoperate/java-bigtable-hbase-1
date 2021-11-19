@@ -328,8 +328,6 @@ public class TestMirroringTable {
     verify(mismatchDetector, times(1)).scannerNext(scan, 0, expected1, expected1);
     verify(mismatchDetector, times(1)).scannerNext(scan, 1, expected2, expected2);
     verify(mismatchDetector, times(1)).scannerNext(scan, 2, (Result) null, null);
-    verify(mismatchDetector, times(3))
-        .scannerNext(eq(scan), anyInt(), (Result) any(), (Result) any());
   }
 
   @Test
