@@ -208,7 +208,8 @@ public class MirroringConnection implements Connection {
 
   @Override
   public Admin getAdmin() throws IOException {
-    throw new UnsupportedOperationException();
+    return new MirroringAdmin(
+        this.primaryConnection.getAdmin(), this.secondaryConnection.getAdmin());
   }
 
   @Override
