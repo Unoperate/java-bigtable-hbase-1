@@ -887,12 +887,7 @@ public class TestMirroringTable {
         .thenReturn(true);
 
     mirroringTable.checkAndPut(
-        "r1".getBytes(),
-        "f1".getBytes(),
-        "q1".getBytes(),
-        CompareOp.GREATER_OR_EQUAL,
-        "v1".getBytes(),
-        put);
+        "r1".getBytes(), "f1".getBytes(), "q1".getBytes(), "v1".getBytes(), put);
     executorServiceRule.waitForExecutor();
 
     verify(secondaryTable, times(1)).mutateRow(any(RowMutations.class));
@@ -911,18 +906,10 @@ public class TestMirroringTable {
         .thenReturn(true);
 
     mirroringTable.checkAndDelete(
-        "r1".getBytes(),
-        "f1".getBytes(),
-        "q1".getBytes(),
-        CompareOp.GREATER_OR_EQUAL,
-        "v1".getBytes(),
-        delete);
-
-    mirroringTable.checkAndDelete(
         "r1".getBytes(), "f1".getBytes(), "q1".getBytes(), "v1".getBytes(), delete);
     executorServiceRule.waitForExecutor();
 
-    verify(secondaryTable, times(2)).mutateRow(any(RowMutations.class));
+    verify(secondaryTable, times(1)).mutateRow(any(RowMutations.class));
   }
 
   @Test
