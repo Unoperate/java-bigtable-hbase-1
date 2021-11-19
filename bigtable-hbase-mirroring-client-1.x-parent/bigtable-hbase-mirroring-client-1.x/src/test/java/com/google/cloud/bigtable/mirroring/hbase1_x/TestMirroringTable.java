@@ -1232,6 +1232,8 @@ public class TestMirroringTable {
   @Test
   public void testConcurrentWritesAreFlowControlledBeforePrimaryAction()
       throws IOException, InterruptedException {
+    boolean performWritesConcurrently = true;
+    boolean waitForSecondaryWrites = true;
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -1242,8 +1244,8 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
-                true,
-                true,
+                performWritesConcurrently,
+                waitForSecondaryWrites,
                 new MirroringTracer(),
                 this.referenceCounter));
 
@@ -1303,6 +1305,8 @@ public class TestMirroringTable {
   }
 
   private void setupMirroringTableWithDirectExecutor() {
+    boolean performWritesConcurrently = true;
+    boolean waitForSecondaryWrites = true;
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -1313,8 +1317,8 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
-                true,
-                true,
+                performWritesConcurrently,
+                waitForSecondaryWrites,
                 new MirroringTracer(),
                 this.referenceCounter));
   }
@@ -1426,6 +1430,8 @@ public class TestMirroringTable {
 
   @Test
   public void testConcurrentOpsAreRunConcurrently() throws IOException, InterruptedException {
+    boolean performWritesConcurrently = true;
+    boolean waitForSecondaryWrites = true;
     this.mirroringTable =
         spy(
             new MirroringTable(
@@ -1436,8 +1442,8 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
-                true,
-                true,
+                performWritesConcurrently,
+                waitForSecondaryWrites,
                 new MirroringTracer(),
                 this.referenceCounter));
 
