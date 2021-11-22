@@ -15,11 +15,13 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.FLOW_CONTROL_LATENCY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.MIRRORING_LATENCY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.PRIMARY_ERRORS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.PRIMARY_LATENCY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.SECONDARY_ERRORS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.SECONDARY_LATENCY;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.SECONDARY_WRITE_ERROR_HANDLER_LATENCY;
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.WriteOperationFutureCallback;
@@ -180,7 +182,7 @@ public class MirroringSpanFactory {
   }
 
   public Scope flowControlScope() {
-    return flowControlSpanBuilder().startScopedSpan();
+    return new StopwatchScope(flowControlSpanBuilder().startScopedSpan(), FLOW_CONTROL_LATENCY);
   }
 
   public Scope verificationScope() {
@@ -188,7 +190,8 @@ public class MirroringSpanFactory {
   }
 
   public Scope writeErrorScope() {
-    return tracer.spanBuilder("writeErrors").startScopedSpan();
+    return new StopwatchScope(
+        tracer.spanBuilder("writeErrors").startScopedSpan(), SECONDARY_WRITE_ERROR_HANDLER_LATENCY);
   }
 
   public Scope operationScope(HBaseOperation name) {
@@ -282,6 +285,26 @@ public class MirroringSpanFactory {
       MirroringSpanFactory.this.mirroringMetricsRecorder.recordOperation(
           this.operation, MIRRORING_LATENCY, this.stopwatch.elapsed(TimeUnit.MILLISECONDS));
       this.scope.close();
+    }
+  }
+
+  private class StopwatchScope implements Scope {
+    private final Stopwatch stopwatch;
+    private final Scope scope;
+    private final MeasureLong measure;
+
+    public StopwatchScope(Scope scope, MeasureLong measure) {
+      this.scope = scope;
+      this.stopwatch = Stopwatch.createStarted();
+      this.measure = measure;
+    }
+
+    @Override
+    public void close() {
+      this.stopwatch.stop();
+      this.scope.close();
+      MirroringSpanFactory.this.mirroringMetricsRecorder.recordLatency(
+          this.measure, this.stopwatch.elapsed(TimeUnit.MILLISECONDS));
     }
   }
 }

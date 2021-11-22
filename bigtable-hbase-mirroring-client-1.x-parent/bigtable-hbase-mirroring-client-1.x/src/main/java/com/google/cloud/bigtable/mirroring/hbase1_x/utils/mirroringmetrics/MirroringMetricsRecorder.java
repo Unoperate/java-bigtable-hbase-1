@@ -93,4 +93,11 @@ public class MirroringMetricsRecorder {
     map.put(READ_MATCHES, numberOfMatches);
     map.record(tagContext);
   }
+
+  public void recordLatency(MeasureLong latencyMeasure, long latencyMs) {
+    TagContext tagContext = tagger.emptyBuilder().build();
+    MeasureMap map = statsRecorder.newMeasureMap();
+    map.put(latencyMeasure, latencyMs);
+    map.record(tagContext);
+  }
 }

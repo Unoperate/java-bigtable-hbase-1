@@ -15,9 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import io.opencensus.common.Scope;
 import java.io.IOException;
 import org.apache.hadoop.hbase.client.Mutation;
 
@@ -86,12 +84,7 @@ public class FailedMutationLogger implements AutoCloseable {
    */
   public void mutationFailed(Mutation mutation, Throwable failureCause)
       throws InterruptedException {
-    byte[] serializedEntry = serializer.serialize(mutation, failureCause);
-    try (Scope ignored =
-        mirroringTracer.spanFactory.operationScope(
-            MirroringSpanConstants.HBaseOperation.APPEND_FAILLOG)) {
-      appender.append(serializedEntry);
-    }
+    appender.append(serializer.serialize(mutation, failureCause));
   }
 
   @Override
