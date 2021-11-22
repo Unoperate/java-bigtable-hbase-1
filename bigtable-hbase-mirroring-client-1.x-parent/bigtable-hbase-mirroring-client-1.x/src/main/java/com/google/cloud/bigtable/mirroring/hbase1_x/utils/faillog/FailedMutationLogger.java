@@ -86,12 +86,7 @@ public class FailedMutationLogger implements AutoCloseable {
    */
   public void mutationFailed(Mutation mutation, Throwable failureCause)
       throws InterruptedException {
-    byte[] serializedEntry = serializer.serialize(mutation, failureCause);
-    try (Scope ignored =
-        mirroringTracer.spanFactory.operationScope(
-            MirroringSpanConstants.HBaseOperation.APPEND_FAILLOG)) {
-      appender.append(serializedEntry);
-    }
+    appender.append(serializer.serialize(mutation, failureCause));
   }
 
   @Override

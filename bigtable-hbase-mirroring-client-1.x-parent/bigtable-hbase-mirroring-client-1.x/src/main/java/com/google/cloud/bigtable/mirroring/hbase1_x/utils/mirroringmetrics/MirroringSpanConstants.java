@@ -64,6 +64,18 @@ public class MirroringSpanConstants {
           "Count of write errors on secondary database.",
           "1");
 
+  public static final MeasureLong FLOW_CONTROL_LATENCY =
+      MeasureLong.create(
+          "com/google/cloud/bigtable/mirroring/flow_control_latency",
+          "Distribution of latency of acquiring flow controller resources.",
+          "ms");
+
+  public static final MeasureLong SECONDARY_WRITE_ERROR_HANDLER_LATENCY =
+      MeasureLong.create(
+          "com/google/cloud/bigtable/mirroring/secondary_write_error_handler_latency",
+          "Distribution of secondary write error handling latency.",
+          "ms");
+
   public static TagKey OPERATION_KEY = TagKey.create("operation");
 
   public enum HBaseOperation {
@@ -94,8 +106,7 @@ public class MirroringSpanConstants {
     BUFFERED_MUTATOR_MUTATE_LIST("mutateList"),
     MIRRORING_CONNECTION_CLOSE("MirroringConnection.close"),
     MIRRORING_CONNECTION_ABORT("MirroringConnection.abort"),
-    BUFFERED_MUTATOR_CLOSE("BufferedMutator.close"),
-    APPEND_FAILLOG("appendFaillog");
+    BUFFERED_MUTATOR_CLOSE("BufferedMutator.close");
 
     private final String string;
     private final TagValue tagValue;
