@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 
-import org.apache.hadoop.conf.Configuration;
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
 
 /**
  * Objects of this class should write log entries somewhere.
@@ -26,6 +26,6 @@ public interface Appender extends AutoCloseable {
   void append(byte[] data) throws InterruptedException;
 
   interface Factory {
-    Appender create(Configuration configuration) throws Throwable;
+    Appender create(MirroringOptions.Faillog options) throws Throwable;
   }
 }

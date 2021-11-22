@@ -39,9 +39,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.DefaultSecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Appender;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutationLogger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Serializer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringMetricsRecorder;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
@@ -104,7 +108,10 @@ public class TestMirroringMetrics {
                 new DefaultMismatchDetector(tracer),
                 flowController,
                 new SecondaryWriteErrorConsumerWithMetrics(
-                    tracer, mock(SecondaryWriteErrorConsumer.class)),
+                    tracer,
+                    new DefaultSecondaryWriteErrorConsumer(
+                        new FailedMutationLogger(
+                            tracer, mock(Appender.class), mock(Serializer.class)))),
                 new ReadSampler(100),
                 false,
                 false,
@@ -258,6 +265,9 @@ public class TestMirroringMetrics {
 
     verify(mirroringMetricsRecorder, times(1))
         .recordOperation(eq(HBaseOperation.PUT), eq(MIRRORING_LATENCY), anyLong());
+
+    verify(mirroringMetricsRecorder, times(1))
+        .recordOperation(eq(HBaseOperation.APPEND_FAILLOG), eq(MIRRORING_LATENCY), anyLong());
 
     verify(mirroringMetricsRecorder, never())
         .recordReadMismatches(any(HBaseOperation.class), anyInt());

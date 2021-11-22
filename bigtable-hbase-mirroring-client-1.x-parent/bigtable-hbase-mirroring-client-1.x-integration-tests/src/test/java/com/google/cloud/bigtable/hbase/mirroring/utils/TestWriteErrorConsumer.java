@@ -17,7 +17,7 @@ package com.google.cloud.bigtable.hbase.mirroring.utils;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.DefaultSecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutationLogger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.common.base.Preconditions;
 import java.util.List;
@@ -30,8 +30,8 @@ public class TestWriteErrorConsumer implements SecondaryWriteErrorConsumer {
   static AtomicInteger errorCount = new AtomicInteger(0);
   private final DefaultSecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
 
-  public TestWriteErrorConsumer(Logger writeErrorLogger) {
-    this.secondaryWriteErrorConsumer = new DefaultSecondaryWriteErrorConsumer(writeErrorLogger);
+  public TestWriteErrorConsumer(FailedMutationLogger failedMutationLogger) {
+    this.secondaryWriteErrorConsumer = new DefaultSecondaryWriteErrorConsumer(failedMutationLogger);
   }
 
   public static int getErrorCount() {
@@ -60,8 +60,8 @@ public class TestWriteErrorConsumer implements SecondaryWriteErrorConsumer {
 
   public static class Factory implements SecondaryWriteErrorConsumer.Factory {
     @Override
-    public SecondaryWriteErrorConsumer create(Logger logger) {
-      return new TestWriteErrorConsumer(logger);
+    public SecondaryWriteErrorConsumer create(FailedMutationLogger failedMutationLogger) {
+      return new TestWriteErrorConsumer(failedMutationLogger);
     }
   }
 }
