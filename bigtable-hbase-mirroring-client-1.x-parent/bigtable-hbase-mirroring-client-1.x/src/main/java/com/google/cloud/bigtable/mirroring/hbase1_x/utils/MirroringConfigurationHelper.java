@@ -150,6 +150,40 @@ public class MirroringConfigurationHelper {
   public static final String MIRRORING_SYNCHRONOUS_WRITES =
       "google.bigtable.mirroring.synchronous-writes";
 
+  /**
+   * Determines the path prefix used for generating the failed mutations log file names.
+   *
+   * <p>In default mode secondary mutations are executed asynchronously, so their status is not
+   * reported to the user. Instead, they are logged to a failed mutation log, which can be inspected
+   * manually, collected or read programatically to retry the mutations.
+   *
+   * <p>This property should not be empty. Example value: {@code
+   * "/tmp/hbase_mirroring_client_failed_mutations"}.
+   */
+  public static final String MIRRORING_FAILLOG_PREFIX_PATH_KEY =
+      "google.bigtable.mirroring.write-error-log.appender.prefix-path";
+
+  /**
+   * Maximum size of the buffer holding failed mutations before they are logged to persistent
+   * storage.
+   *
+   * <p>Defaults to {@code 20 * 1024 * 1024}.
+   */
+  public static final String MIRRORING_FAILLOG_MAX_BUFFER_SIZE_KEY =
+      "google.bigtable.mirroring.write-error-log.appender.max-buffer-size";
+
+  /**
+   * Controls the behavior of the failed mutation log on persistent storage not keeping up with
+   * writing the mutations.
+   *
+   * <p>If set to {@code true}, mutations will be dropped, otherwise they will block the thread
+   * until the storage catches up.
+   *
+   * <p>Defaults to {@code false}.
+   */
+  public static final String MIRRORING_FAILLOG_DROP_ON_OVERFLOW_KEY =
+      "google.bigtable.mirroring.write-error-log.appender.drop-on-overflow";
+
   public static void fillConnectionConfigWithClassImplementation(
       Configuration connectionConfig,
       Configuration config,

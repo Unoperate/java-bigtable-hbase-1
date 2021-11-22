@@ -22,7 +22,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCou
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.Logger;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutationLogger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
@@ -57,7 +57,7 @@ public class MirroringConnection implements Connection {
   protected final MirroringTracer mirroringTracer;
   protected final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
   protected final ReadSampler readSampler;
-  private final Logger failedWritesLogger;
+  private final FailedMutationLogger failedMutationLogger;
   private final MirroringConfiguration configuration;
   private final Connection primaryConnection;
   private final Connection secondaryConnection;
@@ -108,15 +108,18 @@ public class MirroringConnection implements Connection {
             .create(
                 this.mirroringTracer, configuration.mirroringOptions.maxLoggedBinaryValueLength);
 
-    this.failedWritesLogger =
-        new Logger(
+    this.failedMutationLogger =
+        new FailedMutationLogger(
+            mirroringTracer,
             this.configuration
                 .mirroringOptions
+                .faillog
                 .writeErrorLogAppenderFactoryClass
                 .newInstance()
-                .create(this.configuration.baseConfiguration),
+                .create(this.configuration.mirroringOptions.faillog),
             this.configuration
                 .mirroringOptions
+                .faillog
                 .writeErrorLogSerializerFactoryClass
                 .newInstance()
                 .create());
@@ -126,7 +129,7 @@ public class MirroringConnection implements Connection {
             .mirroringOptions
             .writeErrorConsumerFactoryClass
             .newInstance()
-            .create(this.failedWritesLogger);
+            .create(this.failedMutationLogger);
 
     this.secondaryWriteErrorConsumer =
         new SecondaryWriteErrorConsumerWithMetrics(
@@ -229,7 +232,7 @@ public class MirroringConnection implements Connection {
         throw wrapperException;
       } finally {
         try {
-          this.failedWritesLogger.close();
+          this.failedMutationLogger.close();
         } catch (Exception e) {
           throw new IOException(e);
         }

@@ -19,24 +19,14 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOperationException;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOperationException.ExceptionDetails;
-import com.google.cloud.bigtable.mirroring.hbase1_x.WriteOperationFutureCallback;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.RewrittenIncrementAndAppendIndicesInfo;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import io.opencensus.common.Scope;
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -52,7 +42,6 @@ import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
 import org.apache.hadoop.hbase.client.Table;
-import org.apache.hadoop.hbase.client.coprocessor.Batch.Callback;
 import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 public class BatchHelpers {

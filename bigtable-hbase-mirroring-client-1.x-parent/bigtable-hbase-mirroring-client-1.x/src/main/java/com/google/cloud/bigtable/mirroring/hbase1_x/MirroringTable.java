@@ -15,9 +15,6 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.canBatchBePerformedConcurrently;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.reconcileBatchResultsConcurrent;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.reconcileBatchResultsSequential;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.emptyResult;
 
 import com.google.api.core.InternalApi;
@@ -30,7 +27,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.RewrittenIncrementAndAppendIndicesInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;

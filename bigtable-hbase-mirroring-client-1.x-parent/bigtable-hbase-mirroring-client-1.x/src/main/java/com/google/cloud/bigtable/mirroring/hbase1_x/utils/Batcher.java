@@ -40,7 +40,6 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.io.InterruptedIOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -132,7 +131,8 @@ public class Batcher {
       throws IOException, InterruptedException {
     final RewrittenIncrementAndAppendIndicesInfo<? extends Row> actions =
         new RewrittenIncrementAndAppendIndicesInfo<>(inputOperations);
-    Log.trace("[%s] batch(operations=%s, results)", this.primaryTable.getName(), actions.operations);
+    Log.trace(
+        "[%s] batch(operations=%s, results)", this.primaryTable.getName(), actions.operations);
 
     // We store batch results in a internal variable to prevent the user from modifying it when it
     // might still be used by asynchronous secondary operation.

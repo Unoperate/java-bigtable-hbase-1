@@ -84,7 +84,7 @@ public class LogBuffer implements Closeable {
     return false;
   }
 
-  private void waitForAdmissionLocked(byte[] data) throws InterruptedException {
+  private void waitForSpaceAndAdmitLocked(byte[] data) throws InterruptedException {
     while (!admitLocked(data) && !shutdown) {
       notFull.await();
     }
@@ -122,7 +122,7 @@ public class LogBuffer implements Closeable {
           return false;
         }
       } else {
-        waitForAdmissionLocked(data);
+        waitForSpaceAndAdmitLocked(data);
         if (shutdown) {
           throwOnMisuseLocked("LogBuffer closed while waiting for log admission");
         }

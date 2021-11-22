@@ -17,6 +17,9 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_BUFFERED_MUTATOR_BYTES_TO_FLUSH;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_CONCURRENT_WRITES;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_DROP_ON_OVERFLOW_KEY;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_MAX_BUFFER_SIZE_KEY;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_PREFIX_PATH_KEY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_MAX_OUTSTANDING_REQUESTS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_MAX_USED_BYTES;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_STRATEGY_FACTORY_CLASS;
@@ -44,6 +47,31 @@ import org.apache.hadoop.conf.Configuration;
 
 @InternalApi("For internal use only")
 public class MirroringOptions {
+  public static class Faillog {
+    Faillog(Configuration configuration) {
+      this.prefix_path_key = configuration.get(MIRRORING_FAILLOG_PREFIX_PATH_KEY);
+      this.max_buffer_size =
+          configuration.getInt(MIRRORING_FAILLOG_MAX_BUFFER_SIZE_KEY, 20 * 1024 * 1024);
+      this.drop_on_overflow =
+          configuration.getBoolean(MIRRORING_FAILLOG_DROP_ON_OVERFLOW_KEY, false);
+      this.writeErrorLogAppenderFactoryClass =
+          configuration.getClass(
+              MIRRORING_WRITE_ERROR_LOG_APPENDER_FACTORY_CLASS,
+              DefaultAppender.Factory.class,
+              Appender.Factory.class);
+      this.writeErrorLogSerializerFactoryClass =
+          configuration.getClass(
+              MIRRORING_WRITE_ERROR_LOG_SERIALIZER_FACTORY_CLASS,
+              DefaultSerializer.Factory.class,
+              Serializer.Factory.class);
+    }
+
+    public final Class<? extends Appender.Factory> writeErrorLogAppenderFactoryClass;
+    public final Class<? extends Serializer.Factory> writeErrorLogSerializerFactoryClass;
+    public final String prefix_path_key;
+    public final int max_buffer_size;
+    public final boolean drop_on_overflow;
+  }
 
   private static final String HBASE_CLIENT_WRITE_BUFFER_KEY = "hbase.client.write.buffer";
 
@@ -56,11 +84,9 @@ public class MirroringOptions {
   public final int maxLoggedBinaryValueLength;
   public final int readSamplingRate;
 
-  public final Class<? extends Appender.Factory> writeErrorLogAppenderFactoryClass;
-  public final Class<? extends Serializer.Factory> writeErrorLogSerializerFactoryClass;
-
   public final boolean performWritesConcurrently;
   public final boolean waitForSecondaryWrites;
+  public final Faillog faillog;
 
   public MirroringOptions(Configuration configuration) {
     this.mismatchDetectorFactoryClass =
@@ -93,18 +119,6 @@ public class MirroringOptions {
 
     Preconditions.checkArgument(this.readSamplingRate >= 0);
     Preconditions.checkArgument(this.readSamplingRate <= 100);
-    this.writeErrorLogAppenderFactoryClass =
-        configuration.getClass(
-            MIRRORING_WRITE_ERROR_LOG_APPENDER_FACTORY_CLASS,
-            DefaultAppender.Factory.class,
-            Appender.Factory.class);
-
-    this.writeErrorLogSerializerFactoryClass =
-        configuration.getClass(
-            MIRRORING_WRITE_ERROR_LOG_SERIALIZER_FACTORY_CLASS,
-            DefaultSerializer.Factory.class,
-            Serializer.Factory.class);
-
     this.performWritesConcurrently = configuration.getBoolean(MIRRORING_CONCURRENT_WRITES, false);
     this.waitForSecondaryWrites = configuration.getBoolean(MIRRORING_SYNCHRONOUS_WRITES, false);
 
@@ -112,5 +126,6 @@ public class MirroringOptions {
         !(this.performWritesConcurrently && !this.waitForSecondaryWrites),
         "Performing writes concurrently and not waiting for writes is forbidden. "
             + "It has no advantage over performing writes asynchronously and not waiting for them.");
+    this.faillog = new Faillog(configuration);
   }
 }

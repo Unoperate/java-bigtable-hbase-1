@@ -19,7 +19,7 @@ import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.SYNC;
 import static java.nio.file.StandardOpenOption.WRITE;
 
-import com.google.common.base.Preconditions;
+import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -31,7 +31,6 @@ import java.util.Queue;
 import java.util.TimeZone;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
 
 /**
  * Write log entries asynchronously.
@@ -46,22 +45,12 @@ public class DefaultAppender implements Appender {
   private final LogBuffer buffer;
   private final Writer writer;
 
-  public static final String PREFIX_PATH_KEY =
-      "google.bigtable.mirroring.write-error-log.appender.prefix-path";
-  public static final String MAX_BUFFER_SIZE_KEY =
-      "google.bigtable.mirroring.write-error-log.appender.max-buffer-size";
-  public static final String DROP_ON_OVERFLOW_KEY =
-      "google.bigtable.mirroring.write-error-log.appender.drop-on-overflow";
-
-  public DefaultAppender(Configuration configuration) throws IOException {
-    this(
-        getPrefixPathFromConfiguration(configuration),
-        getMaxBufferSizeFromConfiguration(configuration),
-        getDropOnOverflowFromConfiguration(configuration));
+  public DefaultAppender(MirroringOptions.Faillog options) throws IOException {
+    this(options.prefix_path_key, options.max_buffer_size, options.drop_on_overflow);
   }
 
   /**
-   * Create an `DefaultAppender`.
+   * Create a `DefaultAppender`.
    *
    * <p>The created `DefaultAppender` will create a thread for flushing the data asynchronously. The
    * data will be transferred to the thread via a buffer of a given maximum size (`maxBufferSize`).
@@ -180,47 +169,10 @@ public class DefaultAppender implements Appender {
     }
   }
 
-  private static boolean getDropOnOverflowFromConfiguration(Configuration configuration) {
-    String dropOnOverflow = configuration.get(DROP_ON_OVERFLOW_KEY, "false");
-    Preconditions.checkArgument(
-        dropOnOverflow != null && !dropOnOverflow.isEmpty(),
-        "DefaultAppender's %s key shouldn't be empty.",
-        DROP_ON_OVERFLOW_KEY);
-    try {
-      return Boolean.parseBoolean(dropOnOverflow);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format("DefaultAppender's %s key should be a boolean.", DROP_ON_OVERFLOW_KEY));
-    }
-  }
-
-  private static int getMaxBufferSizeFromConfiguration(Configuration configuration) {
-    String maxBufferSize = configuration.get(MAX_BUFFER_SIZE_KEY, "20971520");
-    Preconditions.checkArgument(
-        maxBufferSize != null && !maxBufferSize.isEmpty(),
-        "DefaultAppender's %s key shouldn't be empty.",
-        MAX_BUFFER_SIZE_KEY);
-    try {
-      return Integer.parseInt(maxBufferSize);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format("DefaultAppender's %s key should be a integer.", MAX_BUFFER_SIZE_KEY));
-    }
-  }
-
-  private static String getPrefixPathFromConfiguration(Configuration configuration) {
-    String prefixPath = configuration.get(PREFIX_PATH_KEY);
-    Preconditions.checkArgument(
-        prefixPath != null && !prefixPath.isEmpty(),
-        "DefaultAppender's %s key shouldn't be empty.",
-        PREFIX_PATH_KEY);
-    return prefixPath;
-  }
-
   public static class Factory implements Appender.Factory {
     @Override
-    public Appender create(Configuration configuration) throws IOException {
-      return new DefaultAppender(configuration);
+    public Appender create(MirroringOptions.Faillog options) throws IOException {
+      return new DefaultAppender(options);
     }
   }
 }
