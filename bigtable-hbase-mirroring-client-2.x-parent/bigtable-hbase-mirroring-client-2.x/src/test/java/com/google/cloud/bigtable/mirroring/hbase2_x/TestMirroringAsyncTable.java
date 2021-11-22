@@ -15,12 +15,12 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGet;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGets;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createPut;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createResult;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerToRejectRequests;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createGet;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createGets;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createPut;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createResult;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.setupFlowControllerMock;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.setupFlowControllerToRejectRequests;
 import static com.google.common.truth.Truth.assertThat;
 import static junit.framework.TestCase.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,16 +33,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
-import com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.MirroringResultScanner;
+import com.google.cloud.bigtable.mirroring.core.TestHelpers;
+import com.google.cloud.bigtable.mirroring.core.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.utils.OperationUtils;
+import com.google.cloud.bigtable.mirroring.core.utils.ReadSampler;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
 import com.google.common.primitives.Longs;
 import java.io.IOException;
 import java.util.ArrayList;

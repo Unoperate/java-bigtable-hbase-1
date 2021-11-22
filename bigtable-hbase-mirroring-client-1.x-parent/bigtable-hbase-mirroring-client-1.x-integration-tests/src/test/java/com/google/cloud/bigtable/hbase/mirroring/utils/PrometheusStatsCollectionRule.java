@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringMetricsViews;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringMetricsViews;
 import io.opencensus.exporter.stats.prometheus.PrometheusStatsCollector;
 import io.prometheus.client.exporter.HTTPServer;
 import java.io.IOException;

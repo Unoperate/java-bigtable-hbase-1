@@ -29,61 +29,22 @@ limitations under the License.
   <name>${project.groupId}:${project.artifactId}</name>
   <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
   <description>
+    Bigtable/HBase Mirroring Client conforming to HBase API 1.x.
+    Shades all dependencies of bigtable-hbase-mirroring-client-core except hbase-client.
   </description>
 
-  <properties>
-    <!-- define a property that can be ignored by renovate -->
-    <hbase1-hadoop-slf4j.version>1.6.1</hbase1-hadoop-slf4j.version>
-  </properties>
-
   <dependencies>
+    <dependency>
+      <groupId>com.google.cloud.bigtable</groupId>
+      <artifactId>bigtable-hbase-mirroring-client-core</artifactId>
+      <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
+      <scope>compile</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-client</artifactId>
       <version>${hbase1.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>2.11.1</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.googlecode.protobuf-java-format</groupId>
-      <artifactId>protobuf-java-format</artifactId>
-      <version>1.4</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.api</groupId>
-      <artifactId>api-common</artifactId>
-      <version>1.10.4</version>
       <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.opencensus</groupId>
-      <artifactId>opencensus-api</artifactId>
-      <version>0.28.0</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>30.1.1-android</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.code.findbugs</groupId>
-      <artifactId>jsr305</artifactId>
-      <version>${jsr305.version}</version>
-    </dependency>
-
-    <!-- Manually promote dependencies: This is necessary to avoid flattening hbase-shaded-client's dependency tree -->
-    <dependency>
-      <groupId>commons-logging</groupId>
-      <artifactId>commons-logging</artifactId>
-      <version>${commons-logging.version}</version>
     </dependency>
 
     <!-- Test deps -->
@@ -102,7 +63,14 @@ limitations under the License.
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>3.8.0</version>
+      <version>${mockito.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.cloud.bigtable</groupId>
+      <artifactId>bigtable-hbase-mirroring-client-core</artifactId>
+      <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
+      <type>test-jar</type>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -158,14 +126,19 @@ limitations under the License.
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/MANIFEST.MF</exclude>
+                    <exclude>META-INF/LICENSE</exclude>
+                    <exclude>META-INF/LICENSE.txt</exclude>
+                    <exclude>META-INF/NOTICE</exclude>
+                    <exclude>META-INF/DEPENDENCIES</exclude>
+                    <exclude>META-INF/NOTICE.txt</exclude>
                   </excludes>
                 </filter>
               </filters>
               <artifactSet>
                 <includes>
+                  <include>com.google.cloud.bigtable:bigtable-hbase-mirroring-client-core</include>
                   <include>com.google.api:api-common</include>
-                  <!--                  <include>com.google.protobuf:protobuf-java</include>-->
-                  <!--                  <include>com.google.protobuf:protobuf-java-util</include>-->
                   <include>com.fasterxml.jackson.core:jackson-databind</include>
                   <include>com.fasterxml.jackson.core:jackson-core</include>
                   <include>com.fasterxml.jackson.core:jackson-annotations</include>
@@ -184,13 +157,17 @@ limitations under the License.
               </artifactSet>
               <relocations>
                 <relocation>
+                  <pattern>com.google.cloud.bigtable.mirroring.core</pattern>
+                  <shadedPattern>com.shaded.google.cloud.bigtable.mirroring.core</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.google.api</pattern>
                   <shadedPattern>com.shaded.google.api</shadedPattern>
                 </relocation>
-                <!--                <relocation>-->
-                <!--                  <pattern>com.google.protobuf</pattern>-->
-                <!--                  <shadedPattern>com.shaded.google.protobuf</shadedPattern>-->
-                <!--                </relocation>-->
+                <relocation>
+                  <pattern>com.google.api</pattern>
+                  <shadedPattern>com.shaded.google.api</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.fasterxml.jackson</pattern>
                   <shadedPattern>com.shaded.fasterxml.jackson</shadedPattern>
@@ -252,27 +229,14 @@ limitations under the License.
             <configuration>
               <allowedJarClassEntries>
                 <classEntry>com/google/cloud/bigtable/mirroring/hbase1_x</classEntry>
-                <classEntry>com/shaded/fasterxml</classEntry>
-                <classEntry>com/shaded/google/api</classEntry>
-                <classEntry>com/shaded/google/common</classEntry>
-                <classEntry>com/shaded/googlecode/protobuf</classEntry>
-                <classEntry>io/shaded/grpc</classEntry>
-                <classEntry>io/shaded/opencensus</classEntry>
-                <classEntry>javax/shaded/annotation</classEntry>
-                <classEntry>org/shaded/apache/commons/logging</classEntry>
-                <classEntry>com/shaded/google/thirdparty/publicsuffix/</classEntry>
-                <classEntry>com/shaded/google/j2objc</classEntry>
-                <classEntry>org/shaded/checkerframework/checker</classEntry>
+                <classEntry>com/shaded</classEntry>
+                <classEntry>io/shaded</classEntry>
+                <classEntry>javax/shaded</classEntry>
+                <classEntry>org/shaded</classEntry>
               </allowedJarClassEntries>
             </configuration>
           </execution>
-          <execution>
-            <id>verify-shaded-exclusions</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>verify-shaded-exclusions</goal>
-            </goals>
-          </execution>
+          <!-- ignore verify-shaded-exclusions run -->
           <execution>
             <id>verify-mirror-deps</id>
             <phase>verify</phase>
@@ -284,9 +248,11 @@ limitations under the License.
                 <targetDependency>org.apache.hbase:hbase-client</targetDependency>
               </targetDependencies>
               <ignoredDependencies>
-                <!-- TODO: fix me -->
+                <!-- We have shaded 30.1-android and hbase-client depends on 12.0.1 -->
                 <dependency>com.google.guava:guava</dependency>
+                <!-- hbase-client depends on 3.0.0 and shaded guava:30.1.1-android depends on 3.0.2 -->
                 <dependency>com.google.code.findbugs:jsr305</dependency>
+
                 <!-- for some reason hbase-client exposes testing deps as a compile dep, just ignore them -->
                 <dependency>junit:junit</dependency>
                 <dependency>org.hamcrest:hamcrest-core</dependency>

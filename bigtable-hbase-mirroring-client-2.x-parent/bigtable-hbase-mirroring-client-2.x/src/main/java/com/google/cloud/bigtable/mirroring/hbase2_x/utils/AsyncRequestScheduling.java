@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureUtils;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;

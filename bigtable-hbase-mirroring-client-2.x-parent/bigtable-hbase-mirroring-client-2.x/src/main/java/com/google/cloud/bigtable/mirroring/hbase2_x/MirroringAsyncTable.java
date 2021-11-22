@@ -15,32 +15,33 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.makePutFromResult;
+import static com.google.cloud.bigtable.mirroring.core.utils.OperationUtils.makePutFromResult;
 import static com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.reserveFlowControlResourcesThenScheduleSecondary;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable.RequestScheduler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.WriteOperationFutureCallback;
-import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
+import com.google.cloud.bigtable.mirroring.core.MirroringResultScanner;
+import com.google.cloud.bigtable.mirroring.core.MirroringTable.RequestScheduler;
+import com.google.cloud.bigtable.mirroring.core.WriteOperationFutureCallback;
+import com.google.cloud.bigtable.mirroring.core.asyncwrappers.AsyncResultScannerWrapper;
+import com.google.cloud.bigtable.mirroring.core.utils.BatchHelpers;
+import com.google.cloud.bigtable.mirroring.core.utils.BatchHelpers.FailedSuccessfulSplit;
+import com.google.cloud.bigtable.mirroring.core.utils.BatchHelpers.ReadWriteSplit;
+import com.google.cloud.bigtable.mirroring.core.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.utils.ReadSampler;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.WriteOperationInfo;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.verification.VerificationContinuationFactory;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.OperationStages;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureUtils;
 import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.protobuf.RpcChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -71,8 +72,6 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.ScanResultConsumerBase;
 import org.apache.hadoop.hbase.client.ServiceCaller;
 import org.apache.hadoop.hbase.io.TimeRange;
-import org.apache.hadoop.hbase.shaded.com.google.protobuf.RpcChannel;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements AsyncTable<C> {
   private final Predicate<Object> resultIsFaultyPredicate = (o) -> o instanceof Throwable;
@@ -648,7 +647,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     public FutureCallback<Void> getVerificationCallback(Object[] secondaryResults) {
       return new FutureCallback<Void>() {
         @Override
-        public void onSuccess(@NullableDecl Void unused) {
+        public void onSuccess(Void unused) {
           boolean[] booleanSecondaryResults = new boolean[secondaryResults.length];
           for (int i = 0; i < secondaryResults.length; i++) {
             booleanSecondaryResults[i] = (boolean) secondaryResults[i];
