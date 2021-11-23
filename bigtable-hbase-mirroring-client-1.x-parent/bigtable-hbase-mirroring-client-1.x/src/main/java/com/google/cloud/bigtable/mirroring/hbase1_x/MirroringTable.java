@@ -18,6 +18,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.canBatchBePerformedConcurrently;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.reconcileBatchResultsConcurrent;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.reconcileBatchResultsSequential;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.emptyResult;
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
@@ -32,9 +33,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.EmptyResultFactory;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.EmptyResultFactory1x;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.RewrittenOperations;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.RewrittenIncrementAndAppendIndicesInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.RequestScheduling;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
@@ -109,8 +108,6 @@ public class MirroringTable implements Table, ListenableCloseable {
           return o == null || o instanceof Throwable;
         }
       };
-  private static final EmptyResultFactory emptyResultFactory = new EmptyResultFactory1x();
-
   protected final Table primaryTable;
   private final Table secondaryTable;
   private final AsyncTableWrapper secondaryAsyncWrapper;
@@ -530,7 +527,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       scheduleSequentialWriteOperation(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
 
-      return wantsResults ? result : emptyResultFactory.emptyAppendResult();
+      return wantsResults ? result : null;
     }
   }
 
@@ -555,7 +552,7 @@ public class MirroringTable implements Table, ListenableCloseable {
 
       scheduleSequentialWriteOperation(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
-      return wantsResults ? result : emptyResultFactory.emptyIncrementResult();
+      return wantsResults ? result : emptyResult();
     }
   }
 
@@ -795,9 +792,9 @@ public class MirroringTable implements Table, ListenableCloseable {
       final Object[] results,
       @Nullable final Callback<R> callback)
       throws IOException, InterruptedException {
-    final RewrittenOperations rewrittenOperations =
-        new RewrittenOperations(inputOperations, emptyResultFactory);
-    Log.trace("[%s] batch(operations=%s, results)", this.getName(), rewrittenOperations.operations);
+    final RewrittenIncrementAndAppendIndicesInfo<? extends Row> actions =
+        new RewrittenIncrementAndAppendIndicesInfo<>(inputOperations);
+    Log.trace("[%s] batch(operations=%s, results)", this.getName(), actions.operations);
 
     // We store batch results in a internal variable to prevent the user from modifying it when it
     // might still be used by asynchronous secondary operation.
@@ -808,25 +805,23 @@ public class MirroringTable implements Table, ListenableCloseable {
           @Override
           public Void call() throws IOException, InterruptedException {
             if (callback == null) {
-              MirroringTable.this.primaryTable.batch(
-                  rewrittenOperations.operations, internalPrimaryResults);
+              MirroringTable.this.primaryTable.batch(actions.operations, internalPrimaryResults);
             } else {
               MirroringTable.this.primaryTable.batchCallback(
-                  rewrittenOperations.operations, internalPrimaryResults, callback);
+                  actions.operations, internalPrimaryResults, callback);
             }
             return null;
           }
         };
 
     try {
-      if (!this.performWritesConcurrently
-          || !canBatchBePerformedConcurrently(rewrittenOperations.operations)) {
-        sequentialBatch(internalPrimaryResults, rewrittenOperations.operations, primaryOperation);
+      if (!this.performWritesConcurrently || !canBatchBePerformedConcurrently(actions.operations)) {
+        sequentialBatch(internalPrimaryResults, actions.operations, primaryOperation);
       } else {
-        concurrentBatch(internalPrimaryResults, rewrittenOperations.operations, primaryOperation);
+        concurrentBatch(internalPrimaryResults, actions.operations, primaryOperation);
       }
     } finally {
-      rewrittenOperations.discardUnwantedResults(internalPrimaryResults);
+      actions.discardUnwantedResults(internalPrimaryResults);
       System.arraycopy(internalPrimaryResults, 0, results, 0, results.length);
     }
   }
@@ -1053,10 +1048,6 @@ public class MirroringTable implements Table, ListenableCloseable {
         MoreExecutors.directExecutor());
 
     return result;
-  }
-
-  protected EmptyResultFactory getEmptyResultFactory() {
-    return emptyResultFactory;
   }
 
   public static class WriteOperationInfo {
