@@ -189,10 +189,7 @@ public class TestErrorDetection {
       }
     }
 
-    assertEquals(
-        MismatchDetectorCounter.getInstance().getErrorsAsString(),
-        0,
-        MismatchDetectorCounter.getInstance().getErrorCount());
+    assertEquals(0, MismatchDetectorCounter.getInstance().getErrorCount());
   }
 
   @Test
@@ -280,9 +277,6 @@ public class TestErrorDetection {
     assertEquals(
         numberOfWorkers + 1,
         MismatchDetectorCounter.getInstance().getVerificationsFinishedCounter());
-    assertEquals(
-        MismatchDetectorCounter.getInstance().getErrorsAsString(),
-        0,
-        MismatchDetectorCounter.getInstance().getErrorCount());
+    assertEquals(0, MismatchDetectorCounter.getInstance().getErrorCount());
   }
 }
