@@ -47,41 +47,11 @@ public class OperationUtils {
     return put;
   }
 
-  public interface EmptyResultFactory {
-    Result emptyAppendResult();
-
-    Result emptyIncrementResult();
+  public static Result emptyResult() {
+    return Result.create(new Cell[0]);
   }
 
-  public static class EmptyResultFactory1x implements EmptyResultFactory {
-    public EmptyResultFactory1x() {}
-
-    @Override
-    public Result emptyAppendResult() {
-      return null;
-    }
-
-    @Override
-    public Result emptyIncrementResult() {
-      return Result.create(new Cell[0]);
-    }
-  }
-
-  public static class EmptyResultFactory2x implements EmptyResultFactory {
-    public EmptyResultFactory2x() {}
-
-    @Override
-    public Result emptyAppendResult() {
-      return Result.create(new Cell[0]);
-    }
-
-    @Override
-    public Result emptyIncrementResult() {
-      return Result.create(new Cell[0]);
-    }
-  }
-
-  public static class RewrittenOperations<T extends Row> {
+  public static class RewrittenIncrementAndAppendIndicesInfo<T extends Row> {
     /**
      * Behaviour of HBase when setReturnResults(false) was called on input Append and Increment
      * requests:
@@ -102,11 +72,8 @@ public class OperationUtils {
     public final List<T> operations;
 
     private final Set<Integer> unwantedResultIndices;
-    private final EmptyResultFactory emptyResultFactory;
 
-    public RewrittenOperations(
-        List<? extends T> inputOperations, EmptyResultFactory emptyResultFactory) {
-      this.emptyResultFactory = emptyResultFactory;
+    public RewrittenIncrementAndAppendIndicesInfo(List<? extends T> inputOperations) {
       this.unwantedResultIndices = new HashSet<>();
       this.operations = new ArrayList<>(inputOperations);
       for (int i = 0; i < operations.size(); i++) {
@@ -127,9 +94,9 @@ public class OperationUtils {
           if (results[i] instanceof Result && this.unwantedResultIndices.contains(i)) {
             Row op = this.operations.get(i);
             if (op instanceof Increment) {
-              results[i] = this.emptyResultFactory.emptyIncrementResult();
+              results[i] = emptyResult();
             } else if (op instanceof Append) {
-              results[i] = this.emptyResultFactory.emptyAppendResult();
+              results[i] = emptyResult();
             }
           }
         }

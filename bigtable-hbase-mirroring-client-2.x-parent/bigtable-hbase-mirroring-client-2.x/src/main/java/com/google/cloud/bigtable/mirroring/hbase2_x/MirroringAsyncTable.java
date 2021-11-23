@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.emptyResult;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.makePutFromResult;
 import static com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.reserveFlowControlResourcesThenScheduleSecondary;
 
@@ -27,8 +28,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuc
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.EmptyResultFactory;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.EmptyResultFactory2x;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -78,7 +77,6 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 
 public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements AsyncTable<C> {
   private final Predicate<Object> resultIsFaultyPredicate = (o) -> o instanceof Throwable;
-  private final EmptyResultFactory emptyResultFactory = new EmptyResultFactory2x();
 
   private final AsyncTable<C> primaryTable;
   private final AsyncTable<C> secondaryTable;
@@ -165,8 +163,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         this.primaryTable.append(append.setReturnResults(true));
     return mutationAsPut(primaryFuture)
         .userNotified
-        .thenApply(
-            primaryResult -> wantsResults ? primaryResult : emptyResultFactory.emptyAppendResult());
+        .thenApply(primaryResult -> wantsResults ? primaryResult : emptyResult());
   }
 
   @Override
@@ -176,9 +173,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         this.primaryTable.increment(increment.setReturnResults(true));
     return mutationAsPut(primaryFuture)
         .userNotified
-        .thenApply(
-            primaryResult ->
-                wantsResults ? primaryResult : emptyResultFactory.emptyIncrementResult());
+        .thenApply(primaryResult -> wantsResults ? primaryResult : emptyResult());
   }
 
   @Override
@@ -254,8 +249,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
           Function<FailedSuccessfulSplit<ActionType, SuccessfulResultType>, GeneralBatchBuilder>
               batchBuilderCreator,
           Class<SuccessfulResultType> successfulResultTypeClass) {
-    OperationUtils.RewrittenOperations<ActionType> actions =
-        new OperationUtils.RewrittenOperations<>(userActions, emptyResultFactory);
+    OperationUtils.RewrittenIncrementAndAppendIndicesInfo<ActionType> actions =
+        new OperationUtils.RewrittenIncrementAndAppendIndicesInfo<>(userActions);
     final int numActions = actions.operations.size();
 
     final OperationStages<List<CompletableFuture<ResultType>>> returnedValue =
@@ -357,8 +352,9 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private <T, U extends Row> void completeSuccessfulResultFutures(
       List<CompletableFuture<T>> resultFutures,
       Object[] primaryResults,
-      OperationUtils.RewrittenOperations<U> rewrittenOperations) {
-    rewrittenOperations.discardUnwantedResults(primaryResults);
+      OperationUtils.RewrittenIncrementAndAppendIndicesInfo<U>
+          rewrittenIncrementAndAppendIndicesInfo) {
+    rewrittenIncrementAndAppendIndicesInfo.discardUnwantedResults(primaryResults);
     for (int i = 0; i < primaryResults.length; i++) {
       if (!(resultIsFaultyPredicate.apply(primaryResults[i]))) {
         resultFutures.get(i).complete((T) primaryResults[i]);
