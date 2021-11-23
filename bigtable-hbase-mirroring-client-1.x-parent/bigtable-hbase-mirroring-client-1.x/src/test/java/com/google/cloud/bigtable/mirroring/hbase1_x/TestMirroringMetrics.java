@@ -20,11 +20,13 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createPut
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createResult;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.mockBatch;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.FLOW_CONTROL_LATENCY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.MIRRORING_LATENCY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.PRIMARY_ERRORS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.PRIMARY_LATENCY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.SECONDARY_ERRORS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.SECONDARY_LATENCY;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.SECONDARY_WRITE_ERROR_HANDLER_LATENCY;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -266,8 +268,9 @@ public class TestMirroringMetrics {
     verify(mirroringMetricsRecorder, times(1))
         .recordOperation(eq(HBaseOperation.PUT), eq(MIRRORING_LATENCY), anyLong());
 
+    verify(mirroringMetricsRecorder, times(1)).recordLatency(eq(FLOW_CONTROL_LATENCY), anyLong());
     verify(mirroringMetricsRecorder, times(1))
-        .recordOperation(eq(HBaseOperation.APPEND_FAILLOG), eq(MIRRORING_LATENCY), anyLong());
+        .recordLatency(eq(SECONDARY_WRITE_ERROR_HANDLER_LATENCY), anyLong());
 
     verify(mirroringMetricsRecorder, never())
         .recordReadMismatches(any(HBaseOperation.class), anyInt());

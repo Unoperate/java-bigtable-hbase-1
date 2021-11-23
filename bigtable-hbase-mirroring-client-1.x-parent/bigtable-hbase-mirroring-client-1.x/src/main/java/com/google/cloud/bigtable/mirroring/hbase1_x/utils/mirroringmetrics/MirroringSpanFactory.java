@@ -191,8 +191,7 @@ public class MirroringSpanFactory {
 
   public Scope writeErrorScope() {
     return new StopwatchScope(
-        tracer.spanBuilder("writeErrors").startScopedSpan(),
-        SECONDARY_WRITE_ERROR_HANDLER_LATENCY);
+        tracer.spanBuilder("writeErrors").startScopedSpan(), SECONDARY_WRITE_ERROR_HANDLER_LATENCY);
   }
 
   public Scope operationScope(HBaseOperation name) {

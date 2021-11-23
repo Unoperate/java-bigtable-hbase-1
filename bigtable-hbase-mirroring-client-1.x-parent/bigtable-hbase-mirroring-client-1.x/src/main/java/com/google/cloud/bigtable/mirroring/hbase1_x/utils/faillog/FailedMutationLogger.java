@@ -15,9 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import io.opencensus.common.Scope;
 import java.io.IOException;
 import org.apache.hadoop.hbase.client.Mutation;
 
