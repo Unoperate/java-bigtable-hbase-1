@@ -42,6 +42,7 @@ import io.opencensus.trace.Span;
 import io.opencensus.trace.Tracing;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -207,6 +208,16 @@ public class TestMirroringResultScanner {
 
   @Test
   public void testSecondaryNextsAreIssuedInTheSameOrderAsPrimary() throws IOException {
+    // AsyncRequestWrapper has a concurrent queue of primary scanner results (with some context).
+    // When a next() is requested, it puts its context into the queue.
+    // Then it acquires a mutex and while holding it pops a context from the queue
+    // and runs next() on underlying ResultScanner from secondary database.
+    // Later it joins the primary and secondary results in an object further passed to
+    // MismatchDetector.
+    // This test proves that even if the asynchronous requests get reordered, the
+    // queue is emptied in order (so that results of primary and secondary scanner
+    // are paired as intended).
+
     AsyncResultScannerWrapper secondaryScannerWrapperMock = mock(AsyncResultScannerWrapper.class);
     AsyncTableWrapper secondaryAsyncTableWrapperMock = mock(AsyncTableWrapper.class);
     when(secondaryAsyncTableWrapperMock.getScanner(any(Scan.class)))
@@ -214,6 +225,7 @@ public class TestMirroringResultScanner {
 
     ResultScanner resultScanner = mock(ResultScanner.class);
 
+    // We force reordering of secondary requests.
     ReverseOrderExecutorService reverseOrderExecutorService = new ReverseOrderExecutorService();
     ListeningExecutorService listeningExecutorService =
         MoreExecutors.listeningDecorator(reverseOrderExecutorService);
@@ -233,20 +245,22 @@ public class TestMirroringResultScanner {
     ScannerRequestContext c5 = new ScannerRequestContext(null, null, 5, span);
     ScannerRequestContext c6 = new ScannerRequestContext(null, null, 6, span);
 
-    catchResult(asyncResultScannerWrapper.next(c1).get(), calls);
-    catchResult(asyncResultScannerWrapper.next(c2).get(), calls);
-    catchResult(asyncResultScannerWrapper.next(c3).get(), calls);
-    catchResult(asyncResultScannerWrapper.next(c4).get(), calls);
-    catchResult(asyncResultScannerWrapper.next(c5).get(), calls);
-    catchResult(asyncResultScannerWrapper.next(c6).get(), calls);
+    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c1).get(), calls);
+    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c2).get(), calls);
+    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c3).get(), calls);
+    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c4).get(), calls);
+    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c5).get(), calls);
+    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c6).get(), calls);
 
-    reverseOrderExecutorService.callCallables();
+    reverseOrderExecutorService.callScheduledCallables();
 
     verify(resultScanner, times(6)).next();
-    assertThat(calls).containsExactly(c1, c2, c3, c4, c5, c6);
+    // Even though the secondary requests were reordered by reverseOrderExecutorService,
+    // the contexts were picked from the queue in order.
+    assertThat(calls).isEqualTo(Arrays.asList(c1, c2, c3, c4, c5, c6));
   }
 
-  private void catchResult(
+  private void getFutureWithoutBlocking(
       ListenableFuture<AsyncScannerVerificationPayload> next,
       final List<ScannerRequestContext> calls) {
     Futures.addCallback(
@@ -267,7 +281,7 @@ public class TestMirroringResultScanner {
   static class ReverseOrderExecutorService implements ExecutorService {
     List<Runnable> callables = new ArrayList<>();
 
-    public void callCallables() {
+    public void callScheduledCallables() {
       for (int i = callables.size() - 1; i >= 0; i--) {
         callables.get(i).run();
       }
