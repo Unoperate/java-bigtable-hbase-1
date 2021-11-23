@@ -93,9 +93,7 @@ public class OperationUtils {
         for (int i = 0; i < results.length; i++) {
           if (results[i] instanceof Result && this.unwantedResultIndices.contains(i)) {
             Row op = this.operations.get(i);
-            if (op instanceof Increment) {
-              results[i] = emptyResult();
-            } else if (op instanceof Append) {
+            if (op instanceof Increment || op instanceof Append) {
               results[i] = emptyResult();
             }
           }

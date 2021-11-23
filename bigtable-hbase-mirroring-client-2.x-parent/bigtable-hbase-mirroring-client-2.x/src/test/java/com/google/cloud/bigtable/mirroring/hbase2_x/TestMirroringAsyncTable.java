@@ -80,7 +80,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -908,87 +907,119 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void testAppendIncrementWhichDontWantResults()
-      throws IOException, InterruptedException, ExecutionException {
+  public void testAppendWhichDoesntWantResult() throws InterruptedException, ExecutionException {
     final byte[] row = "r1".getBytes();
     final byte[] family = "f1".getBytes();
     final byte[] qualifier = "q1".getBytes();
     final long ts = 12;
     final byte[] value = "v1".getBytes();
 
-    Append appendIgnoringResults = new Append(row).setReturnResults(false);
-    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+    Append appendIgnoringResult = new Append(row).setReturnResults(false);
 
     when(primaryTable.append(any(Append.class)))
-        .thenAnswer(
-            invocationOnMock -> {
-              assert ((Append) invocationOnMock.getArgument(0)).isReturnResults();
-              return CompletableFuture.completedFuture(
-                  Result.create(
-                      new Cell[] {
-                        CellUtil.createCell(
-                            row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
-                      }));
-            });
-    Result appendWithoutResult = mirroringTable.append(appendIgnoringResults).get();
-    verify(primaryTable, times(1)).append(any(Append.class));
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                Result.create(
+                    new Cell[] {
+                      CellUtil.createCell(
+                          row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                    })));
+    Result appendWithoutResult = mirroringTable.append(appendIgnoringResult).get();
+
+    ArgumentCaptor<Append> appendCaptor = ArgumentCaptor.forClass(Append.class);
+    verify(primaryTable, times(1)).append(appendCaptor.capture());
+    assertThat(appendCaptor.getValue().isReturnResults()).isTrue();
     assertThat(appendWithoutResult.value()).isNull();
+  }
+
+  @Test
+  public void testIncrementWhichDoesntWantResult() throws InterruptedException, ExecutionException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    Increment incrementIgnoringResult = new Increment(row).setReturnResults(false);
 
     when(primaryTable.increment(any(Increment.class)))
-        .thenAnswer(
-            invocationOnMock -> {
-              assert ((Increment) invocationOnMock.getArgument(0)).isReturnResults();
-              return CompletableFuture.completedFuture(
-                  Result.create(
-                      new Cell[] {
-                        CellUtil.createCell(
-                            row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
-                      }));
-            });
-    Result incrementWithoutResult = mirroringTable.increment(incrementIgnoringResults).get();
-    verify(primaryTable, times(1)).increment(any(Increment.class));
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                Result.create(
+                    new Cell[] {
+                      CellUtil.createCell(
+                          row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                    })));
+    Result incrementWithoutResult = mirroringTable.increment(incrementIgnoringResult).get();
+
+    ArgumentCaptor<Increment> incrementCaptor = ArgumentCaptor.forClass(Increment.class);
+    verify(primaryTable, times(1)).increment(incrementCaptor.capture());
+    assertThat(incrementCaptor.getValue().isReturnResults()).isTrue();
     assertThat(incrementWithoutResult.value()).isNull();
   }
 
   @Test
-  public void testBatchAppendIncrementWhichDontWantResults()
-      throws IOException, InterruptedException, ExecutionException {
+  public void testBatchAppendWhichDoesntWantResult()
+      throws InterruptedException, ExecutionException {
     final byte[] row = "r1".getBytes();
     final byte[] family = "f1".getBytes();
     final byte[] qualifier = "q1".getBytes();
     final long ts = 12;
     final byte[] value = "v1".getBytes();
 
-    Append appendIgnoringResults = new Append(row).setReturnResults(false);
-    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+    List<Append> batchAppendIgnoringResult =
+        Collections.singletonList(new Append(row).setReturnResults(false));
 
     when(primaryTable.batch(anyList()))
-        .thenAnswer(
-            invocationOnMock -> {
-              List<Row> requests = (List<Row>) invocationOnMock.getArgument(0);
+        .thenReturn(
+            Collections.singletonList(
+                CompletableFuture.completedFuture(
+                    Result.create(
+                        new Cell[] {
+                          CellUtil.createCell(
+                              row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                        }))));
 
-              assert ((Append) requests.get(0)).isReturnResults();
-              assert ((Increment) requests.get(1)).isReturnResults();
-              return Arrays.asList(
-                  CompletableFuture.completedFuture(
-                      Result.create(
-                          new Cell[] {
-                            CellUtil.createCell(
-                                row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
-                          })),
-                  CompletableFuture.completedFuture(
-                      Result.create(
-                          new Cell[] {
-                            CellUtil.createCell(
-                                row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
-                          })));
-            });
+    List<CompletableFuture<Result>> batchAppendWithoutResult =
+        mirroringTable.batch(batchAppendIgnoringResult);
 
-    List<CompletableFuture<Result>> appendIncrementWithoutResults =
-        mirroringTable.batch(Arrays.asList(appendIgnoringResults, incrementIgnoringResults));
-    verify(primaryTable, times(1)).batch(ArgumentMatchers.<Row>anyList());
-    assertThat(appendIncrementWithoutResults.get(0).get().value()).isNull();
-    assertThat(appendIncrementWithoutResults.get(1).get().value()).isNull();
+    ArgumentCaptor<List<Row>> listCaptor = ArgumentCaptor.forClass(List.class);
+    verify(primaryTable, times(1)).batch(listCaptor.capture());
+    assertThat(listCaptor.getValue().size()).isEqualTo(1);
+    assertThat(((Append) listCaptor.getValue().get(0)).isReturnResults()).isTrue();
+    assertThat((batchAppendWithoutResult.get(0).get()).value()).isNull();
+  }
+
+  @Test
+  public void testBatchIncrementWhichDoesntWantResult()
+      throws InterruptedException, ExecutionException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    List<Increment> batchIncrementIgnoringResult =
+        Collections.singletonList(new Increment(row).setReturnResults(false));
+
+    when(primaryTable.batch(anyList()))
+        .thenReturn(
+            Collections.singletonList(
+                CompletableFuture.completedFuture(
+                    Result.create(
+                        new Cell[] {
+                          CellUtil.createCell(
+                              row, family, qualifier, ts, KeyValue.Type.Put.getCode(), value)
+                        }))));
+
+    List<CompletableFuture<Result>> batchIncrementWithoutResult =
+        mirroringTable.batch(batchIncrementIgnoringResult);
+
+    ArgumentCaptor<List<Row>> listCaptor = ArgumentCaptor.forClass(List.class);
+    verify(primaryTable, times(1)).batch(listCaptor.capture());
+    assertThat(listCaptor.getValue().size()).isEqualTo(1);
+    assertThat(((Increment) listCaptor.getValue().get(0)).isReturnResults()).isTrue();
+    assertThat((batchIncrementWithoutResult.get(0).get()).value()).isNull();
   }
 
   @Test

@@ -999,91 +999,110 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testAppendIncrementWhichDontWantResults() throws IOException, InterruptedException {
+  public void testAppendWhichDoesntWantResult() throws IOException {
     final byte[] row = "r1".getBytes();
     final byte[] family = "f1".getBytes();
     final byte[] qualifier = "q1".getBytes();
     final long ts = 12;
     final byte[] value = "v1".getBytes();
 
-    Append appendIgnoringResults = new Append(row).setReturnResults(false);
-    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+    Append appendIgnoringResult = new Append(row).setReturnResults(false);
 
     when(primaryTable.append(any(Append.class)))
-        .thenAnswer(
-            new Answer<Result>() {
-              @Override
-              public Result answer(InvocationOnMock invocationOnMock) throws Throwable {
-                assert ((Append) invocationOnMock.getArgument(0)).isReturnResults();
-                return Result.create(
-                    new Cell[] {
-                      CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
-                    });
-              }
-            });
-    Result appendWithoutResult = mirroringTable.append(appendIgnoringResults);
-    verify(primaryTable, times(1)).append(any(Append.class));
+        .thenReturn(
+            Result.create(
+                new Cell[] {
+                  CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+                }));
+    Result appendWithoutResult = mirroringTable.append(appendIgnoringResult);
+
+    ArgumentCaptor<Append> appendCaptor = ArgumentCaptor.forClass(Append.class);
+    verify(primaryTable, times(1)).append(appendCaptor.capture());
+    assertThat(appendCaptor.getValue().isReturnResults()).isTrue();
     assertThat(appendWithoutResult).isNull();
 
+    executorServiceRule.waitForExecutor();
+  }
+
+  @Test
+  public void testIncrementWhichDoesntWantResult() throws IOException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
+
+    Increment incrementIgnoringResult = new Increment(row).setReturnResults(false);
+
     when(primaryTable.increment(any(Increment.class)))
-        .thenAnswer(
-            new Answer<Result>() {
-              @Override
-              public Result answer(InvocationOnMock invocationOnMock) throws Throwable {
-                assert ((Increment) invocationOnMock.getArgument(0)).isReturnResults();
-                return Result.create(
-                    new Cell[] {
-                      CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
-                    });
-              }
-            });
-    Result incrementWithoutResult = mirroringTable.increment(incrementIgnoringResults);
-    verify(primaryTable, times(1)).increment(any(Increment.class));
+        .thenReturn(
+            Result.create(
+                new Cell[] {
+                  CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+                }));
+    Result incrementWithoutResult = mirroringTable.increment(incrementIgnoringResult);
+
+    ArgumentCaptor<Increment> incrementCaptor = ArgumentCaptor.forClass(Increment.class);
+    verify(primaryTable, times(1)).increment(incrementCaptor.capture());
+    assertThat(incrementCaptor.getValue().isReturnResults()).isTrue();
     assertThat(incrementWithoutResult.value()).isNull();
 
     executorServiceRule.waitForExecutor();
   }
 
   @Test
-  public void testBatchAppendIncrementWhichDontWantResults()
-      throws IOException, InterruptedException {
+  public void testBatchAppendWhichDoesntWantResult() throws IOException, InterruptedException {
     final byte[] row = "r1".getBytes();
     final byte[] family = "f1".getBytes();
     final byte[] qualifier = "q1".getBytes();
     final long ts = 12;
     final byte[] value = "v1".getBytes();
 
-    Append appendIgnoringResults = new Append(row).setReturnResults(false);
-    Increment incrementIgnoringResults = new Increment(row).setReturnResults(false);
+    List<Append> batchAppendIgnoringResult =
+        Collections.singletonList(new Append(row).setReturnResults(false));
 
-    doAnswer(
-            new Answer<Void>() {
-              @Override
-              public Void answer(InvocationOnMock invocationOnMock) throws Throwable {
-                List<Row> requests = (List<Row>) invocationOnMock.getArgument(0);
-                Object[] results = invocationOnMock.getArgument(1);
+    mockBatch(
+        primaryTable,
+        batchAppendIgnoringResult.get(0),
+        Result.create(
+            new Cell[] {
+              CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+            }));
+    Object[] batchAppendWithoutResult = mirroringTable.batch(batchAppendIgnoringResult);
 
-                assert ((Append) requests.get(0)).isReturnResults();
-                assert ((Increment) requests.get(1)).isReturnResults();
+    ArgumentCaptor<List<Row>> listCaptor = ArgumentCaptor.forClass(List.class);
+    verify(primaryTable, times(1)).batch(listCaptor.capture(), any(Object[].class));
+    assertThat(listCaptor.getValue().size()).isEqualTo(1);
+    assertThat(((Append) listCaptor.getValue().get(0)).isReturnResults()).isTrue();
+    assertThat(((Result) batchAppendWithoutResult[0]).value()).isNull();
+    executorServiceRule.waitForExecutor();
+  }
 
-                results[0] = null;
-                results[1] =
-                    Result.create(
-                        new Cell[] {
-                          CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
-                        });
-                return null;
-              }
-            })
-        .when(primaryTable)
-        .batch(ArgumentMatchers.<Row>anyList(), (Object[]) any());
+  @Test
+  public void testBatchIncrementWhichDoesntWantResult() throws IOException, InterruptedException {
+    final byte[] row = "r1".getBytes();
+    final byte[] family = "f1".getBytes();
+    final byte[] qualifier = "q1".getBytes();
+    final long ts = 12;
+    final byte[] value = "v1".getBytes();
 
-    Object[] appendIncrementWithoutResults =
-        mirroringTable.batch(Arrays.asList(appendIgnoringResults, incrementIgnoringResults));
-    verify(primaryTable, times(1)).batch(ArgumentMatchers.<Row>anyList(), any(Object[].class));
-    assertThat(appendIncrementWithoutResults[0]).isNull();
-    assertThat(((Result) appendIncrementWithoutResults[1]).value()).isNull();
+    List<Increment> batchIncrementIgnoringResult =
+        Collections.singletonList(new Increment(row).setReturnResults(false));
 
+    mockBatch(
+        primaryTable,
+        batchIncrementIgnoringResult.get(0),
+        Result.create(
+            new Cell[] {
+              CellUtil.createCell(row, family, qualifier, ts, Type.Put.getCode(), value)
+            }));
+    Object[] batchIncrementWithoutResult = mirroringTable.batch(batchIncrementIgnoringResult);
+
+    ArgumentCaptor<List<Row>> listCaptor = ArgumentCaptor.forClass(List.class);
+    verify(primaryTable, times(1)).batch(listCaptor.capture(), any(Object[].class));
+    assertThat(listCaptor.getValue().size()).isEqualTo(1);
+    assertThat(((Increment) listCaptor.getValue().get(0)).isReturnResults()).isTrue();
+    assertThat(((Result) batchIncrementWithoutResult[0]).value()).isNull();
     executorServiceRule.waitForExecutor();
   }
 
