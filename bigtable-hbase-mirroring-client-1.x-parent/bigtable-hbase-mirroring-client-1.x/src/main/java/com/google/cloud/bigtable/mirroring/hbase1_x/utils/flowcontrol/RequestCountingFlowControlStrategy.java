@@ -84,7 +84,7 @@ public class RequestCountingFlowControlStrategy extends SingleQueueFlowControlSt
     }
 
     @Override
-    public boolean tryAcquiredResource(RequestResourcesDescription requestResourcesDescription) {
+    public boolean tryAcquireResource(RequestResourcesDescription requestResourcesDescription) {
       if (this.canAcquireResource(requestResourcesDescription)) {
         this.primaryReadsAdvantage += requestResourcesDescription.numberOfResults;
         this.usedBytes += requestResourcesDescription.sizeInBytes;

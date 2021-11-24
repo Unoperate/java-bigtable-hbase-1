@@ -56,7 +56,7 @@ public class TestFlowController {
     }
 
     @Override
-    public boolean tryAcquiredResource(RequestResourcesDescription resource) {
+    public boolean tryAcquireResource(RequestResourcesDescription resource) {
       if (this.canAcquireResource(resource)) {
         this.acquireOrdering.add(resource);
         this.numRequestInFlight += 1;

@@ -99,12 +99,12 @@ public class SingleQueueFlowControlStrategy implements FlowControlStrategy {
   @VisibleForTesting
   boolean tryAcquireResource(RequestResourcesDescription requestResourcesDescription) {
     synchronized (this.ledger) {
-      return this.ledger.tryAcquiredResource(requestResourcesDescription);
+      return this.ledger.tryAcquireResource(requestResourcesDescription);
     }
   }
 
   interface Ledger {
-    boolean tryAcquiredResource(RequestResourcesDescription requestResourcesDescription);
+    boolean tryAcquireResource(RequestResourcesDescription requestResourcesDescription);
 
     void accountReleasedResources(RequestResourcesDescription resource);
   }
