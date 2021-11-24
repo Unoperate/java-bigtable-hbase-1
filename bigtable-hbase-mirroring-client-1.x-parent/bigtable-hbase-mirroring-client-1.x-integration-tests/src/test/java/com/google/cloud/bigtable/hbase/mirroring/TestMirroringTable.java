@@ -290,6 +290,7 @@ public class TestMirroringTable {
           }
           try {
             t1.delete(deletes);
+            fail("should have thrown");
           } catch (RetriesExhaustedWithDetailsException e) {
             assertThat(e.getNumExceptions()).isEqualTo(50);
             assertThat(deletes.size()).isEqualTo(50);
