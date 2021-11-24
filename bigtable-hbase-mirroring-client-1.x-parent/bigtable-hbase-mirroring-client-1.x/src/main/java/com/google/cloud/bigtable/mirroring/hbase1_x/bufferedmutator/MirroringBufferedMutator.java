@@ -362,16 +362,13 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
    */
   static class FlushSerializer<BufferEntryType> {
 
-    /** Object used as a lock to ensure ordering of scheduling flushes. */
-    private final Object flushOrderLock = new Object();
-
     /**
      * We have to ensure that order of asynchronously called {@link BufferedMutator#flush()} is the
      * same as order in which callbacks for these operations were created. To enforce this property
      * each scheduled flush will wait for previously scheduled flush to finish before performing its
      * operation. We are storing futures of last scheduled flush operation in this field.
      *
-     * <p>Access to this field should be synchronized by {@code synchronized(flushOrderLock)}
+     * <p>Access to this field should be synchronized by {@code synchronized(this)}
      *
      * <p>We have to ensure the ordering to prevent the following scenario:
      *
@@ -416,40 +413,35 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       return new FlushFutures(future, future, future);
     }
 
-    public final void storeResourcesAndFlushIfNeeded(
+    public synchronized final void storeResourcesAndFlushIfNeeded(
         BufferEntryType entry, RequestResourcesDescription resourcesDescription) {
       // This method is synchronized to make sure that order of scheduled flushes matches order of
       // created dataToFlush lists.
-      synchronized (this.flushOrderLock) {
-        List<BufferEntryType> dataToFlush =
-            this.mutationEntries.add(entry, resourcesDescription.sizeInBytes);
-        if (dataToFlush != null) {
-          scheduleFlush(dataToFlush);
-        }
+      List<BufferEntryType> dataToFlush =
+          this.mutationEntries.add(entry, resourcesDescription.sizeInBytes);
+      if (dataToFlush != null) {
+        scheduleFlush(dataToFlush);
       }
     }
 
-    public final FlushFutures scheduleFlushAll() {
+    public synchronized final FlushFutures scheduleFlushAll() {
       // This method is synchronized to make sure that order of scheduled flushes matches order of
       // created dataToFlush lists.
-      synchronized (this.flushOrderLock) {
-        List<BufferEntryType> dataToFlush = this.mutationEntries.flushBuffer();
-        return scheduleFlush(dataToFlush);
-      }
+      List<BufferEntryType> dataToFlush = this.mutationEntries.flushBuffer();
+      return scheduleFlush(dataToFlush);
     }
 
-    private FlushFutures scheduleFlush(List<BufferEntryType> dataToFlush) {
-      synchronized (this.flushOrderLock) {
-        try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
-          this.ongoingFlushesCounter.incrementReferenceCount();
+    private synchronized FlushFutures scheduleFlush(List<BufferEntryType> dataToFlush) {
+      try (Scope scope = this.mirroringTracer.spanFactory.scheduleFlushScope()) {
+        this.ongoingFlushesCounter.incrementReferenceCount();
 
-          FlushFutures resultFutures =
-              this.bufferedMutator.scheduleFlushScoped(dataToFlush, lastFlushFutures);
-          this.lastFlushFutures = resultFutures;
+        FlushFutures resultFutures =
+            this.bufferedMutator.scheduleFlushScoped(dataToFlush, lastFlushFutures);
+        this.lastFlushFutures = resultFutures;
 
-          resultFutures.secondaryFlushFinished.addListener(
-              new Runnable() {
-                @Override
+        resultFutures.secondaryFlushFinished.addListener(
+            new Runnable() {
+              @Override
                 public void run() {
                   ongoingFlushesCounter.decrementReferenceCount();
                 }
@@ -457,7 +449,6 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
               MoreExecutors.directExecutor());
           return resultFutures;
         }
-      }
     }
   }
 
