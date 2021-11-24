@@ -128,8 +128,7 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
    * Exceptions caught when performing asynchronous flush() on primary BufferedMutator that should
    * be rethrown to inform the user about failed writes.
    */
-  private final ThreadSafeRetriesExhaustedWithDetailsExceptionList failedMutationsExceptions =
-      new ThreadSafeRetriesExhaustedWithDetailsExceptionList();
+  private final ExceptionBuffer failedMutationsExceptions = new ExceptionBuffer();
 
   /**
    * Stores exceptions thrown by asynchronous flush()es that were not {@link
@@ -470,7 +469,12 @@ public class SequentialMirroringBufferedMutator extends MirroringBufferedMutator
     }
   }
 
-  private static class ThreadSafeRetriesExhaustedWithDetailsExceptionList {
+  /**
+   * Wraps a list of {@link RetriesExhaustedWithDetailsException} to be rethrown to the user.
+   *
+   * <p>Thread-safe.
+   */
+  private static class ExceptionBuffer {
     private List<RetriesExhaustedWithDetailsException> list = new ArrayList<>();
 
     public synchronized void add(RetriesExhaustedWithDetailsException e) {
