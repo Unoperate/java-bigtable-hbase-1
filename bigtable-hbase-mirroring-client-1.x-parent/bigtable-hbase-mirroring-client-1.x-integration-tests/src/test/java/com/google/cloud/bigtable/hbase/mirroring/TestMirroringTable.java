@@ -375,41 +375,54 @@ public class TestMirroringTable {
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
+          // We modify each row using for comparison cell in its column qualifier1.
+          // These cells are set by fillTable() and in i-th row the cell contains value of
+          // Longs.toByteArray(i).
           byte[] rowKey = rowKeyFromId(i);
-          table.checkAndPut(
-              rowKey,
-              columnFamily1,
-              qualifier1,
-              Longs.toByteArray(i),
-              Helpers.createPut(i, columnFamily1, qualifier2));
-          table.checkAndPut(
-              rowKey,
-              columnFamily1,
-              qualifier1,
-              CompareOp.EQUAL,
-              Longs.toByteArray(i),
-              Helpers.createPut(i, columnFamily1, qualifier3));
-          table.checkAndPut(
-              rowKey,
-              columnFamily1,
-              qualifier1,
-              CompareOp.GREATER,
-              Longs.toByteArray(i + 1),
-              Helpers.createPut(i, columnFamily1, qualifier4));
-          table.checkAndPut(
-              rowKey,
-              columnFamily1,
-              qualifier1,
-              CompareOp.NOT_EQUAL,
-              Longs.toByteArray(i),
-              Helpers.createPut(i, columnFamily1, qualifier5));
+          assertThat(
+                  table.checkAndPut(
+                      rowKey,
+                      columnFamily1,
+                      qualifier1,
+                      Longs.toByteArray(i),
+                      Helpers.createPut(i, columnFamily1, qualifier2)))
+              .isTrue();
+          assertThat(
+                  table.checkAndPut(
+                      rowKey,
+                      columnFamily1,
+                      qualifier1,
+                      CompareOp.EQUAL,
+                      Longs.toByteArray(i),
+                      Helpers.createPut(i, columnFamily1, qualifier3)))
+              .isTrue();
+          assertThat(
+                  table.checkAndPut(
+                      rowKey,
+                      columnFamily1,
+                      qualifier1,
+                      CompareOp.GREATER,
+                      Longs.toByteArray(i + 1),
+                      Helpers.createPut(i, columnFamily1, qualifier4)))
+              .isTrue();
+          assertThat(
+                  table.checkAndPut(
+                      rowKey,
+                      columnFamily1,
+                      qualifier1,
+                      CompareOp.NOT_EQUAL,
+                      Longs.toByteArray(i),
+                      Helpers.createPut(i, columnFamily1, qualifier5)))
+              .isFalse();
         }
       }
     }
 
+    // We only modify rows present in the database before the loop.
     assertThat(databaseHelpers.countRows(tableName1, DatabaseSelector.PRIMARY))
         .isEqualTo(databaseEntriesCount);
 
+    // There was a put iff checkAndPut returned true.
     assertThat(databaseHelpers.countCells(tableName1, DatabaseSelector.PRIMARY))
         .isEqualTo(databaseEntriesCount * 4);
 
