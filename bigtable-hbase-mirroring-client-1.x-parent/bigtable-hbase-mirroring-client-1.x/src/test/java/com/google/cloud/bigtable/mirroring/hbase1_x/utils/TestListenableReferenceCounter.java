@@ -15,17 +15,25 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.withSettings;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 @RunWith(JUnit4.class)
 public class TestListenableReferenceCounter {
@@ -71,6 +79,45 @@ public class TestListenableReferenceCounter {
     verify(listenableReferenceCounter, times(1)).incrementReferenceCount();
     verify(listenableReferenceCounter, never()).decrementReferenceCount();
     future.setException(new Exception("expected"));
+    verify(listenableReferenceCounter, times(1)).incrementReferenceCount();
+    verify(listenableReferenceCounter, times(1)).decrementReferenceCount();
+  }
+
+  @Test
+  public void testHoldReferenceUntilClosing() throws IOException {
+    ListenableCloseable listenableCloseable =
+        mock(ListenableCloseable.class, withSettings().extraInterfaces(Closeable.class));
+    final AtomicReference<Runnable> listener = new AtomicReference<>();
+
+    doAnswer(
+            new Answer() {
+              @Override
+              public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+                listener.set((Runnable) invocationOnMock.getArgument(0));
+                return null;
+              }
+            })
+        .when(listenableCloseable)
+        .addOnCloseListener(any(Runnable.class));
+    doAnswer(
+            new Answer() {
+              @Override
+              public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+                listener.get().run();
+                return null;
+              }
+            })
+        .when((Closeable) listenableCloseable)
+        .close();
+
+    ListenableReferenceCounter listenableReferenceCounter = spy(new ListenableReferenceCounter());
+    verify(listenableReferenceCounter, never()).incrementReferenceCount();
+
+    listenableReferenceCounter.holdReferenceUntilClosing(listenableCloseable);
+    verify(listenableReferenceCounter, times(1)).incrementReferenceCount();
+    verify(listenableReferenceCounter, never()).decrementReferenceCount();
+
+    ((Closeable) listenableCloseable).close();
     verify(listenableReferenceCounter, times(1)).incrementReferenceCount();
     verify(listenableReferenceCounter, times(1)).decrementReferenceCount();
   }
