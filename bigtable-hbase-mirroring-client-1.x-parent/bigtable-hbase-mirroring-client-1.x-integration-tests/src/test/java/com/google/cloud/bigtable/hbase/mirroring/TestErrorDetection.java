@@ -118,16 +118,21 @@ public class TestErrorDetection {
 
     class WorkerThread extends PropagatingThread {
       private final long workerId;
-      private final long batchSize = 100;
+      private final long batchSize;
       private final Connection connection;
       private final TableName tableName;
       private final long entriesPerWorker;
       private final long numberOfBatches;
 
       public WorkerThread(
-          int workerId, Connection connection, TableName tableName, long numberOfBatches) {
+          int workerId,
+          Connection connection,
+          TableName tableName,
+          long numberOfBatches,
+          long batchSize) {
         this.workerId = workerId;
         this.connection = connection;
+        this.batchSize = batchSize;
         this.entriesPerWorker = numberOfBatches * batchSize;
         this.numberOfBatches = numberOfBatches;
         this.tableName = tableName;
@@ -156,6 +161,7 @@ public class TestErrorDetection {
 
     final int numberOfWorkers = 100;
     final int numberOfBatches = 100;
+    final long batchSize = 100;
 
     TableName tableName;
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
@@ -163,7 +169,8 @@ public class TestErrorDetection {
 
       List<PropagatingThread> workers = new ArrayList<>();
       for (int i = 0; i < numberOfWorkers; i++) {
-        PropagatingThread worker = new WorkerThread(i, connection, tableName, numberOfBatches);
+        PropagatingThread worker =
+            new WorkerThread(i, connection, tableName, numberOfBatches, batchSize);
         worker.start();
         workers.add(worker);
       }
@@ -189,6 +196,10 @@ public class TestErrorDetection {
     }
 
     assertEquals(0, MismatchDetectorCounter.getInstance().getErrorCount());
+    assertEquals(
+        numberOfWorkers * numberOfBatches * batchSize,
+        MismatchDetectorCounter.getInstance().getVerificationsStartedCounter(),
+        MismatchDetectorCounter.getInstance().getVerificationsFinishedCounter());
   }
 
   @Test
