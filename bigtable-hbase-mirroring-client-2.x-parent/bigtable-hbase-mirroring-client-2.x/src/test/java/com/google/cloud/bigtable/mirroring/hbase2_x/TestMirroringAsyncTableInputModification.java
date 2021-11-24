@@ -95,11 +95,6 @@ public class TestMirroringAsyncTableInputModification {
                 executorService));
 
     secondaryOperationAllowedFuture = SettableFuture.create();
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).exists(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).get(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).put(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).delete(anyList());
-    blockMethodCall(secondaryTable, secondaryOperationAllowedFuture).batch(anyList());
 
     lenient().doAnswer(this::answerWithSuccessfulNulls).when(primaryTable).exists(anyList());
     lenient().doAnswer(this::answerWithSuccessfulNulls).when(primaryTable).get(anyList());
