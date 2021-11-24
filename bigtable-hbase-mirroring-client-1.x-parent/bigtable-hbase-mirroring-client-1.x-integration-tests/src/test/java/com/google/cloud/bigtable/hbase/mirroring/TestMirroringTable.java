@@ -376,7 +376,7 @@ public class TestMirroringTable {
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
-          // We modify each row using for comparison cell in its column qualifier1.
+          // We modify each row using for comparison a cell in its column qualifier1.
           // These cells are set by fillTable() and in i-th row the cell contains value of
           // Longs.toByteArray(i).
           byte[] rowKey = rowKeyFromId(i);
@@ -539,6 +539,9 @@ public class TestMirroringTable {
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
+          // We delete each row using for comparison a cell in its column qualifier1.
+          // These cells are set by fillTable() and in i-th row the cell contains value of
+          // Longs.toByteArray(i).
           byte[] rowKey = rowKeyFromId(i);
           assertThat(
                   table.checkAndDelete(
@@ -579,9 +582,11 @@ public class TestMirroringTable {
       }
     }
 
+    // We only modify rows present in the database before the loop.
     assertThat(databaseHelpers.countRows(tableName1, DatabaseSelector.PRIMARY))
         .isEqualTo(databaseEntriesCount);
 
+    // There was a delete iff checkAndDelete returned true.
     assertThat(databaseHelpers.countCells(tableName1, DatabaseSelector.PRIMARY))
         .isEqualTo(databaseEntriesCount * 2);
 
