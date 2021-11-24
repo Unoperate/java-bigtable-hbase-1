@@ -271,7 +271,7 @@ public class TestErrorDetection {
           int counter = 0;
           for (Result r : s) {
             assertEquals(
-                new String(r.getRow(), Charset.defaultCharset()),
+                String.format("Row %s mismatch in checkAndPut test", r.getRow()),
                 String.valueOf(numberOfOperations),
                 new String(r.getValue(columnFamily1, qualifier1), Charset.defaultCharset()));
             counter++;
