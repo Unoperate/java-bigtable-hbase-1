@@ -671,11 +671,14 @@ public class TestMirroringTable {
                 DatabaseSelector.PRIMARY,
                 Helpers.createScan(columnFamily1, qualifier1)))
         .isEqualTo(0);
+    assertThat(databaseHelpers.countCells(tableName1, DatabaseSelector.PRIMARY)).isEqualTo(0);
     assertThat(
             databaseHelpers.countRows(
                 tableName1,
                 DatabaseSelector.SECONDARY,
                 Helpers.createScan(columnFamily1, qualifier1)))
+        .isEqualTo(databaseEntriesCount / 2);
+    assertThat(databaseHelpers.countCells(tableName1, DatabaseSelector.SECONDARY))
         .isEqualTo(databaseEntriesCount / 2);
     reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
