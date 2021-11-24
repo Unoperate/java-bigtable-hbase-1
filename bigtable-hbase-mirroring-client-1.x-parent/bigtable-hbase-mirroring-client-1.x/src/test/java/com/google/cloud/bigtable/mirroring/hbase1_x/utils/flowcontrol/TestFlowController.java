@@ -35,7 +35,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class TestFlowController {
-  static class Ledger implements SingleQueueFlowControlStrategy.Ledger {
+  static class TestLedger implements SingleQueueFlowControlStrategy.Ledger {
     public int numRequestInFlight = 0;
     public int canAcquireResourcesCallsCount = 0;
     public int maxInFlightRequests = 0;
@@ -43,7 +43,7 @@ public class TestFlowController {
     public List<RequestResourcesDescription> acquireOrdering = new ArrayList<>();
     public SettableFuture<Void> futureToNotifyWhenCanAcquireResourceIsCalled = null;
 
-    Ledger(int limit) {
+    TestLedger(int limit) {
       this.limit = limit;
     }
 
@@ -77,8 +77,8 @@ public class TestFlowController {
       throws ExecutionException, InterruptedException, TimeoutException {
 
     // Mutex
-    Ledger ledger = new Ledger(1);
-    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(ledger);
+    TestLedger testLedger = new TestLedger(1);
+    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
     final SettableFuture<Void> threadStarted = SettableFuture.create();
@@ -87,7 +87,7 @@ public class TestFlowController {
     RequestResourcesDescription description = createRequest(1);
     ResourceReservation resourceReservation = fc.asyncRequestResource(description).get();
 
-    int canAcquireCalls = ledger.canAcquireResourcesCallsCount;
+    int canAcquireCalls = testLedger.canAcquireResourcesCallsCount;
 
     Thread thread =
         new Thread() {
@@ -109,11 +109,11 @@ public class TestFlowController {
     threadStarted.get(3, TimeUnit.SECONDS);
     Thread.sleep(300);
     assertThat(threadEnded.isDone()).isFalse();
-    assertThat(ledger.canAcquireResourcesCallsCount).isEqualTo(canAcquireCalls + 1);
+    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(canAcquireCalls + 1);
 
     resourceReservation.release();
     threadEnded.get(3, TimeUnit.SECONDS);
-    assertThat(ledger.canAcquireResourcesCallsCount).isEqualTo(canAcquireCalls + 2);
+    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(canAcquireCalls + 2);
   }
 
   private RequestResourcesDescription createRequest(int size) {
@@ -124,8 +124,8 @@ public class TestFlowController {
   public void testLockingAndUnlockingOrdering()
       throws ExecutionException, InterruptedException, TimeoutException {
 
-    Ledger ledger = new Ledger(2);
-    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(ledger);
+    TestLedger testLedger = new TestLedger(2);
+    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
     RequestResourcesDescription description1 = createRequest(2);
@@ -139,7 +139,7 @@ public class TestFlowController {
     List<Thread> threads = new ArrayList<>();
     for (int threadId = 0; threadId < numThreads; threadId++) {
       final SettableFuture<Void> threadStarted = SettableFuture.create();
-      ledger.futureToNotifyWhenCanAcquireResourceIsCalled = threadStarted;
+      testLedger.futureToNotifyWhenCanAcquireResourceIsCalled = threadStarted;
 
       final int finalThreadId = threadId;
       Thread thread =
@@ -169,11 +169,11 @@ public class TestFlowController {
       t.join();
     }
 
-    assertThat(ledger.acquireOrdering).hasSize(numThreads + 2); // + 2 initial entries
-    assertThat(ledger.maxInFlightRequests).isEqualTo(2);
+    assertThat(testLedger.acquireOrdering).hasSize(numThreads + 2); // + 2 initial entries
+    assertThat(testLedger.maxInFlightRequests).isEqualTo(2);
 
-    for (int i = 0; i < ledger.acquireOrdering.size(); i++) {
-      RequestResourcesDescription d = ledger.acquireOrdering.get(i);
+    for (int i = 0; i < testLedger.acquireOrdering.size(); i++) {
+      RequestResourcesDescription d = testLedger.acquireOrdering.get(i);
       int expectedValue = Math.abs(i - 2);
       assertThat(d.numberOfResults).isEqualTo(expectedValue);
     }
@@ -182,8 +182,8 @@ public class TestFlowController {
   @Test
   public void testCancelledReservationFutureIsRemovedFromFlowControllerWaitersList()
       throws ExecutionException, InterruptedException, TimeoutException {
-    Ledger ledger = new Ledger(1);
-    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(ledger);
+    TestLedger testLedger = new TestLedger(1);
+    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
     RequestResourcesDescription description = createRequest(1);
@@ -200,7 +200,7 @@ public class TestFlowController {
     assertThat(reservationFuture1.cancel(true)).isTrue();
 
     Thread.sleep(300);
-    assertThat(ledger.maxInFlightRequests).isEqualTo(1);
+    assertThat(testLedger.maxInFlightRequests).isEqualTo(1);
 
     // Releasing the resource should allow second future.
     resourceReservation.release();
@@ -210,8 +210,8 @@ public class TestFlowController {
   @Test
   public void testCancellingGrantedReservationIsNotSuccessful()
       throws ExecutionException, InterruptedException {
-    Ledger ledger = new Ledger(1);
-    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(ledger);
+    TestLedger testLedger = new TestLedger(1);
+    FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
     ListenableFuture<ResourceReservation> reservationFuture1 =
