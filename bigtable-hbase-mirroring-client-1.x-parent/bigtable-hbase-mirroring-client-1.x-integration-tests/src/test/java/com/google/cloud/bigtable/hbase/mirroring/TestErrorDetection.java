@@ -60,6 +60,8 @@ public class TestErrorDetection {
 
   private static final byte[] columnFamily1 = "cf1".getBytes();
   private static final byte[] qualifier1 = "q1".getBytes();
+  private static final byte[] row1 = "r1".getBytes();
+  private static final byte[] value1 = "v1".getBytes();
 
   @Test
   public void readsAndWritesArePerformed() throws IOException {
@@ -68,15 +70,15 @@ public class TestErrorDetection {
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       tableName = connectionRule.createTable(connection, columnFamily1);
       try (Table t1 = connection.getTable(tableName)) {
-        t1.put(Helpers.createPut("1".getBytes(), columnFamily1, qualifier1, "1".getBytes()));
+        t1.put(Helpers.createPut(row1, columnFamily1, qualifier1, value1));
       }
     }
 
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table t2 = connection.getTable(tableName)) {
-        Result result = t2.get(Helpers.createGet("1".getBytes(), columnFamily1, qualifier1));
-        assertArrayEquals(result.getRow(), "1".getBytes());
-        assertArrayEquals(result.getValue(columnFamily1, qualifier1), "1".getBytes());
+        Result result = t2.get(Helpers.createGet(row1, columnFamily1, qualifier1));
+        assertArrayEquals(result.getRow(), row1);
+        assertArrayEquals(result.getValue(columnFamily1, qualifier1), value1);
         assertEquals(MismatchDetectorCounter.getInstance().getErrorCount(), 0);
       }
     }
@@ -88,25 +90,22 @@ public class TestErrorDetection {
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       tableName = connectionRule.createTable(connection, columnFamily1);
       try (Table mirroredTable = connection.getTable(tableName)) {
-        mirroredTable.put(
-            Helpers.createPut("1".getBytes(), columnFamily1, qualifier1, "1".getBytes()));
+        mirroredTable.put(Helpers.createPut(row1, columnFamily1, qualifier1, value1));
       }
     }
 
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table secondaryTable = connection.getSecondaryConnection().getTable(tableName)) {
-        secondaryTable.put(
-            Helpers.createPut("1".getBytes(), columnFamily1, qualifier1, "2".getBytes()));
+        secondaryTable.put(Helpers.createPut(row1, columnFamily1, qualifier1, value1));
       }
     }
 
     try (MirroringConnection connection = databaseHelpers.createConnection()) {
       try (Table mirroredTable = connection.getTable(tableName)) {
-        Result result =
-            mirroredTable.get(Helpers.createGet("1".getBytes(), columnFamily1, qualifier1));
+        Result result = mirroredTable.get(Helpers.createGet(row1, columnFamily1, qualifier1));
         // Data from primary is returned.
-        assertArrayEquals(result.getRow(), "1".getBytes());
-        assertArrayEquals(result.getValue(columnFamily1, qualifier1), "1".getBytes());
+        assertArrayEquals(result.getRow(), row1);
+        assertArrayEquals(result.getValue(columnFamily1, qualifier1), value1);
       }
     }
 
