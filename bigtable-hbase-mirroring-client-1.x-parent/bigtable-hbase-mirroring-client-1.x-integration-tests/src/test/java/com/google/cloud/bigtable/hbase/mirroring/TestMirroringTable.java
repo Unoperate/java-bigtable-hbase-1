@@ -988,7 +988,8 @@ public class TestMirroringTable {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
-          t1.get(Helpers.createGet(rowKey, columnFamily1, qualifier1));
+          Result r = t1.get(Helpers.createGet(rowKey, columnFamily1, qualifier1));
+          assertThat(r.value()).isEqualTo(Longs.toByteArray(i));
         }
       }
     }
