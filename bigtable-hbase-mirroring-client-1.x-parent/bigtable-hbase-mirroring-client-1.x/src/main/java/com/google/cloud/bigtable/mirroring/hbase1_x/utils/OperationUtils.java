@@ -52,23 +52,7 @@ public class OperationUtils {
   }
 
   public static class RewrittenIncrementAndAppendIndicesInfo<T extends Row> {
-    /**
-     * Behaviour of HBase when setReturnResults(false) was called on input Append and Increment
-     * requests:
-     *
-     * <ul>
-     *   <li>HBase 1.4.12
-     *       <ul>
-     *         <li>append(Append): null
-     *         <li>increment(Increment): Result.create(new Cell[0])
-     *         <li>batch(Append): IllegalStateException
-     *         <li>batch(Increment): IllegalStateException
-     *       </ul>
-     *   <li>HBase 2.2.3
-     *       <p>all operations on both Table and AsyncTable return a Result equal to
-     *       Result.create(new Cell[0])
-     * </ul>
-     */
+    /** In batch() when an input Row's isReturnResults is false an empty Result is returned. */
     public final List<T> operations;
 
     private final Set<Integer> unwantedResultIndices;

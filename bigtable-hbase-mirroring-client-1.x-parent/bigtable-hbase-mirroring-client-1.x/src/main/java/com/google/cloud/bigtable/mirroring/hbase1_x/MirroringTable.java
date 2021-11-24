@@ -527,6 +527,7 @@ public class MirroringTable implements Table, ListenableCloseable {
       scheduleSequentialWriteOperation(
           new WriteOperationInfo(put), this.secondaryAsyncWrapper.put(put));
 
+      // HBase's append() returns null when isReturnResults is false.
       return wantsResults ? result : null;
     }
   }
