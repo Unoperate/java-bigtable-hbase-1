@@ -19,6 +19,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import java.io.IOException;
 import java.util.List;
@@ -39,7 +40,8 @@ public class MirroringTable extends com.google.cloud.bigtable.mirroring.hbase1_x
       ReadSampler readSampler,
       boolean performWritesConcurrently,
       boolean waitForSecondaryWrites,
-      MirroringTracer mirroringTracer) {
+      MirroringTracer mirroringTracer,
+      ReferenceCounter referenceCounter) {
     super(
         primaryTable,
         secondaryTable,
@@ -50,7 +52,8 @@ public class MirroringTable extends com.google.cloud.bigtable.mirroring.hbase1_x
         readSampler,
         performWritesConcurrently,
         waitForSecondaryWrites,
-        mirroringTracer);
+        mirroringTracer,
+        referenceCounter);
   }
 
   @Override

@@ -25,7 +25,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultSca
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.ReadWriteSplit;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
@@ -33,6 +32,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestRes
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.AsyncRequestScheduling.OperationStages;
@@ -82,7 +82,12 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
   private final FlowController flowController;
   private final SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
+  /**
+   * HBase 2.x AsyncTables are not closeable and we do not need keep a separate reference counter
+   * for it, but we can just use MirroringAsyncConnection reference counter.
+   */
   private final ListenableReferenceCounter referenceCounter;
+
   private final ReadSampler readSampler;
   private final ExecutorService executorService;
   private final RequestScheduler requestScheduler;
@@ -107,7 +112,7 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
     this.readSampler = readSampler;
     this.executorService = executorService;
     this.requestScheduler =
-        new RequestScheduler(this.flowController, this.mirroringTracer, referenceCounter);
+        new RequestScheduler(this.flowController, this.mirroringTracer, this.referenceCounter);
   }
 
   @Override
@@ -472,7 +477,8 @@ public class MirroringAsyncTable<C extends ScanResultConsumerBase> implements As
         this.verificationContinuationFactory,
         this.mirroringTracer,
         this.readSampler.shouldNextReadOperationBeSampled(),
-        this.requestScheduler);
+        this.requestScheduler,
+        this.referenceCounter);
   }
 
   @Override
