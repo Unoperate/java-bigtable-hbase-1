@@ -17,10 +17,12 @@ package com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController.ResourceReservation;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -235,12 +237,16 @@ public class TestFlowController {
   }
 
   @Test
-  public void testCancellingPendingReservationFuture() {
-    ResourceReservation reservation = mock(ResourceReservation.class);
-    SettableFuture<ResourceReservation> grantedFuture = SettableFuture.create();
+  public void testCancellingPendingReservationFuture()
+      throws ExecutionException, InterruptedException {
+    ExecutionException flowControllerException =
+        new ExecutionException(new Exception("FlowController rejected request"));
 
-    FlowController.cancelRequest(grantedFuture);
-    verify(reservation, never()).release();
+    ListenableFuture<ResourceReservation> pendingFuture = mock(ListenableFuture.class);
+    when(pendingFuture.cancel(anyBoolean())).thenReturn(false);
+    when(pendingFuture.get()).thenThrow(flowControllerException);
+
+    FlowController.cancelRequest(pendingFuture);
   }
 
   @Test
