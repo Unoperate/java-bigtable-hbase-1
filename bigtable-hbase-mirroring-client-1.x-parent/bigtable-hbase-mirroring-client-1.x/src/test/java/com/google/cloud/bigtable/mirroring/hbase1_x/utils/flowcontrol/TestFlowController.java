@@ -86,8 +86,7 @@ public class TestFlowController {
 
     RequestResourcesDescription description = createRequest(1);
     ResourceReservation resourceReservation = fc.asyncRequestResource(description).get();
-
-    int canAcquireCalls = testLedger.canAcquireResourcesCallsCount;
+    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(1);
 
     Thread thread =
         new Thread() {
@@ -109,11 +108,11 @@ public class TestFlowController {
     threadStarted.get(3, TimeUnit.SECONDS);
     Thread.sleep(300);
     assertThat(threadEnded.isDone()).isFalse();
-    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(canAcquireCalls + 1);
+    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(2);
 
     resourceReservation.release();
     threadEnded.get(3, TimeUnit.SECONDS);
-    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(canAcquireCalls + 2);
+    assertThat(testLedger.canAcquireResourcesCallsCount).isEqualTo(3);
   }
 
   private RequestResourcesDescription createRequest(int size) {
