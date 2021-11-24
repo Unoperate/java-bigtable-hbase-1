@@ -415,7 +415,18 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
     }
   }
 
+  /**
+   * A container for mutations that were issued to primary buffered mutator. Generic EntryType can
+   * be used to store additional data with mutations (sequential buffered mutator uses it to keep
+   * FlowController reservations).
+   *
+   * <p>Keeps track of total size of buffered mutations and detects if there are enough entries to
+   * perform a flush.
+   *
+   * <p>Thread-safe.
+   */
   private static class BufferedMutations<EntryType> {
+
     private List<EntryType> mutationEntries;
     private long mutationsBufferSizeBytes;
     protected final long mutationsBufferFlushThresholdBytes;
