@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -35,24 +36,25 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class TestFlowController {
-  static class TestLedger implements SingleQueueFlowControlStrategy.Ledger {
+  static class SingleQueueTestLedger implements SingleQueueFlowControlStrategy.Ledger {
     public int numRequestInFlight = 0;
     public int canAcquireResourcesCallsCount = 0;
     public int maxInFlightRequests = 0;
-    public final int limit;
+    public final int limitInFlightRequests;
     public List<RequestResourcesDescription> acquireOrdering = new ArrayList<>();
     public SettableFuture<Void> futureToNotifyWhenCanAcquireResourceIsCalled = null;
 
-    TestLedger(int limit) {
-      this.limit = limit;
+    SingleQueueTestLedger(int limitInFlightRequests) {
+      this.limitInFlightRequests = limitInFlightRequests;
     }
 
     public boolean canAcquireResource(RequestResourcesDescription resource) {
       if (this.futureToNotifyWhenCanAcquireResourceIsCalled != null) {
         this.futureToNotifyWhenCanAcquireResourceIsCalled.set(null);
       }
+
       this.canAcquireResourcesCallsCount += 1;
-      return this.numRequestInFlight < this.limit;
+      return this.numRequestInFlight < this.limitInFlightRequests;
     }
 
     @Override
@@ -77,7 +79,7 @@ public class TestFlowController {
       throws ExecutionException, InterruptedException, TimeoutException {
 
     // Mutex
-    TestLedger testLedger = new TestLedger(1);
+    SingleQueueTestLedger testLedger = new SingleQueueTestLedger(1);
     FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
@@ -120,25 +122,24 @@ public class TestFlowController {
   }
 
   @Test
-  public void testLockingAndUnlockingOrdering()
+  public void testSingleQueueStrategyAllowsRequestsInOrder()
       throws ExecutionException, InterruptedException, TimeoutException {
 
-    TestLedger testLedger = new TestLedger(2);
+    int limitRequestsInFlight = 2;
+    SingleQueueTestLedger testLedger = new SingleQueueTestLedger(limitRequestsInFlight);
     FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
+    // This FlowController limits number of requests in flight and admits them in order.
 
-    RequestResourcesDescription description1 = createRequest(2);
-    RequestResourcesDescription description2 = createRequest(1);
-
-    // Critical section is full.
-    ResourceReservation reservation1 = fc.asyncRequestResource(description1).get();
-    ResourceReservation reservation2 = fc.asyncRequestResource(description2).get();
+    ResourceReservation reservation1 = fc.asyncRequestResource(createRequest(2)).get();
+    ResourceReservation reservation2 = fc.asyncRequestResource(createRequest(1)).get();
+    // Maximal number of requests in flight has been reached.
 
     final int numThreads = 1000;
     List<Thread> threads = new ArrayList<>();
     for (int threadId = 0; threadId < numThreads; threadId++) {
-      final SettableFuture<Void> threadStarted = SettableFuture.create();
-      testLedger.futureToNotifyWhenCanAcquireResourceIsCalled = threadStarted;
+      final SettableFuture<Void> threadBlockedOnAcquiringResources = SettableFuture.create();
+      testLedger.futureToNotifyWhenCanAcquireResourceIsCalled = threadBlockedOnAcquiringResources;
 
       final int finalThreadId = threadId;
       Thread thread =
@@ -149,6 +150,7 @@ public class TestFlowController {
                 RequestResourcesDescription r = createRequest(finalThreadId);
                 fc.asyncRequestResource(r).get().release();
               } catch (InterruptedException | ExecutionException ignored) {
+                fail("shouldn't have thrown");
               }
             }
           };
@@ -157,8 +159,10 @@ public class TestFlowController {
       thread.start();
       threads.add(thread);
 
-      // Wait until `fc.acquire` is called before starting next thread to ensure ordering.
-      threadStarted.get(3, TimeUnit.SECONDS);
+      // We want to check that our threads are given resources in order they asked for them, so to
+      // have a well-defined order we can only have one thread running before it blocks on future
+      // received from FlowController.
+      threadBlockedOnAcquiringResources.get(3, TimeUnit.SECONDS);
     }
 
     reservation1.release();
@@ -169,7 +173,7 @@ public class TestFlowController {
     }
 
     assertThat(testLedger.acquireOrdering).hasSize(numThreads + 2); // + 2 initial entries
-    assertThat(testLedger.maxInFlightRequests).isEqualTo(2);
+    assertThat(testLedger.maxInFlightRequests).isEqualTo(limitRequestsInFlight);
 
     for (int i = 0; i < testLedger.acquireOrdering.size(); i++) {
       RequestResourcesDescription d = testLedger.acquireOrdering.get(i);
@@ -181,7 +185,7 @@ public class TestFlowController {
   @Test
   public void testCancelledReservationFutureIsRemovedFromFlowControllerWaitersList()
       throws ExecutionException, InterruptedException, TimeoutException {
-    TestLedger testLedger = new TestLedger(1);
+    SingleQueueTestLedger testLedger = new SingleQueueTestLedger(1);
     FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
@@ -209,7 +213,7 @@ public class TestFlowController {
   @Test
   public void testCancellingGrantedReservationIsNotSuccessful()
       throws ExecutionException, InterruptedException {
-    TestLedger testLedger = new TestLedger(1);
+    SingleQueueTestLedger testLedger = new SingleQueueTestLedger(1);
     FlowControlStrategy flowControlStrategy = new SingleQueueFlowControlStrategy(testLedger);
     final FlowController fc = new FlowController(flowControlStrategy);
 
