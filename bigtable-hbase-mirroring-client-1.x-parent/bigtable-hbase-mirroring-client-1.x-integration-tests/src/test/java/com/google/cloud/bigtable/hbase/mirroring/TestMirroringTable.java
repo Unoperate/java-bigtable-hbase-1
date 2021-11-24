@@ -299,6 +299,7 @@ public class TestMirroringTable {
               thrownRows.add(e.getRow(exceptionId).getRow());
             }
 
+            // Delete removes successful operations from input list. Only failed rows remain.
             List<byte[]> notDeletedRows = new ArrayList<>();
             for (Delete delete : deletes) {
               notDeletedRows.add(delete.getRow());
