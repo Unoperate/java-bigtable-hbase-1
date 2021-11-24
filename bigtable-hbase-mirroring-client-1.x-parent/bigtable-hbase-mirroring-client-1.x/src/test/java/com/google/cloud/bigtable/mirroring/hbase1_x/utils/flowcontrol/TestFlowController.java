@@ -176,9 +176,9 @@ public class TestFlowController {
     assertThat(testLedger.maxInFlightRequests).isEqualTo(limitRequestsInFlight);
 
     for (int i = 0; i < testLedger.acquireOrdering.size(); i++) {
-      RequestResourcesDescription d = testLedger.acquireOrdering.get(i);
+      RequestResourcesDescription resourceDescriptor = testLedger.acquireOrdering.get(i);
       int expectedValue = Math.abs(i - 2);
-      assertThat(d.numberOfResults).isEqualTo(expectedValue);
+      assertThat(resourceDescriptor.numberOfResults).isEqualTo(expectedValue);
     }
   }
 
