@@ -1020,8 +1020,6 @@ public class TestMirroringTable {
     verify(primaryTable, times(1)).append(appendCaptor.capture());
     assertThat(appendCaptor.getValue().isReturnResults()).isTrue();
     assertThat(appendWithoutResult).isNull();
-
-    executorServiceRule.waitForExecutor();
   }
 
   @Test
@@ -1046,8 +1044,6 @@ public class TestMirroringTable {
     verify(primaryTable, times(1)).increment(incrementCaptor.capture());
     assertThat(incrementCaptor.getValue().isReturnResults()).isTrue();
     assertThat(incrementWithoutResult.value()).isNull();
-
-    executorServiceRule.waitForExecutor();
   }
 
   @Test
@@ -1075,7 +1071,6 @@ public class TestMirroringTable {
     assertThat(listCaptor.getValue().size()).isEqualTo(1);
     assertThat(((Append) listCaptor.getValue().get(0)).isReturnResults()).isTrue();
     assertThat(((Result) batchAppendWithoutResult[0]).value()).isNull();
-    executorServiceRule.waitForExecutor();
   }
 
   @Test
@@ -1103,7 +1098,6 @@ public class TestMirroringTable {
     assertThat(listCaptor.getValue().size()).isEqualTo(1);
     assertThat(((Increment) listCaptor.getValue().get(0)).isReturnResults()).isTrue();
     assertThat(((Result) batchIncrementWithoutResult[0]).value()).isNull();
-    executorServiceRule.waitForExecutor();
   }
 
   @Test
