@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers;
+package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -24,20 +25,21 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringResultScanner;
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringTable.RequestScheduler;
+import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.AsyncScannerVerificationPayload;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncResultScannerWrapper.ScannerRequestContext;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.SettableFuture;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.Tracing;
 import java.io.IOException;
@@ -81,7 +83,8 @@ public class TestMirroringResultScanner {
             new MirroringTracer(),
             true,
             new RequestScheduler(
-                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)),
+            mock(ReferenceCounter.class));
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
 
@@ -96,12 +99,13 @@ public class TestMirroringResultScanner {
             });
 
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
+    verify(secondaryScannerWrapperMock, times(1)).close();
     assertThat(thrown).hasMessageThat().contains("first");
   }
 
   @Test
-  public void testScannerCloseWhenSecondCloseThrows() throws IOException {
+  public void testScannerCloseWhenSecondCloseThrows()
+      throws TimeoutException, InterruptedException {
     ResultScanner primaryScannerMock = mock(ResultScanner.class);
 
     VerificationContinuationFactory continuationFactoryMock =
@@ -109,7 +113,7 @@ public class TestMirroringResultScanner {
 
     AsyncResultScannerWrapper secondaryScannerWrapperMock = mock(AsyncResultScannerWrapper.class);
 
-    final ResultScanner mirroringScanner =
+    final MirroringResultScanner mirroringScanner =
         new MirroringResultScanner(
             new Scan(),
             primaryScannerMock,
@@ -118,27 +122,24 @@ public class TestMirroringResultScanner {
             new MirroringTracer(),
             true,
             new RequestScheduler(
-                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)),
+            mock(ReferenceCounter.class));
 
-    doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
+    doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).close();
 
-    Exception thrown =
-        assertThrows(
-            RuntimeException.class,
-            new ThrowingRunnable() {
-              @Override
-              public void run() {
-                mirroringScanner.close();
-              }
-            });
+    mirroringScanner.close();
 
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
-    assertThat(thrown).hasMessageThat().contains("second");
+    verify(secondaryScannerWrapperMock, times(1)).close();
+    try {
+      mirroringScanner.asyncClose().get(3, TimeUnit.SECONDS);
+    } catch (ExecutionException e) {
+      assertThat(e).hasCauseThat().hasMessageThat().contains("second");
+    }
   }
 
   @Test
-  public void testScannerCloseWhenBothCloseThrow() throws IOException {
+  public void testScannerCloseWhenBothCloseThrow() throws InterruptedException, TimeoutException {
     ResultScanner primaryScannerMock = mock(ResultScanner.class);
 
     VerificationContinuationFactory continuationFactoryMock =
@@ -146,7 +147,7 @@ public class TestMirroringResultScanner {
 
     AsyncResultScannerWrapper secondaryScannerWrapperMock = mock(AsyncResultScannerWrapper.class);
 
-    final ResultScanner mirroringScanner =
+    final MirroringResultScanner mirroringScanner =
         new MirroringResultScanner(
             new Scan(),
             primaryScannerMock,
@@ -155,10 +156,11 @@ public class TestMirroringResultScanner {
             new MirroringTracer(),
             true,
             new RequestScheduler(
-                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)),
+            mock(ReferenceCounter.class));
 
     doThrow(new RuntimeException("first")).when(primaryScannerMock).close();
-    doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).asyncClose();
+    doThrow(new RuntimeException("second")).when(secondaryScannerWrapperMock).close();
 
     RuntimeException thrown =
         assertThrows(
@@ -166,15 +168,24 @@ public class TestMirroringResultScanner {
             new ThrowingRunnable() {
               @Override
               public void run() {
-                mirroringScanner.close();
+                mirroringScanner.asyncClose();
               }
             });
 
+    // asyncClose returns future that will resolve to secondary error.
+    // Second call to asyncClose() should perform any other operation.
+    ListenableFuture<Void> asyncCloseResult = mirroringScanner.asyncClose();
+
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
     assertThat(thrown).hasMessageThat().contains("first");
-    assertThat(thrown.getSuppressed()).hasLength(1);
-    assertThat(thrown.getSuppressed()[0]).hasMessageThat().contains("second");
+    try {
+      asyncCloseResult.get(3, TimeUnit.SECONDS);
+      fail();
+    } catch (ExecutionException e) {
+      assertThat(e).hasCauseThat().hasMessageThat().contains("second");
+    }
+
+    verify(secondaryScannerWrapperMock, times(1)).close();
   }
 
   @Test
@@ -184,9 +195,6 @@ public class TestMirroringResultScanner {
     VerificationContinuationFactory continuationFactoryMock =
         mock(VerificationContinuationFactory.class);
     AsyncResultScannerWrapper secondaryScannerWrapperMock = mock(AsyncResultScannerWrapper.class);
-    SettableFuture<Void> closedFuture = SettableFuture.create();
-    closedFuture.set(null);
-    when(secondaryScannerWrapperMock.asyncClose()).thenReturn(closedFuture);
 
     final ResultScanner mirroringScanner =
         new MirroringResultScanner(
@@ -197,12 +205,13 @@ public class TestMirroringResultScanner {
             new MirroringTracer(),
             true,
             new RequestScheduler(
-                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)));
+                flowController, new MirroringTracer(), mock(ListenableReferenceCounter.class)),
+            mock(ReferenceCounter.class));
 
     mirroringScanner.close();
     mirroringScanner.close();
     verify(primaryScannerMock, times(1)).close();
-    verify(secondaryScannerWrapperMock, times(1)).asyncClose();
+    verify(secondaryScannerWrapperMock, times(1)).close();
   }
 
   @Test

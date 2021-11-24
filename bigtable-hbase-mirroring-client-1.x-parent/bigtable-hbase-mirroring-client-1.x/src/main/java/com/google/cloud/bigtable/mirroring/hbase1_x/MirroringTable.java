@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase1_x;
 
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils.emptyResult;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounterUtils.holdReferenceUntilCompletion;
 
 import com.google.api.core.InternalApi;
 import com.google.cloud.bigtable.mirroring.hbase1_x.asyncwrappers.AsyncTableWrapper;
@@ -23,8 +24,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.BatchHelpers.FailedSuccessfulSplit;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Batcher;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableCloseable;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.OperationUtils;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
@@ -35,6 +34,8 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestRes
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.WriteOperationInfo;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.HierarchicalReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.annotations.VisibleForTesting;
@@ -45,6 +46,7 @@ import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 import io.opencensus.common.Scope;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -88,7 +90,8 @@ import org.checkerframework.checker.nullness.compatqual.NullableDecl;
  * asynchronously. Read operations are mirrored to verify that content of both databases matches.
  */
 @InternalApi("For internal usage only")
-public class MirroringTable implements Table, ListenableCloseable {
+public class MirroringTable implements Table {
+
   private static final Logger Log = new Logger(MirroringTable.class);
   private static final Predicate<Object> resultIsFaultyPredicate =
       new Predicate<Object>() {
@@ -100,13 +103,16 @@ public class MirroringTable implements Table, ListenableCloseable {
   protected final Table primaryTable;
   private final AsyncTableWrapper secondaryAsyncWrapper;
   private final VerificationContinuationFactory verificationContinuationFactory;
-  private final ListenableReferenceCounter referenceCounter;
+  /** Counter for MirroringConnection and MirroringTable. */
+  private final HierarchicalReferenceCounter referenceCounter;
+
   private final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
   private final MirroringTracer mirroringTracer;
   private final ReadSampler readSampler;
   private final RequestScheduler requestScheduler;
   private final Batcher batcher;
   private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final SettableFuture<Void> closedFuture = SettableFuture.create();
 
   /**
    * @param executorService ExecutorService is used to perform operations on secondaryTable and
@@ -125,15 +131,15 @@ public class MirroringTable implements Table, ListenableCloseable {
       ReadSampler readSampler,
       boolean performWritesConcurrently,
       boolean waitForSecondaryWrites,
-      MirroringTracer mirroringTracer) {
+      MirroringTracer mirroringTracer,
+      ReferenceCounter parentReferenceCounter) {
     this.primaryTable = primaryTable;
     this.verificationContinuationFactory = new VerificationContinuationFactory(mismatchDetector);
     this.readSampler = readSampler;
     this.secondaryAsyncWrapper =
         new AsyncTableWrapper(
             secondaryTable, MoreExecutors.listeningDecorator(executorService), mirroringTracer);
-    this.referenceCounter = new ListenableReferenceCounter();
-    this.referenceCounter.holdReferenceUntilClosing(this.secondaryAsyncWrapper);
+    this.referenceCounter = new HierarchicalReferenceCounter(parentReferenceCounter);
     this.secondaryWriteErrorConsumer = secondaryWriteErrorConsumer;
     Preconditions.checkArgument(
         !(performWritesConcurrently && !waitForSecondaryWrites),
@@ -262,8 +268,8 @@ public class MirroringTable implements Table, ListenableCloseable {
               this.verificationContinuationFactory,
               this.mirroringTracer,
               this.readSampler.shouldNextReadOperationBeSampled(),
-              this.requestScheduler);
-      this.referenceCounter.holdReferenceUntilClosing(scanner);
+              this.requestScheduler,
+              this.referenceCounter);
       return scanner;
     }
   }
@@ -559,7 +565,7 @@ public class MirroringTable implements Table, ListenableCloseable {
   /**
    * Synchronously {@link Table#close()}s primary table and schedules closing of the secondary table
    * after finishing all secondary requests that are yet in-flight ({@link
-   * AsyncTableWrapper#asyncClose()}).
+   * AsyncTableWrapper#close()}).
    */
   @Override
   public void close() throws IOException {
@@ -571,10 +577,14 @@ public class MirroringTable implements Table, ListenableCloseable {
     try (Scope scope =
         this.mirroringTracer.spanFactory.operationScope(HBaseOperation.TABLE_CLOSE)) {
       if (this.closed.getAndSet(true)) {
-        return this.referenceCounter.getOnLastReferenceClosed();
+        return this.closedFuture;
       }
 
-      this.referenceCounter.decrementReferenceCount();
+      // We are freeing the initial reference to current level reference counter.
+      this.referenceCounter.current.decrementReferenceCount();
+      // But we are scheduling asynchronous secondary operation and we should increment our parent's
+      // ref counter until this operation is finished.
+      holdReferenceUntilCompletion(this.referenceCounter.parent, this.closedFuture);
 
       AccumulatedExceptions exceptionsList = new AccumulatedExceptions();
       try {
@@ -592,24 +602,34 @@ public class MirroringTable implements Table, ListenableCloseable {
       }
 
       try {
-        this.secondaryAsyncWrapper.asyncClose();
+        // Close secondary wrapper (what will close secondary table) after all scheduled requests
+        // have finished.
+        this.referenceCounter
+            .current
+            .getOnLastReferenceClosed()
+            .addListener(
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    try {
+                      secondaryAsyncWrapper.close();
+                      closedFuture.set(null);
+                    } catch (IOException e) {
+                      closedFuture.setException(e);
+                    }
+                  }
+                },
+                MoreExecutors.directExecutor());
       } catch (RuntimeException e) {
         exceptionsList.add(e);
       }
 
       exceptionsList.rethrowIfCaptured();
-      return this.referenceCounter.getOnLastReferenceClosed();
+      return this.closedFuture;
     } finally {
       this.mirroringTracer.spanFactory.asyncCloseSpanWhenCompleted(
-          this.referenceCounter.getOnLastReferenceClosed());
+          this.referenceCounter.current.getOnLastReferenceClosed());
     }
-  }
-
-  @Override
-  public void addOnCloseListener(Runnable listener) {
-    this.referenceCounter
-        .getOnLastReferenceClosed()
-        .addListener(listener, MoreExecutors.directExecutor());
   }
 
   private <T> void scheduleSequentialReadOperationWithVerification(
@@ -769,15 +789,19 @@ public class MirroringTable implements Table, ListenableCloseable {
   public static class RequestScheduler {
     final FlowController flowController;
     final MirroringTracer mirroringTracer;
-    final ListenableReferenceCounter referenceCounter;
+    final ReferenceCounter referenceCounter;
 
     public RequestScheduler(
         FlowController flowController,
         MirroringTracer mirroringTracer,
-        ListenableReferenceCounter referenceCounter) {
+        ReferenceCounter referenceCounter) {
       this.flowController = flowController;
       this.mirroringTracer = mirroringTracer;
       this.referenceCounter = referenceCounter;
+    }
+
+    public RequestScheduler withReferenceCounter(ReferenceCounter referenceCounter) {
+      return new RequestScheduler(this.flowController, this.mirroringTracer, referenceCounter);
     }
 
     public <T> ListenableFuture<Void> scheduleRequestWithCallback(
@@ -810,7 +834,7 @@ public class MirroringTable implements Table, ListenableCloseable {
               this.flowController,
               this.mirroringTracer,
               flowControlReservationErrorConsumer);
-      this.referenceCounter.holdReferenceUntilCompletion(future);
+      holdReferenceUntilCompletion(this.referenceCounter, future);
       return future;
     }
   }

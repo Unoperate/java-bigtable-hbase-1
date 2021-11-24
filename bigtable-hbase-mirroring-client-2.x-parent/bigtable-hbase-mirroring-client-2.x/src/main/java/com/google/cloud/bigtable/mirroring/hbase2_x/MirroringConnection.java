@@ -76,20 +76,18 @@ public class MirroringConnection
 
       @Override
       public Table build() {
-        MirroringTable table =
-            new MirroringTable(
-                primaryTableBuilder.build(),
-                secondaryTableBuilder.build(),
-                executorService,
-                mismatchDetector,
-                flowController,
-                secondaryWriteErrorConsumer,
-                readSampler,
-                performWritesConcurrently,
-                waitForSecondaryWrites,
-                mirroringTracer);
-        referenceCounter.holdReferenceUntilClosing(table);
-        return table;
+        return new MirroringTable(
+            primaryTableBuilder.build(),
+            secondaryTableBuilder.build(),
+            executorService,
+            mismatchDetector,
+            flowController,
+            secondaryWriteErrorConsumer,
+            readSampler,
+            performWritesConcurrently,
+            waitForSecondaryWrites,
+            mirroringTracer,
+            referenceCounter);
       }
     };
   }

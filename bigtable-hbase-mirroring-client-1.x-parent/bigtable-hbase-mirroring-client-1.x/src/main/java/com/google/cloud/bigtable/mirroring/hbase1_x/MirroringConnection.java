@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutator;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.CallableThrowingIOException;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
@@ -26,6 +25,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutation
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -53,7 +53,13 @@ public class MirroringConnection implements Connection {
   protected final FlowController flowController;
   protected final ExecutorService executorService;
   protected final MismatchDetector mismatchDetector;
+  /**
+   * Counter of all asynchronous operations that are using the secondary connection. Incremented
+   * when scheduling operations by underlying {@link MirroringTable} and {@link
+   * MirroringResultScanner}.
+   */
   protected final ListenableReferenceCounter referenceCounter;
+
   protected final MirroringTracer mirroringTracer;
   protected final SecondaryWriteErrorConsumer secondaryWriteErrorConsumer;
   protected final ReadSampler readSampler;
@@ -165,20 +171,18 @@ public class MirroringConnection implements Connection {
               },
               HBaseOperation.GET_TABLE);
       Table secondaryTable = this.secondaryConnection.getTable(tableName);
-      MirroringTable table =
-          new MirroringTable(
-              primaryTable,
-              secondaryTable,
-              executorService,
-              this.mismatchDetector,
-              this.flowController,
-              this.secondaryWriteErrorConsumer,
-              this.readSampler,
-              this.performWritesConcurrently,
-              this.waitForSecondaryWrites,
-              this.mirroringTracer);
-      this.referenceCounter.holdReferenceUntilClosing(table);
-      return table;
+      return new MirroringTable(
+          primaryTable,
+          secondaryTable,
+          executorService,
+          this.mismatchDetector,
+          this.flowController,
+          this.secondaryWriteErrorConsumer,
+          this.readSampler,
+          this.performWritesConcurrently,
+          this.waitForSecondaryWrites,
+          this.mirroringTracer,
+          this.referenceCounter);
     }
   }
 

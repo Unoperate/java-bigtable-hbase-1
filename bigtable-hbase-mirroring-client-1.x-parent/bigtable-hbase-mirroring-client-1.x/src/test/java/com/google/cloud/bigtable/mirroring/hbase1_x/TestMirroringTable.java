@@ -40,17 +40,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
@@ -109,6 +108,7 @@ public class TestMirroringTable {
   @Mock MismatchDetector mismatchDetector;
   @Mock FlowController flowController;
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
+  @Mock ReferenceCounter referenceCounter;
 
   MirroringTable mirroringTable;
 
@@ -127,7 +127,8 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 false,
                 false,
-                new MirroringTracer()));
+                new MirroringTracer(),
+                this.referenceCounter));
   }
 
   private void waitForMirroringScanner(ResultScanner mirroringScanner)
@@ -498,36 +499,6 @@ public class TestMirroringTable {
   }
 
   @Test
-  public void testClosingTableWithFutureDecreasesListenableCounter()
-      throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    ListenableReferenceCounter listenableReferenceCounter = spy(new ListenableReferenceCounter());
-    listenableReferenceCounter.holdReferenceUntilClosing(mirroringTable);
-
-    verify(listenableReferenceCounter, times(1)).incrementReferenceCount();
-    verify(listenableReferenceCounter, never()).decrementReferenceCount();
-    final ListenableFuture<Void> closingFuture = mirroringTable.asyncClose();
-    closingFuture.get(3, TimeUnit.SECONDS);
-    verify(listenableReferenceCounter, times(1)).decrementReferenceCount();
-  }
-
-  @Test
-  public void testClosingTableWithoutFutureDecreasesListenableCounter() throws IOException {
-    ListenableReferenceCounter listenableReferenceCounter = spy(new ListenableReferenceCounter());
-    listenableReferenceCounter.holdReferenceUntilClosing(mirroringTable);
-
-    verify(listenableReferenceCounter, times(1)).incrementReferenceCount();
-    verify(listenableReferenceCounter, never()).decrementReferenceCount();
-
-    IOException expectedException = new IOException("expected");
-    doThrow(expectedException).when(secondaryTable).close();
-
-    mirroringTable.close();
-    executorServiceRule.waitForExecutor();
-
-    verify(listenableReferenceCounter, times(1)).decrementReferenceCount();
-  }
-
-  @Test
   public void testSecondaryIsClosedWhenPrimaryThrowsAnException() throws IOException {
     doThrow(new IOException("expected")).when(primaryTable).close();
 
@@ -544,57 +515,6 @@ public class TestMirroringTable {
     executorServiceRule.waitForExecutor();
 
     verify(secondaryTable, times(1)).close();
-  }
-
-  @Test
-  public void testListenersAreCalledOnClose()
-      throws IOException, InterruptedException, ExecutionException, TimeoutException {
-
-    final SettableFuture<Integer> listenerFuture1 = SettableFuture.create();
-    mirroringTable.addOnCloseListener(
-        new Runnable() {
-          @Override
-          public void run() {
-            listenerFuture1.set(1);
-          }
-        });
-
-    final SettableFuture<Integer> listenerFuture2 = SettableFuture.create();
-    mirroringTable.addOnCloseListener(
-        new Runnable() {
-          @Override
-          public void run() {
-            listenerFuture2.set(2);
-          }
-        });
-
-    mirroringTable.asyncClose().get(3, TimeUnit.SECONDS);
-    assertThat(listenerFuture1.get(3, TimeUnit.SECONDS)).isEqualTo(1);
-    assertThat(listenerFuture2.get(3, TimeUnit.SECONDS)).isEqualTo(2);
-  }
-
-  @Test
-  public void testListenersAreNotCalledAfterSecondClose()
-      throws IOException, InterruptedException, ExecutionException, TimeoutException {
-
-    final SettableFuture<Integer> listenerFuture1 = SettableFuture.create();
-
-    Runnable onCloseAction =
-        spy(
-            new Runnable() {
-              @Override
-              public void run() {
-                listenerFuture1.set(1);
-              }
-            });
-
-    mirroringTable.addOnCloseListener(onCloseAction);
-
-    mirroringTable.asyncClose().get(3, TimeUnit.SECONDS);
-    assertThat(listenerFuture1.get(3, TimeUnit.SECONDS)).isEqualTo(1);
-    mirroringTable.asyncClose().get(3, TimeUnit.SECONDS);
-
-    verify(onCloseAction, times(1)).run();
   }
 
   @Test
@@ -1321,7 +1241,8 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 true,
                 true,
-                new MirroringTracer()));
+                new MirroringTracer(),
+                this.referenceCounter));
 
     Put put1 = createPut("r1", "f1", "q1", "v1");
 
@@ -1391,7 +1312,8 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 true,
                 true,
-                new MirroringTracer()));
+                new MirroringTracer(),
+                this.referenceCounter));
   }
 
   private void checkBatchCalledSequentially(List<? extends Row> requests)
@@ -1513,7 +1435,8 @@ public class TestMirroringTable {
                 new ReadSampler(100),
                 true,
                 true,
-                new MirroringTracer()));
+                new MirroringTracer(),
+                this.referenceCounter));
 
     Put put = createPut("test1", "f1", "q1", "v1");
     mockBatch(primaryTable, secondaryTable);
