@@ -19,6 +19,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Comparators;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import java.util.Arrays;
 import java.util.List;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
@@ -81,21 +82,22 @@ public class TestMismatchDetector implements MismatchDetector {
   @Override
   public void existsAll(List<Get> request, boolean[] primary, boolean[] secondary) {
     onVerificationStarted();
-    for (int i = 0; i < primary.length; i++) {
-      byte[] primaryValues = new byte[primary.length];
-      byte[] secondaryValues = new byte[secondary.length];
+    byte[] primaryValues = new byte[primary.length];
+    byte[] secondaryValues = new byte[secondary.length];
 
+    for (int i = 0; i < primary.length; i++) {
       for (int j = 0; j < primary.length; j++) {
         primaryValues[j] = booleanToByte(primary[j]);
       }
       for (int j = 0; j < secondary.length; j++) {
         secondaryValues[j] = booleanToByte(secondary[j]);
       }
-
-      if (primary[i] != secondary[i]) {
-        onMismatch(HBaseOperation.EXISTS_ALL, primaryValues, secondaryValues);
-      }
     }
+
+    if (!Arrays.equals(primaryValues, secondaryValues)) {
+      onMismatch(HBaseOperation.EXISTS_ALL, primaryValues, secondaryValues);
+    }
+
     onVerificationFinished();
   }
 
@@ -160,6 +162,7 @@ public class TestMismatchDetector implements MismatchDetector {
   public void scannerNext(Scan request, int entriesAlreadyRead, Throwable throwable) {
     onVerificationStarted();
     onFailure(HBaseOperation.NEXT, throwable);
+    onVerificationFinished();
   }
 
   @Override
