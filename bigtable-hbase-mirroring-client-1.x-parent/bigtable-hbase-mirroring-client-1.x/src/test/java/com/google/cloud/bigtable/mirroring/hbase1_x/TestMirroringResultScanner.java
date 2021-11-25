@@ -37,6 +37,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.Refe
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.opencensus.trace.Span;

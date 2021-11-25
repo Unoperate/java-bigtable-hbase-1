@@ -453,11 +453,11 @@ public class TestMirroringTable {
                 @Override
                 public void run() throws IOException {
                   assertThat(
-                      table.checkAndPut(
-                          rowKey,
-                          columnFamily1,
-                          qualifier1,
-                          rowKey,
+                          table.checkAndPut(
+                              rowKey,
+                              columnFamily1,
+                              qualifier1,
+                              rowKey,
                               Helpers.createPut(finalI, columnFamily1, qualifier2)))
                       .isTrue();
                 }
@@ -615,11 +615,11 @@ public class TestMirroringTable {
                 @Override
                 public void run() throws IOException {
                   assertThat(
-                      table.checkAndDelete(
-                          rowKey,
-                          columnFamily1,
-                          qualifier1,
-                          rowKey,
+                          table.checkAndDelete(
+                              rowKey,
+                              columnFamily1,
+                              qualifier1,
+                              rowKey,
                               Helpers.createDelete(rowKey, columnFamily1, qualifier2)))
                       .isTrue();
                 }
@@ -759,11 +759,11 @@ public class TestMirroringTable {
                 @Override
                 public void run() throws IOException {
                   assertThat(
-                      table.checkAndMutate(
-                          rowKey,
-                          columnFamily1,
-                          qualifier1,
-                          CompareOp.EQUAL,
+                          table.checkAndMutate(
+                              rowKey,
+                              columnFamily1,
+                              qualifier1,
+                              CompareOp.EQUAL,
                               rowKey,
                               Helpers.createRowMutations(
                                   rowKey, Helpers.createDelete(rowKey, columnFamily1, qualifier2))))
@@ -968,7 +968,7 @@ public class TestMirroringTable {
                 @Override
                 public void run() throws IOException {
                   table.append(
-                      Helpers.createAppend(rowKey, columnFamily1, qualifier1, new byte[]{1}));
+                      Helpers.createAppend(rowKey, columnFamily1, qualifier1, new byte[] {1}));
                 }
               });
         }
