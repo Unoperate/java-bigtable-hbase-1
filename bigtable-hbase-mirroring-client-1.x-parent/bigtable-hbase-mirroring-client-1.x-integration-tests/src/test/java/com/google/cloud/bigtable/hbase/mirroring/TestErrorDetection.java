@@ -15,11 +15,13 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_READ_VERIFICATION_RATE_PERCENT;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.cloud.bigtable.hbase.mirroring.utils.ConfigurationHelper;
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConnectionRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.DatabaseHelpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
@@ -34,6 +36,7 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Put;
@@ -114,7 +117,7 @@ public class TestErrorDetection {
 
   @Test
   public void concurrentInsertionAndReadingInsertsWithScanner()
-      throws IOException, InterruptedException, TimeoutException {
+      throws IOException, TimeoutException {
 
     class WorkerThread extends PropagatingThread {
       private final long workerId;
@@ -146,12 +149,12 @@ public class TestErrorDetection {
             for (long batchEntryId = 0; batchEntryId < this.batchSize; batchEntryId++) {
               long putIndex =
                   this.workerId * this.entriesPerWorker + batchId * this.batchSize + batchEntryId;
-              long putValue = putIndex + 1;
+              long putTimestamp = putIndex + 1;
               byte[] putIndexBytes = Longs.toByteArray(putIndex);
-              byte[] putValueBytes = Longs.toByteArray(putValue);
+              byte[] putValueBytes = ("value-" + putIndex).getBytes();
               puts.add(
                   Helpers.createPut(
-                      putIndexBytes, columnFamily1, qualifier1, putValue, putValueBytes));
+                      putIndexBytes, columnFamily1, qualifier1, putTimestamp, putValueBytes));
             }
             table.put(puts);
           }
@@ -180,15 +183,18 @@ public class TestErrorDetection {
       }
     }
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    Configuration configuration = ConfigurationHelper.newConfiguration();
+    configuration.set(MIRRORING_READ_VERIFICATION_RATE_PERCENT, "100");
+
+    try (MirroringConnection connection = databaseHelpers.createConnection(configuration)) {
       try (Table t = connection.getTable(tableName)) {
         try (ResultScanner s = t.getScanner(columnFamily1, qualifier1)) {
           long counter = 0;
           for (Result r : s) {
             long row = Longs.fromByteArray(r.getRow());
-            long value = Longs.fromByteArray(r.getValue(columnFamily1, qualifier1));
+            byte[] value = r.getValue(columnFamily1, qualifier1);
             assertEquals(counter, row);
-            assertEquals(counter + 1, value);
+            assertEquals(("value-" + counter).getBytes(), value);
             counter += 1;
           }
         }
@@ -268,7 +274,10 @@ public class TestErrorDetection {
       }
     }
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    Configuration configuration = ConfigurationHelper.newConfiguration();
+    configuration.set(MIRRORING_READ_VERIFICATION_RATE_PERCENT, "100");
+
+    try (MirroringConnection connection = databaseHelpers.createConnection(configuration)) {
       try (Table t = connection.getTable(tableName)) {
         try (ResultScanner s = t.getScanner(columnFamily1, qualifier1)) {
           int counter = 0;
