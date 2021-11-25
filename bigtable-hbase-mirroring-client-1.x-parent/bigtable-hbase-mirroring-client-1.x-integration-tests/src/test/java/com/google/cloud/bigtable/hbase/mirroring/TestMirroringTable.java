@@ -1234,7 +1234,7 @@ public class TestMirroringTable {
   private static int getSecondaryWriteErrorLogMessagesWritten() throws IOException {
     Configuration configuration = ConfigurationHelper.newConfiguration();
     MirroringOptions mirroringOptions = new MirroringOptions(configuration);
-    String prefixPath = configuration.get(mirroringOptions.faillog.prefix_path_key);
+    String prefixPath = mirroringOptions.faillog.prefixPath;
     String[] prefixParts = prefixPath.split("/");
     final String fileNamePrefix = prefixParts[prefixParts.length - 1];
     String[] directoryParts = Arrays.copyOf(prefixParts, prefixParts.length - 1);

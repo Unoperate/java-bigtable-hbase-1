@@ -46,7 +46,7 @@ import org.mockito.Mockito;
 public class TestMirroringConnectionClosing {
   @Rule
   public final ExecutorServiceRule executorServiceRule =
-      ExecutorServiceRule.singleThreadedExecutor();
+      ExecutorServiceRule.spyedSingleThreadedExecutor();
 
   private Configuration createConfiguration() {
     Configuration configuration = new Configuration();

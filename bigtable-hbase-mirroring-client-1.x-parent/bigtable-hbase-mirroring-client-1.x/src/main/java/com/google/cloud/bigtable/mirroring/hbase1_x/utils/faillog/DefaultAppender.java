@@ -15,11 +15,13 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_PREFIX_PATH_KEY;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.SYNC;
 import static java.nio.file.StandardOpenOption.WRITE;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
+import com.google.common.base.Preconditions;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -46,7 +48,7 @@ public class DefaultAppender implements Appender {
   private final Writer writer;
 
   public DefaultAppender(MirroringOptions.Faillog options) throws IOException {
-    this(options.prefix_path_key, options.max_buffer_size, options.drop_on_overflow);
+    this(options.prefixPath, options.maxBufferSize, options.dropOnOverflow);
   }
 
   /**
@@ -68,6 +70,12 @@ public class DefaultAppender implements Appender {
    */
   public DefaultAppender(String pathPrefix, int maxBufferSize, boolean dropOnOverflow)
       throws IOException {
+
+    Preconditions.checkArgument(
+        pathPrefix != null && !pathPrefix.isEmpty(),
+        "DefaultAppender's %s key shouldn't be empty.",
+        MIRRORING_FAILLOG_PREFIX_PATH_KEY);
+
     // In case of an unclean shutdown the end of the log file may contain partially written log
     // entries. In order to simplify reading the log files, we assume that everything following an
     // incomplete entry is to be discarded. In order to satisfy that assumption, we should not

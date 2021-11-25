@@ -61,7 +61,8 @@ public class TestSequentialMirroringBufferedMutator {
   @Rule public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
   @Rule
-  public final ExecutorServiceRule executorServiceRule = ExecutorServiceRule.cachedPoolExecutor();
+  public final ExecutorServiceRule executorServiceRule =
+      ExecutorServiceRule.spyedCachedPoolExecutor();
 
   public final MirroringBufferedMutatorCommon common = new MirroringBufferedMutatorCommon();
 

@@ -49,11 +49,10 @@ import org.apache.hadoop.conf.Configuration;
 public class MirroringOptions {
   public static class Faillog {
     Faillog(Configuration configuration) {
-      this.prefix_path_key = configuration.get(MIRRORING_FAILLOG_PREFIX_PATH_KEY);
-      this.max_buffer_size =
+      this.prefixPath = configuration.get(MIRRORING_FAILLOG_PREFIX_PATH_KEY);
+      this.maxBufferSize =
           configuration.getInt(MIRRORING_FAILLOG_MAX_BUFFER_SIZE_KEY, 20 * 1024 * 1024);
-      this.drop_on_overflow =
-          configuration.getBoolean(MIRRORING_FAILLOG_DROP_ON_OVERFLOW_KEY, false);
+      this.dropOnOverflow = configuration.getBoolean(MIRRORING_FAILLOG_DROP_ON_OVERFLOW_KEY, false);
       this.writeErrorLogAppenderFactoryClass =
           configuration.getClass(
               MIRRORING_WRITE_ERROR_LOG_APPENDER_FACTORY_CLASS,
@@ -68,9 +67,9 @@ public class MirroringOptions {
 
     public final Class<? extends Appender.Factory> writeErrorLogAppenderFactoryClass;
     public final Class<? extends Serializer.Factory> writeErrorLogSerializerFactoryClass;
-    public final String prefix_path_key;
-    public final int max_buffer_size;
-    public final boolean drop_on_overflow;
+    public final String prefixPath;
+    public final int maxBufferSize;
+    public final boolean dropOnOverflow;
   }
 
   private static final String HBASE_CLIENT_WRITE_BUFFER_KEY = "hbase.client.write.buffer";
