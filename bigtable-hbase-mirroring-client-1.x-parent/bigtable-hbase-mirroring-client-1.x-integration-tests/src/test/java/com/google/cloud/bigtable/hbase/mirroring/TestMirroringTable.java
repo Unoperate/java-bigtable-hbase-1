@@ -380,39 +380,43 @@ public class TestMirroringTable {
           // These cells are set by fillTable() and in i-th row the cell contains value of
           // Longs.toByteArray(i).
           byte[] rowKey = rowKeyFromId(i);
+          // Column qualifier2 should have a value.
           assertThat(
                   table.checkAndPut(
                       rowKey,
                       columnFamily1,
                       qualifier1,
-                      Longs.toByteArray(i),
+                      /* compare to */ Longs.toByteArray(i),
                       Helpers.createPut(i, columnFamily1, qualifier2)))
               .isTrue();
+          // Column qualifier3 should have a value.
           assertThat(
                   table.checkAndPut(
                       rowKey,
                       columnFamily1,
                       qualifier1,
                       CompareOp.EQUAL,
-                      Longs.toByteArray(i),
+                      /* compare to */ Longs.toByteArray(i),
                       Helpers.createPut(i, columnFamily1, qualifier3)))
               .isTrue();
+          // Column qualifier4 should have a value.
           assertThat(
                   table.checkAndPut(
                       rowKey,
                       columnFamily1,
                       qualifier1,
                       CompareOp.GREATER,
-                      Longs.toByteArray(i + 1),
+                      /* compare to */ Longs.toByteArray(i + 1),
                       Helpers.createPut(i, columnFamily1, qualifier4)))
               .isTrue();
+          // Column qualifier5 not should have a value.
           assertThat(
                   table.checkAndPut(
                       rowKey,
                       columnFamily1,
                       qualifier1,
                       CompareOp.NOT_EQUAL,
-                      Longs.toByteArray(i),
+                      /* compare to */ Longs.toByteArray(i),
                       Helpers.createPut(i, columnFamily1, qualifier5)))
               .isFalse();
         }
