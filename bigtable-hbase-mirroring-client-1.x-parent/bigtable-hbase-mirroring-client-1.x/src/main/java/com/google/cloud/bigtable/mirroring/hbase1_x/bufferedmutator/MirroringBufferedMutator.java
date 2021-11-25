@@ -413,7 +413,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       return new FlushFutures(future, future, future);
     }
 
-    public synchronized final void storeResourcesAndFlushIfNeeded(
+    public final synchronized void storeResourcesAndFlushIfNeeded(
         BufferEntryType entry, RequestResourcesDescription resourcesDescription) {
       // This method is synchronized to make sure that order of scheduled flushes matches order of
       // created dataToFlush lists.
@@ -424,7 +424,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
       }
     }
 
-    public synchronized final FlushFutures scheduleFlushAll() {
+    public final synchronized FlushFutures scheduleFlushAll() {
       // This method is synchronized to make sure that order of scheduled flushes matches order of
       // created dataToFlush lists.
       List<BufferEntryType> dataToFlush = this.mutationEntries.flushBuffer();
@@ -442,13 +442,13 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
         resultFutures.secondaryFlushFinished.addListener(
             new Runnable() {
               @Override
-                public void run() {
-                  ongoingFlushesCounter.decrementReferenceCount();
-                }
-              },
-              MoreExecutors.directExecutor());
-          return resultFutures;
-        }
+              public void run() {
+                ongoingFlushesCounter.decrementReferenceCount();
+              }
+            },
+            MoreExecutors.directExecutor());
+        return resultFutures;
+      }
     }
   }
 
