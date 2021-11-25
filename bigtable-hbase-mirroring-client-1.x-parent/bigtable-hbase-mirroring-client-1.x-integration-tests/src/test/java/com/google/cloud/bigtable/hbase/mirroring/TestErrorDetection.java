@@ -196,10 +196,13 @@ public class TestErrorDetection {
     }
 
     assertEquals(0, MismatchDetectorCounter.getInstance().getErrorCount());
+    // + 1 because we also verify the final `null` denoting end of results.
     assertEquals(
-        numberOfWorkers * numberOfBatches * batchSize,
-        MismatchDetectorCounter.getInstance().getVerificationsStartedCounter(),
+        numberOfWorkers * numberOfBatches * batchSize + 1,
         MismatchDetectorCounter.getInstance().getVerificationsFinishedCounter());
+    assertEquals(
+        numberOfWorkers * numberOfBatches * batchSize + 1,
+        MismatchDetectorCounter.getInstance().getVerificationsStartedCounter());
   }
 
   @Test

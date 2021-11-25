@@ -64,7 +64,6 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.junit.Assume;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -108,7 +107,6 @@ public class TestBufferedMutator {
     return configuration;
   }
 
-  @Ignore
   @Test
   public void testBufferedMutatorPerformsMutations() throws IOException, InterruptedException {
     final int numThreads = 10;
@@ -296,7 +294,6 @@ public class TestBufferedMutator {
         secondary == null ? null : Longs.toByteArray(secondary));
   }
 
-  @Ignore
   @Test
   public void testBufferedMutatorPrimaryErrorHandling() throws IOException {
     Assume.assumeTrue(

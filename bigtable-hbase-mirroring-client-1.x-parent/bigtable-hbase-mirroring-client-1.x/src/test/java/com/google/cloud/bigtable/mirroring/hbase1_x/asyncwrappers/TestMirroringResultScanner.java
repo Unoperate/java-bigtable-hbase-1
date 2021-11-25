@@ -34,7 +34,6 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.VerificationContinuationFactory;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
@@ -245,12 +244,34 @@ public class TestMirroringResultScanner {
     ScannerRequestContext c5 = new ScannerRequestContext(null, null, 5, span);
     ScannerRequestContext c6 = new ScannerRequestContext(null, null, 6, span);
 
-    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c1).get(), calls);
-    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c2).get(), calls);
-    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c3).get(), calls);
-    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c4).get(), calls);
-    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c5).get(), calls);
-    getFutureWithoutBlocking(asyncResultScannerWrapper.next(c6).get(), calls);
+    // asyncResultScannerWrapper.next(c1).get() schedules the requests asynchronously.
+    // All requests are scheduled and a callback is added to place its result in `calls` list.
+    // Later we will verify if elements on that list are in correct order, even though we won't run
+    // scheduled requests in order of scheduling.
+    Futures.addCallback(
+        asyncResultScannerWrapper.next(c1).get(),
+        addContextToListCallback(calls),
+        MoreExecutors.directExecutor());
+    Futures.addCallback(
+        asyncResultScannerWrapper.next(c2).get(),
+        addContextToListCallback(calls),
+        MoreExecutors.directExecutor());
+    Futures.addCallback(
+        asyncResultScannerWrapper.next(c3).get(),
+        addContextToListCallback(calls),
+        MoreExecutors.directExecutor());
+    Futures.addCallback(
+        asyncResultScannerWrapper.next(c4).get(),
+        addContextToListCallback(calls),
+        MoreExecutors.directExecutor());
+    Futures.addCallback(
+        asyncResultScannerWrapper.next(c5).get(),
+        addContextToListCallback(calls),
+        MoreExecutors.directExecutor());
+    Futures.addCallback(
+        asyncResultScannerWrapper.next(c6).get(),
+        addContextToListCallback(calls),
+        MoreExecutors.directExecutor());
 
     reverseOrderExecutorService.callScheduledCallables();
 
@@ -260,25 +281,22 @@ public class TestMirroringResultScanner {
     assertThat(calls).isEqualTo(Arrays.asList(c1, c2, c3, c4, c5, c6));
   }
 
-  private void getFutureWithoutBlocking(
-      ListenableFuture<AsyncScannerVerificationPayload> next,
-      final List<ScannerRequestContext> calls) {
-    Futures.addCallback(
-        next,
-        new FutureCallback<AsyncScannerVerificationPayload>() {
-          @Override
-          public void onSuccess(
-              @NullableDecl AsyncScannerVerificationPayload asyncScannerVerificationPayload) {
-            calls.add(asyncScannerVerificationPayload.context);
-          }
+  private FutureCallback<AsyncScannerVerificationPayload> addContextToListCallback(
+      final List<ScannerRequestContext> list) {
+    return new FutureCallback<AsyncScannerVerificationPayload>() {
+      @Override
+      public void onSuccess(
+          @NullableDecl AsyncScannerVerificationPayload asyncScannerVerificationPayload) {
+        list.add(asyncScannerVerificationPayload.context);
+      }
 
-          @Override
-          public void onFailure(Throwable throwable) {}
-        },
-        MoreExecutors.directExecutor());
+      @Override
+      public void onFailure(Throwable throwable) {}
+    };
   }
 
   static class ReverseOrderExecutorService implements ExecutorService {
+
     List<Runnable> callables = new ArrayList<>();
 
     public void callScheduledCallables() {
