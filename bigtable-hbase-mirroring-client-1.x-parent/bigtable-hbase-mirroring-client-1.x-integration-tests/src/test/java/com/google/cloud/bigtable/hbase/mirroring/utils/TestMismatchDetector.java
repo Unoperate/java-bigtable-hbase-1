@@ -82,22 +82,19 @@ public class TestMismatchDetector implements MismatchDetector {
   @Override
   public void existsAll(List<Get> request, boolean[] primary, boolean[] secondary) {
     onVerificationStarted();
-    byte[] primaryValues = new byte[primary.length];
-    byte[] secondaryValues = new byte[secondary.length];
+    if (!Arrays.equals(primary, secondary)) {
+      byte[] primaryValues = new byte[primary.length];
+      byte[] secondaryValues = new byte[secondary.length];
 
-    for (int i = 0; i < primary.length; i++) {
-      for (int j = 0; j < primary.length; j++) {
-        primaryValues[j] = booleanToByte(primary[j]);
+      for (int i = 0; i < primary.length; i++) {
+        primaryValues[i] = booleanToByte(primary[i]);
       }
-      for (int j = 0; j < secondary.length; j++) {
-        secondaryValues[j] = booleanToByte(secondary[j]);
-      }
-    }
 
-    if (!Arrays.equals(primaryValues, secondaryValues)) {
+      for (int i = 0; i < secondary.length; i++) {
+        secondaryValues[i] = booleanToByte(secondary[i]);
+      }
       onMismatch(HBaseOperation.EXISTS_ALL, primaryValues, secondaryValues);
     }
-
     onVerificationFinished();
   }
 

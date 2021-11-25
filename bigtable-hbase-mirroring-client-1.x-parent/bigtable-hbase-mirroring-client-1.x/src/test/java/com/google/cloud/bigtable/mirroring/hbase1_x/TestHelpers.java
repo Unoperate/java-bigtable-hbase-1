@@ -148,8 +148,9 @@ public class TestHelpers {
    * A helper function that blocks method on a mock until a future is set or default timeout is
    * reached.
    *
-   * <p>Once unblocked either by timeout or {@link SettableFuture#set} it just lets further calls
-   * through without waiting.
+   * <p>Once unblocked by {@link SettableFuture#set} the call is unblocked and let through.
+   *
+   * <p>When timeout is reached a TimeoutException is thrown and blocked method is never called.
    *
    * @param mock mock whose method is blocked
    * @param futureToWaitFor future which unblocks method calls

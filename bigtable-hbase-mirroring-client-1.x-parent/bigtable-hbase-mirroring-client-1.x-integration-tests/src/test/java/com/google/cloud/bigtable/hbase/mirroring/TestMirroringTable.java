@@ -132,7 +132,7 @@ public class TestMirroringTable {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
           final int finalI = i;
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
@@ -265,7 +265,7 @@ public class TestMirroringTable {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
@@ -447,17 +447,17 @@ public class TestMirroringTable {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
           final int finalI = i;
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
                 public void run() throws IOException {
                   assertThat(
-                          table.checkAndPut(
-                              rowKey,
-                              columnFamily1,
-                              qualifier1,
-                              rowKey,
+                      table.checkAndPut(
+                          rowKey,
+                          columnFamily1,
+                          qualifier1,
+                          rowKey,
                               Helpers.createPut(finalI, columnFamily1, qualifier2)))
                       .isTrue();
                 }
@@ -609,17 +609,17 @@ public class TestMirroringTable {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
                 public void run() throws IOException {
                   assertThat(
-                          table.checkAndDelete(
-                              rowKey,
-                              columnFamily1,
-                              qualifier1,
-                              rowKey,
+                      table.checkAndDelete(
+                          rowKey,
+                          columnFamily1,
+                          qualifier1,
+                          rowKey,
                               Helpers.createDelete(rowKey, columnFamily1, qualifier2)))
                       .isTrue();
                 }
@@ -753,17 +753,17 @@ public class TestMirroringTable {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
                 public void run() throws IOException {
                   assertThat(
-                          table.checkAndMutate(
-                              rowKey,
-                              columnFamily1,
-                              qualifier1,
-                              CompareOp.EQUAL,
+                      table.checkAndMutate(
+                          rowKey,
+                          columnFamily1,
+                          qualifier1,
+                          CompareOp.EQUAL,
                               rowKey,
                               Helpers.createRowMutations(
                                   rowKey, Helpers.createDelete(rowKey, columnFamily1, qualifier2))))
@@ -872,7 +872,7 @@ public class TestMirroringTable {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
@@ -962,13 +962,13 @@ public class TestMirroringTable {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
                 public void run() throws IOException {
                   table.append(
-                      Helpers.createAppend(rowKey, columnFamily1, qualifier1, new byte[] {1}));
+                      Helpers.createAppend(rowKey, columnFamily1, qualifier1, new byte[]{1}));
                 }
               });
         }
@@ -1039,7 +1039,7 @@ public class TestMirroringTable {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
@@ -1109,7 +1109,7 @@ public class TestMirroringTable {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
-          catchAndValidateIOExceptionsThrown(
+          validateThrownExceptionIO(
               rowKey,
               new RunnableThrowingIO() {
                 @Override
@@ -1243,10 +1243,15 @@ public class TestMirroringTable {
   }
 
   interface RunnableThrowingIO {
+
     void run() throws IOException;
   }
 
-  private void catchAndValidateIOExceptionsThrown(byte[] rowKey, RunnableThrowingIO runnable) {
+  /**
+   * If rowKey row should fail (according to {@code failEvenRowKeysPredicate}) then expect the
+   * {@code runnable} to throw IOException, otherwise expect it not to throw anything.:w
+   */
+  private void validateThrownExceptionIO(byte[] rowKey, RunnableThrowingIO runnable) {
     boolean willThrow = failEvenRowKeysPredicate.apply(rowKey);
     try {
       runnable.run();
