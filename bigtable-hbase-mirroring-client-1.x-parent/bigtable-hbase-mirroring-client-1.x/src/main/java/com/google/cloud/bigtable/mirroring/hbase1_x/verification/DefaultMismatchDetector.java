@@ -23,16 +23,21 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringMetricsRecorder;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.util.Bytes;
 
 @InternalApi("For internal usage only")
 public class DefaultMismatchDetector implements MismatchDetector {
@@ -199,9 +204,21 @@ public class DefaultMismatchDetector implements MismatchDetector {
     return new DefaultScannerResultVerifier(request, maxBufferedResults);
   }
 
+  /**
+   * Helper class used to detect non-trivial mismatches in scan operations.
+   *
+   * <p>Assumption: scanners return results ordered lexicographically by row key.
+   */
   public class DefaultScannerResultVerifier implements ScannerResultVerifier {
+
     private final LinkedList<Result> primaryMismatchBuffer;
+    private final Set<ResultRowKey> primaryKeys;
+
     private final LinkedList<Result> secondaryMismatchBuffer;
+    private final Set<ResultRowKey> secondaryKeys;
+
+    private final SortedSet<ResultRowKey> commonRowKeys;
+
     private final int sizeLimit;
     private final Scan scanRequest;
 
@@ -209,87 +226,122 @@ public class DefaultMismatchDetector implements MismatchDetector {
       this.scanRequest = scan;
       this.sizeLimit = sizeLimit;
       this.primaryMismatchBuffer = new LinkedList<>();
+      this.primaryKeys = new HashSet<>();
       this.secondaryMismatchBuffer = new LinkedList<>();
+      this.secondaryKeys = new HashSet<>();
+      this.commonRowKeys = new TreeSet<>();
     }
 
     @Override
     public void flush() {
-      this.shrinkBuffer(this.primaryMismatchBuffer, 0);
-      this.shrinkBuffer(this.secondaryMismatchBuffer, 0);
+      this.shrinkBuffer(this.primaryMismatchBuffer, "primary", 0);
+      this.shrinkBuffer(this.secondaryMismatchBuffer, "secondary", 0);
     }
 
     @Override
     public void verify(Result[] primary, Result[] secondary) {
-      this.addNotNull(this.primaryMismatchBuffer, primary);
-      this.addNotNull(this.secondaryMismatchBuffer, secondary);
-
+      this.extendBuffers(primary, secondary);
       this.matchResults();
-
-      this.shrinkBuffer(this.primaryMismatchBuffer, this.sizeLimit);
-      this.shrinkBuffer(this.secondaryMismatchBuffer, this.sizeLimit);
+      this.shrinkBuffers();
     }
 
-    private void addNotNull(Deque<Result> mismatchBuffer, Result[] results) {
-      for (Result result : results) {
-        if (result == null) break;
-        mismatchBuffer.addLast(result);
+    private void shrinkBuffers() {
+      this.shrinkBuffer(this.primaryMismatchBuffer, "primary", this.sizeLimit);
+      this.shrinkBuffer(this.secondaryMismatchBuffer, "secondary", this.sizeLimit);
+    }
+
+    private void extendBuffers(Result[] primary, Result[] secondary) {
+      for (Result result : primary) {
+        if (result == null) {
+          continue;
+        }
+        this.primaryMismatchBuffer.add(result);
+        ResultRowKey rowKey = new ResultRowKey(result.getRow());
+        this.primaryKeys.add(rowKey);
+        if (this.secondaryKeys.contains(rowKey)) {
+          this.commonRowKeys.add(rowKey);
+        }
+      }
+
+      for (Result result : secondary) {
+        if (result == null) {
+          continue;
+        }
+        this.secondaryMismatchBuffer.add(result);
+        ResultRowKey rowKey = new ResultRowKey(result.getRow());
+        this.secondaryKeys.add(rowKey);
+        if (this.primaryKeys.contains(rowKey)) {
+          this.commonRowKeys.add(rowKey);
+        }
       }
     }
 
     private void matchResults() {
-      Set<Result> matches = this.matchingResults();
-      while (!matches.isEmpty()) {
-        Result primaryResult = this.firstMatch(this.primaryMismatchBuffer, matches);
-        this.popUntilMatchesWanted(this.secondaryMismatchBuffer, primaryResult, matches);
+      for (ResultRowKey firstMatchingRowKey : this.commonRowKeys) {
+        Result primaryMatchingResult =
+            this.dropAndReportUntilMatch(
+                this.primaryMismatchBuffer, this.primaryKeys, "primary", firstMatchingRowKey);
+        Result secondaryMatchingResult =
+            this.dropAndReportUntilMatch(
+                this.secondaryMismatchBuffer, this.secondaryKeys, "secondary", firstMatchingRowKey);
+        this.compareMatchingRowsResults(primaryMatchingResult, secondaryMatchingResult);
+      }
+      this.commonRowKeys.clear();
+    }
+
+    private void compareMatchingRowsResults(
+        Result primaryMatchingResult, Result secondaryMatchingResult) {
+      if (!Comparators.resultsEqual(primaryMatchingResult, secondaryMatchingResult)) {
+        logAndRecordScanMismatch(primaryMatchingResult, secondaryMatchingResult);
+      } else {
         metricsRecorder.recordReadMatches(HBaseOperation.NEXT, 1);
       }
     }
 
-    private Result firstMatch(Deque<Result> primaryBuffer, Set<Result> matches) {
-      while (!primaryBuffer.isEmpty()) {
-        Result result = primaryBuffer.removeFirst();
-        if (matches.remove(result)) {
+    private Result dropAndReportUntilMatch(
+        LinkedList<Result> buffer,
+        Set<ResultRowKey> keySet,
+        String databaseName,
+        ResultRowKey matchingKey) {
+      Iterator<Result> bufferIterator = buffer.iterator();
+      while (bufferIterator.hasNext()) {
+        Result result = bufferIterator.next();
+        bufferIterator.remove();
+        keySet.remove(new ResultRowKey(result.getRow()));
+        if (matchingKey.compareTo(result.getRow())) {
           return result;
+        } else {
+          logAndReportMissingEntry(result, databaseName);
         }
-        logAndRecordScanMismatch(result);
       }
-      // A match should have been found.
-      assert false;
+      Log.error(
+          "DefaultScannerResultVerifier was not able to find matching element in buffered list and the invariant is broken.");
       return null;
     }
 
-    void popUntilMatchesWanted(Deque<Result> buffer, Result wanted, Set<Result> matches) {
-      while (!buffer.isEmpty()) {
-        Result result = buffer.removeFirst();
-        matches.remove(result);
-        if (Comparators.resultsEqual(result, wanted)) {
-          return;
-        }
-        logAndRecordScanMismatch(result);
-      }
-      // Wanted result should have been found.
-      assert false;
-    }
-
-    private Set<Result> matchingResults() {
-      Set<Result> results = new HashSet<>(this.primaryMismatchBuffer);
-      results.retainAll(this.secondaryMismatchBuffer);
-      return results;
-    }
-
-    private void shrinkBuffer(Deque<Result> mismatchBuffer, int targetSize) {
+    private void shrinkBuffer(Deque<Result> mismatchBuffer, String type, int targetSize) {
       int toRemove = Math.max(0, mismatchBuffer.size() - targetSize);
       for (int i = 0; i < toRemove; i++) {
-        logAndRecordScanMismatch(mismatchBuffer.removeFirst());
+        logAndReportMissingEntry(mismatchBuffer.removeFirst(), type);
       }
     }
 
-    private void logAndRecordScanMismatch(Result scanResult) {
+    private void logAndReportMissingEntry(Result scanResult, String databaseName) {
       Log.debug(
           String.format(
-              "scan(id=%s) mismatch: only one database contains (row=%s)",
+              "scan(id=%s) mismatch: only %s database contains (row=%s)",
               this.scanRequest.getId(),
+              databaseName,
               new LazyBytesHexlifier(scanResult.getRow(), maxValueBytesLogged)));
+      metricsRecorder.recordReadMismatches(HBaseOperation.NEXT, 1);
+    }
+
+    private void logAndRecordScanMismatch(Result primaryResult, Result secondaryResult) {
+      Log.debug(
+          String.format(
+              "scan(id=%s) mismatch: databases contain different rows (row=%s)",
+              this.scanRequest.getId(),
+              new LazyBytesHexlifier(primaryResult.getRow(), maxValueBytesLogged)));
       metricsRecorder.recordReadMismatches(HBaseOperation.NEXT, 1);
     }
   }
@@ -357,6 +409,37 @@ public class DefaultMismatchDetector implements MismatchDetector {
         bytesToHex(out, 0, 0, bytesToPrint);
       }
       return new String(out);
+    }
+  }
+
+  /**
+   * Wrapper around byte[] that has correct hashCode, equals and is lexicographically comparable.
+   */
+  public static class ResultRowKey implements Comparable<ResultRowKey> {
+    private final ByteBuffer byteBuffer;
+
+    public ResultRowKey(byte[] rowKey) {
+      this.byteBuffer = ByteBuffer.wrap(rowKey);
+    }
+
+    @Override
+    public int hashCode() {
+      return this.byteBuffer.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      return obj.getClass() == this.getClass()
+          && this.byteBuffer.equals(((ResultRowKey) obj).byteBuffer);
+    }
+
+    @Override
+    public int compareTo(ResultRowKey resultRowKey) {
+      return this.byteBuffer.compareTo(resultRowKey.byteBuffer);
+    }
+
+    public boolean compareTo(byte[] bytes) {
+      return Bytes.compareTo(this.byteBuffer.array(), bytes) == 0;
     }
   }
 

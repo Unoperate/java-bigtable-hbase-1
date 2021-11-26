@@ -64,6 +64,10 @@ public interface MismatchDetector {
 
   ScannerResultVerifier createScannerResultVerifier(Scan request, int maxBufferedResults);
 
+  /**
+   * Interface of helper classes used to detect non-trivial mismatches in scan operations, such as
+   * elements missing in one of the databases.
+   */
   interface ScannerResultVerifier {
     void verify(Result[] primary, Result[] secondary);
 
