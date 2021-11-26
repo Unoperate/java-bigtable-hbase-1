@@ -118,8 +118,10 @@ public class MirroringConfigurationHelper {
       "google.bigtable.mirroring.read-verification-rate-percent";
 
   /**
-   * Number of bytes that {@link MirroringBufferedMutator} should buffer before flushing underlying
-   * primary BufferedMutator and performing a write to secondary database.
+   * Number of bytes that {@link
+   * com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutator} should
+   * buffer before flushing underlying primary BufferedMutator and performing a write to secondary
+   * database.
    *
    * <p>If not set uses the value of {@code hbase.client.write.buffer}, which by default is 2MB.
    * When those values are kept in sync, mirroring client should perform flush operation on primary
@@ -189,11 +191,11 @@ public class MirroringConfigurationHelper {
    * com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection} should wait synchronously for
    * pending operations before terminating connection with secondary database.
    *
-   * <p>After reaching the timeout some of the operations on secondary database would still be
-   * in-flight and might be lost. Those requests are not cancelled and will be performed
-   * asynchronously until the program terminates.
+   * <p>If the timeout is reached, some of the operations on secondary database are still be
+   * in-flight and would be lost if we closed the secondary connection immediately. Those requests
+   * are not cancelled and will be performed asynchronously until the program terminates.
    *
-   * <p>Defaults to 60000. If the wait times out, the termination is scheduled asynchronously.
+   * <p>Defaults to 60000.
    */
   public static final String MIRRORING_CONNECTION_CONNECTION_TERMINATION_TIMEOUT =
       "google.bigtable.mirroring.connection.termination-timeout";
