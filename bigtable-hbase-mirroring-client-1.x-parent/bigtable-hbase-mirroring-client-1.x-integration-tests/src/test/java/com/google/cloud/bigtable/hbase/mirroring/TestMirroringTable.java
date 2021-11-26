@@ -521,7 +521,7 @@ public class TestMirroringTable {
         .isEqualTo(databaseEntriesCount * 2);
     // failEvenRowKeysPredicate fails every second put.
     assertThat(databaseHelpers.countCells(tableName1, DatabaseSelector.SECONDARY))
-        .isEqualTo((int) databaseEntriesCount * 1.5);
+        .isEqualTo((int) (databaseEntriesCount * 1.5));
     reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
   }
 
