@@ -87,14 +87,15 @@ public class TestMirroringAsyncConfiguration {
         MirroringConfigurationHelper.MIRRORING_SECONDARY_ASYNC_CONNECTION_CLASS_KEY,
         "AsyncConnectionClass2");
 
-    MirroringAsyncConfiguration configuration = new MirroringAsyncConfiguration(testConfiguration);
-    assertThat(configuration.primaryConfiguration.get("hbase.client.connection.impl"))
+    MirroringAsyncConfiguration asyncConfiguration =
+        new MirroringAsyncConfiguration(testConfiguration);
+    assertThat(asyncConfiguration.primaryConfiguration.get("hbase.client.connection.impl"))
         .isEqualTo("ConnectionClass1");
-    assertThat(configuration.secondaryConfiguration.get("hbase.client.connection.impl"))
+    assertThat(asyncConfiguration.secondaryConfiguration.get("hbase.client.connection.impl"))
         .isEqualTo("ConnectionClass2");
-    assertThat(configuration.primaryConfiguration.get("hbase.client.async.connection.impl"))
+    assertThat(asyncConfiguration.primaryConfiguration.get("hbase.client.async.connection.impl"))
         .isEqualTo("AsyncConnectionClass1");
-    assertThat(configuration.secondaryConfiguration.get("hbase.client.async.connection.impl"))
+    assertThat(asyncConfiguration.secondaryConfiguration.get("hbase.client.async.connection.impl"))
         .isEqualTo("AsyncConnectionClass2");
   }
 
