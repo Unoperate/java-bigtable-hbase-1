@@ -118,10 +118,8 @@ public class MirroringConfigurationHelper {
       "google.bigtable.mirroring.read-verification-rate-percent";
 
   /**
-   * Number of bytes that {@link
-   * com.google.cloud.bigtable.mirroring.hbase1_x.bufferedmutator.MirroringBufferedMutator} should
-   * buffer before flushing underlying primary BufferedMutator and performing a write to secondary
-   * database.
+   * Number of bytes that {@link MirroringBufferedMutator} should buffer before flushing underlying
+   * primary BufferedMutator and performing a write to secondary database.
    *
    * <p>If not set uses the value of {@code hbase.client.write.buffer}, which by default is 2MB.
    * When those values are kept in sync, mirroring client should perform flush operation on primary
