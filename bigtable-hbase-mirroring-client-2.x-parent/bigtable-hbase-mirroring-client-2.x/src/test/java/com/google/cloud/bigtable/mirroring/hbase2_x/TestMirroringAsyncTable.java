@@ -382,6 +382,21 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
+  public void testPutListIsMirrored() throws ExecutionException, InterruptedException {
+    Put put = createPut("test", "f1", "q1", "v1");
+    List<Put> puts = Arrays.asList(put);
+
+    when(primaryTable.put(puts))
+        .thenReturn(
+            Arrays.asList(
+                CompletableFuture.completedFuture(null), CompletableFuture.completedFuture(null)));
+    CompletableFuture.allOf(mirroringTable.put(puts).toArray(new CompletableFuture[0])).get();
+
+    verify(primaryTable, times(1)).put(eq(puts));
+    verify(secondaryTable, times(1)).put(eq(puts));
+  }
+
+  @Test
   public void testPutWithErrorIsNotMirrored() {
     final Put put = createPut("test", "f1", "q1", "v1");
     CompletableFuture<Void> primaryFuture = new CompletableFuture<>();
