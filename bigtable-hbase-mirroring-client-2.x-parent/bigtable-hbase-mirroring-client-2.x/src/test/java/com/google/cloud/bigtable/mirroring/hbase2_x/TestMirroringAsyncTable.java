@@ -44,6 +44,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -1079,6 +1080,60 @@ public class TestMirroringAsyncTable {
     verify(secondaryTable, never()).batch(any());
     verify(secondaryWriteErrorConsumer, times(1))
         .consume(eq(HBaseOperation.BATCH), eq(Arrays.asList(put2)), eq(flowControllerException));
+  }
+
+  @Test
+  public void testFlowControllerExceptionInGetPreventsSecondaryOperation()
+      throws ExecutionException, InterruptedException {
+    setupFlowControllerToRejectRequests(flowController);
+
+    Get request = createGet("test");
+    Result expectedResult = createResult("test", "value");
+    when(primaryTable.get(request)).thenReturn(CompletableFuture.completedFuture(expectedResult));
+    Result result = mirroringTable.get(request).get();
+    assertThat(result).isEqualTo(expectedResult);
+
+    verify(primaryTable, times(1)).get(request);
+    verify(secondaryTable, never()).get(any(Get.class));
+  }
+
+  @Test
+  public void testFlowControllerExceptionInPutExecutesWriteErrorHandler()
+      throws ExecutionException, InterruptedException {
+    setupFlowControllerToRejectRequests(flowController);
+
+    Put put = createPut("test", "f1", "q1", "v1");
+    when(primaryTable.put(any(Put.class))).thenReturn(CompletableFuture.completedFuture(null));
+    mirroringTable.put(put).get();
+
+    verify(primaryTable, times(1)).put(put);
+    verify(secondaryTable, never()).put(put);
+    verify(secondaryWriteErrorConsumer, times(1))
+        .consume(eq(HBaseOperation.PUT), eq(ImmutableList.of(put)), any(Throwable.class));
+  }
+
+  @Test
+  public void testFlowControllerExceptionInBatchExecutesWriteErrorHandler()
+      throws ExecutionException, InterruptedException {
+    setupFlowControllerToRejectRequests(flowController);
+
+    Put put1 = createPut("test0", "f1", "q1", "v1");
+    Put put2 = createPut("test1", "f1", "q2", "v1");
+    Get get1 = createGet("test2");
+    List<? extends Row> request = ImmutableList.of(put1, put2, get1);
+
+    when(primaryTable.batch(request))
+        .thenReturn(
+            Arrays.asList(
+                CompletableFuture.completedFuture(null),
+                CompletableFuture.completedFuture(null),
+                CompletableFuture.completedFuture(Result.create(new Cell[0]))));
+    CompletableFuture.allOf(mirroringTable.batch(request).toArray(new CompletableFuture[0])).get();
+
+    verify(primaryTable, times(1)).batch(eq(request));
+    verify(secondaryTable, never()).batch(eq(request));
+    verify(secondaryWriteErrorConsumer, times(1))
+        .consume(eq(HBaseOperation.BATCH), eq(ImmutableList.of(put1, put2)), any(Throwable.class));
   }
 
   @Test
