@@ -143,7 +143,7 @@ public class TestMirroringAsyncTableInputModification {
   }
 
   @Test
-  public void testGet() throws InterruptedException, TimeoutException, ExecutionException {
+  public void testGets() throws InterruptedException, TimeoutException, ExecutionException {
     List<Get> gets = createGets("k1", "k2", "k3");
     List<Get> inputList = new ArrayList<>(gets);
 
@@ -160,7 +160,7 @@ public class TestMirroringAsyncTableInputModification {
   }
 
   @Test
-  public void testPut() throws InterruptedException, TimeoutException, ExecutionException {
+  public void testPuts() throws InterruptedException, TimeoutException, ExecutionException {
     List<Put> puts = Collections.singletonList(createPut("r", "f", "q", "v"));
     List<Put> inputList = new ArrayList<>(puts);
 
@@ -177,7 +177,7 @@ public class TestMirroringAsyncTableInputModification {
   }
 
   @Test
-  public void testDelete() throws InterruptedException, TimeoutException, ExecutionException {
+  public void testDeletes() throws InterruptedException, TimeoutException, ExecutionException {
     List<Delete> puts = Collections.singletonList(new Delete("r".getBytes()));
     List<Delete> inputList = new ArrayList<>(puts);
 
