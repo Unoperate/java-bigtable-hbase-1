@@ -23,6 +23,7 @@ import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlow
 import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerToRejectRequests;
 import static com.google.common.truth.Truth.assertThat;
 import static junit.framework.TestCase.fail;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -145,6 +146,22 @@ public class TestMirroringAsyncTable {
     verify(mismatchDetector, times(1)).get(get, expectedResult, expectedResult);
     verify(mismatchDetector, never()).get((Get) any(), any());
     verify(mismatchDetector, never()).get(anyList(), any(Result[].class), any(Result[].class));
+  }
+
+  @Test
+  public void testPrimaryReadExceptionDoesntCallSecondaryNorVerification() throws IOException {
+    Get request = createGet("test");
+    IOException expectedException = new IOException("expected");
+    CompletableFuture<Result> primaryFuture = new CompletableFuture<>();
+    primaryFuture.completeExceptionally(expectedException);
+    when(primaryTable.get(request)).thenReturn(primaryFuture);
+
+    Exception thrownException =
+        assertThrows(ExecutionException.class, () -> mirroringTable.get(request).get());
+    assertThat(thrownException.getCause()).isEqualTo(expectedException);
+
+    verify(secondaryTable, never()).get(any(Get.class));
+    verify(mismatchDetector, never()).get(request, expectedException);
   }
 
   @Test
