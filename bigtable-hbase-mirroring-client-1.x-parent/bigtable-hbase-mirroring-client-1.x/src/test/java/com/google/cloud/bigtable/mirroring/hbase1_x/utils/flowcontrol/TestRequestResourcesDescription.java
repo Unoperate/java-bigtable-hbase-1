@@ -39,7 +39,7 @@ public class TestRequestResourcesDescription {
     // 2 aligned to 8
     assertThat(new RequestResourcesDescription(new boolean[] {true, false}).sizeInBytes)
         .isEqualTo(8);
-    // 9 aligned to 8
+    // 9 aligned to 16
     assertThat(new RequestResourcesDescription(new boolean[9]).sizeInBytes).isEqualTo(16);
     Cell c1 =
         CellUtil.createCell(
