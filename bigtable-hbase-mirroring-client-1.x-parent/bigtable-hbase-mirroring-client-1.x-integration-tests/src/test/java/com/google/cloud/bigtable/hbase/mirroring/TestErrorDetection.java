@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.hbase.mirroring;
 
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_READ_VERIFICATION_RATE_PERCENT;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -193,8 +194,8 @@ public class TestErrorDetection {
           for (Result r : s) {
             long row = Longs.fromByteArray(r.getRow());
             byte[] value = r.getValue(columnFamily1, qualifier1);
-            assertEquals(counter, row);
-            assertEquals(("value-" + counter).getBytes(), value);
+            assertThat(counter).isEqualTo(row);
+            assertThat(("value-" + counter).getBytes()).isEqualTo(value);
             counter += 1;
           }
         }
