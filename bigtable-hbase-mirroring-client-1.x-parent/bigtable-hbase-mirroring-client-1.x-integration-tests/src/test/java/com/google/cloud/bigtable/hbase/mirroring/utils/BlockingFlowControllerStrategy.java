@@ -15,13 +15,13 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowControlStrategy;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController.ResourceReservation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.SettableFuture;
+import com.google.cloud.bigtable.mirroring.core.MirroringOptions;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowControlStrategy;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.ResourceReservation;
+import com.shaded.google.common.util.concurrent.ListenableFuture;
+import com.shaded.google.common.util.concurrent.SettableFuture;
+import java.util.concurrent.Executor;
 
 public class BlockingFlowControllerStrategy implements FlowControlStrategy {
 
@@ -50,7 +50,12 @@ public class BlockingFlowControllerStrategy implements FlowControlStrategy {
                 });
           }
         },
-        MoreExecutors.directExecutor());
+        new Executor() {
+          @Override
+          public void execute(Runnable runnable) {
+            runnable.run();
+          }
+        });
     return reservation;
   }
 

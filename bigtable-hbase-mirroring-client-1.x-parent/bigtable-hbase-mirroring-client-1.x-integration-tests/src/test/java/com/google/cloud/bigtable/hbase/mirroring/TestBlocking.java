@@ -15,9 +15,9 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_CONNECTION_CONNECTION_TERMINATION_TIMEOUT;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_STRATEGY_FACTORY_CLASS;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS;
+import static com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper.MIRRORING_CONNECTION_CONNECTION_TERMINATION_TIMEOUT;
+import static com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_STRATEGY_FACTORY_CLASS;
+import static com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper.MIRRORING_MISMATCH_DETECTOR_FACTORY_CLASS;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
@@ -29,9 +29,8 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.DatabaseHelpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounter;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
-import com.google.common.base.Stopwatch;
+import com.google.cloud.bigtable.mirroring.core.ExecutorServiceRule;
+import com.google.cloud.bigtable.mirroring.core.MirroringConnection;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
@@ -208,10 +207,10 @@ public class TestBlocking {
               table.close();
 
               closingThreadStartedFuture.set(connection);
-              Stopwatch stopwatch = Stopwatch.createStarted();
+              long startTime = System.currentTimeMillis();
               connection.close();
-              stopwatch.stop();
-              closingThreadFinishedFuture.set(stopwatch.elapsed(TimeUnit.MILLISECONDS));
+              long endTime = System.currentTimeMillis();
+              closingThreadFinishedFuture.set(endTime - startTime);
             } catch (IOException e) {
               closingThreadFinishedFuture.setException(e);
             }
@@ -228,7 +227,7 @@ public class TestBlocking {
     // connection lasted no longer than 3 seconds, but we also need to check that it waited at least
     // `timeoutMillis`. `closeDuration` is strictly greater than timeout because it includes some
     // overhead, but `timeoutMillis` >> expected overhead, thus false-positives are unlikely.
-    assertThat(closeDuration).isGreaterThan(timeoutMillis);
+    assertThat(closeDuration).isAtLeast(timeoutMillis);
     assertThat(c.getPrimaryConnection().isClosed()).isTrue();
     assertThat(c.getSecondaryConnection().isClosed()).isFalse();
 

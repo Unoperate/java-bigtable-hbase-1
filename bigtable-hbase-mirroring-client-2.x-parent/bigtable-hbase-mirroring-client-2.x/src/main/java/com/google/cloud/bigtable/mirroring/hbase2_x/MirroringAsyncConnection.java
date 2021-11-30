@@ -15,18 +15,17 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutationLogger;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.utils.ReadSampler;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumer;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.faillog.FailedMutationLogger;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -62,6 +61,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private final ReadSampler readSampler;
   private final ExecutorService executorService;
+  private final FailedMutationLogger failedMutationLogger;
 
   /**
    * The constructor called from {@link
@@ -109,7 +109,7 @@ public class MirroringAsyncConnection implements AsyncConnection {
                 this.mirroringTracer,
                 this.configuration.mirroringOptions.maxLoggedBinaryValueLength);
 
-    FailedMutationLogger failedMutationLogger =
+    this.failedMutationLogger =
         new FailedMutationLogger(
             mirroringTracer,
             this.configuration
@@ -168,11 +168,12 @@ public class MirroringAsyncConnection implements AsyncConnection {
       this.referenceCounter.getOnLastReferenceClosed().get();
       this.primaryConnection.close();
       this.secondaryConnection.close();
+      this.failedMutationLogger.close();
     } catch (InterruptedException e) {
       IOException wrapperException = new InterruptedIOException();
       wrapperException.initCause(e);
       throw wrapperException;
-    } catch (ExecutionException e) {
+    } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }

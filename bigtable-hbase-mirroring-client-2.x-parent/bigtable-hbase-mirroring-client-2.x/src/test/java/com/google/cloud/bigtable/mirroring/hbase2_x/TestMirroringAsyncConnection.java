@@ -17,7 +17,7 @@ package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import static org.junit.Assert.assertTrue;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.core.MirroringConnection;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;

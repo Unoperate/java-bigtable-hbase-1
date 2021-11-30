@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils.compat;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.compat.CellComparatorCompat;
+import com.google.cloud.bigtable.mirroring.core.utils.compat.CellComparatorCompat;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellComparator;
 

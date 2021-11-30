@@ -36,6 +36,7 @@ limitations under the License.
     <hbase.version>${hbase1.version}</hbase.version>
     <google.bigtable.connection.impl>com.google.cloud.bigtable.hbase1_x.BigtableConnection</google.bigtable.connection.impl>
     <test.timeout>1800</test.timeout>
+    <hbase1-hadoop-slf4j.version>1.6.1</hbase1-hadoop-slf4j.version>
   </properties>
 
   <profiles>
@@ -175,28 +176,7 @@ limitations under the License.
     </profile>
   </profiles>
 
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>com.google.cloud</groupId>
-        <artifactId>google-cloud-bigtable-bom</artifactId>
-        <version>${bigtable.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-
-      <dependency>
-        <groupId>com.google.cloud</groupId>
-        <artifactId>google-cloud-bigtable-deps-bom</artifactId>
-        <version>${bigtable.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-
   <dependencies>
-    <!-- Project Modules -->
     <dependency>
       <groupId>com.google.cloud.bigtable</groupId>
       <artifactId>bigtable-hbase-mirroring-client-1.x</artifactId>
@@ -205,56 +185,44 @@ limitations under the License.
     </dependency>
 
     <dependency>
-      <groupId>com.google.cloud.bigtable</groupId>
-      <artifactId>bigtable-client-core</artifactId>
-      <version>${bigtable-client-core.version}</version>
+      <groupId>org.apache.hbase</groupId>
+      <artifactId>hbase-client</artifactId>
+      <version>${hbase1.version}</version> <!-- {x-version-update:bigtable-client-parent:current} -->
       <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.cloud.bigtable</groupId>
-      <artifactId>bigtable-hbase</artifactId>
-      <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
-      <scope>test</scope>
-      <exclusions>
-        <!-- included in hbase-shaded-testing-util -->
-        <exclusion>
-          <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-shaded-client</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>bigtable-hbase-1.x</artifactId>
+      <artifactId>bigtable-hbase-1.x-hadoop</artifactId>
       <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
       <scope>test</scope>
-      <exclusions>
-        <!-- included in hbase-shaded-testing-util -->
-        <exclusion>
-          <groupId>org.apache.hbase</groupId>
-          <artifactId>hbase-shaded-client</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
-    <!-- java-bigtable Modules -->
     <dependency>
-      <groupId>com.google.cloud</groupId>
-      <artifactId>google-cloud-bigtable</artifactId>
-      <version>${bigtable.version}</version>
-      <scope>test</scope>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${hbase1-hadoop-slf4j.version}</version>
     </dependency>
 
     <!-- HBase testing tools -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-shaded-testing-util</artifactId>
+      <artifactId>hbase-testing-util</artifactId>
       <version>${hbase1.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <!-- exclusion to avoid version conflict with existing artifact  -->
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+        </exclusion>
+        <!-- exclusion to avoid version conflict with existing artifact  -->
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
-
 
     <!-- Misc -->
     <dependency>
@@ -265,9 +233,9 @@ limitations under the License.
     </dependency>
 
     <dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-      <version>30.1.1-android</version>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>2.5.0</version>
       <scope>test</scope>
     </dependency>
 
@@ -339,16 +307,10 @@ limitations under the License.
     </dependency>
     <dependency>
       <groupId>com.google.cloud.bigtable</groupId>
-      <artifactId>bigtable-hbase-mirroring-client-1.x</artifactId>
+      <artifactId>bigtable-hbase-mirroring-client-core</artifactId>
       <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
       <type>test-jar</type>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>org.apache.hbase</artifactId>
-          <groupId>*</groupId>
-        </exclusion>
-      </exclusions>
     </dependency>
   </dependencies>
 
@@ -425,6 +387,26 @@ limitations under the License.
               <excludes>
                 <exclude>**/*.java</exclude>
               </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce</id>
+            <configuration>
+              <skip>true</skip>
+            </configuration>
+          </execution>
+          <execution>
+            <id>enforce-banned-deps</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <skip>true</skip>
             </configuration>
           </execution>
         </executions>

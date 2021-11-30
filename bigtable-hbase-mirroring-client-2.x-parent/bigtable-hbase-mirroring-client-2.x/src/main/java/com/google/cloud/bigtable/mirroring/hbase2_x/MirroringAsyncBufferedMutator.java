@@ -16,11 +16,12 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.api.core.InternalApi;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.utils.HBaseOperation;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.ResourceReservation;
+import com.google.cloud.bigtable.mirroring.core.utils.referencecounting.ListenableReferenceCounter;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,7 +75,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
     primaryCompleted
         .thenRun(
             () -> {
-              CompletableFuture<FlowController.ResourceReservation> resourceRequested =
+              CompletableFuture<ResourceReservation> resourceRequested =
                   FutureConverter.toCompletable(
                       flowController.asyncRequestResource(
                           new RequestResourcesDescription(mutation)));
@@ -89,7 +90,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
                             .exceptionally(
                                 secondaryError -> {
                                   this.secondaryWriteErrorConsumer.consume(
-                                      MirroringSpanConstants.HBaseOperation.BUFFERED_MUTATOR_MUTATE,
+                                      HBaseOperation.BUFFERED_MUTATOR_MUTATE,
                                       mutation,
                                       secondaryError);
                                   referenceCounter.decrementReferenceCount();
@@ -101,7 +102,7 @@ public class MirroringAsyncBufferedMutator implements AsyncBufferedMutator {
                         referenceCounter.decrementReferenceCount();
                         resultFuture.complete(null);
                         this.secondaryWriteErrorConsumer.consume(
-                            MirroringSpanConstants.HBaseOperation.BUFFERED_MUTATOR_MUTATE,
+                            HBaseOperation.BUFFERED_MUTATOR_MUTATE,
                             mutation,
                             resourceReservationError);
                         return null;
