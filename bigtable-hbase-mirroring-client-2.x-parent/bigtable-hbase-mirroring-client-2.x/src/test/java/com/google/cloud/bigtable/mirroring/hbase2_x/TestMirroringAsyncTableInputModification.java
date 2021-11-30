@@ -15,11 +15,11 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.blockMethodCall;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGet;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGets;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createPut;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.blockMethodCall;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createGet;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createGets;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createPut;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.setupFlowControllerMock;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -27,14 +27,14 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.NoopTimestamper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.utils.ReadSampler;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.NoopTimestamper;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.Timestamper;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
 import com.google.common.util.concurrent.SettableFuture;
 import java.util.ArrayList;
 import java.util.Arrays;

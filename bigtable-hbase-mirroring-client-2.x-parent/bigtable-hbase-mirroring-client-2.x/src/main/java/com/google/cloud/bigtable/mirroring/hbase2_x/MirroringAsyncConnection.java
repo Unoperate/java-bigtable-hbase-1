@@ -15,18 +15,18 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.faillog.FailedMutationLogger;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.TimestamperFactory;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.utils.AccumulatedExceptions;
+import com.google.cloud.bigtable.mirroring.core.utils.Logger;
+import com.google.cloud.bigtable.mirroring.core.utils.ReadSampler;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumer;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.faillog.FailedMutationLogger;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.Timestamper;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.TimestamperFactory;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;

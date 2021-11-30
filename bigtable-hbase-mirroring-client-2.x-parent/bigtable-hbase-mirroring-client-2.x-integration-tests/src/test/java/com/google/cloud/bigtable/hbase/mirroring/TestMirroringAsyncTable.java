@@ -27,7 +27,7 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.TestMismatchDetectorCount
 import com.google.cloud.bigtable.hbase.mirroring.utils.TestWriteErrorConsumer;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegion;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegionRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
+import com.google.cloud.bigtable.mirroring.core.ExecutorServiceRule;
 import com.google.cloud.bigtable.mirroring.hbase2_x.MirroringAsyncConnection;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterators;

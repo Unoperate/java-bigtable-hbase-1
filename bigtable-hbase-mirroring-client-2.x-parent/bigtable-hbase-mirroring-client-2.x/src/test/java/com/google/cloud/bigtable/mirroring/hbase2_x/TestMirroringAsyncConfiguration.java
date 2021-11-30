@@ -19,7 +19,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper;
+import com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.Test;
 

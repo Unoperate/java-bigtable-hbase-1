@@ -16,8 +16,8 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.api.core.InternalApi;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper;
+import com.google.cloud.bigtable.mirroring.core.MirroringOptions;
+import com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper;
 import org.apache.hadoop.conf.Configuration;
 
 @InternalApi("For internal use only")

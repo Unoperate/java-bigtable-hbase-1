@@ -28,9 +28,9 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.TestMismatchDetectorCount
 import com.google.cloud.bigtable.hbase.mirroring.utils.TestWriteErrorConsumer;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegion;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegionRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringOptions;
+import com.google.cloud.bigtable.mirroring.core.ExecutorServiceRule;
+import com.google.cloud.bigtable.mirroring.core.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.core.MirroringOptions;
 import com.google.common.base.Predicate;
 import com.google.common.primitives.Longs;
 import java.io.File;
@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HConstants.OperationStatusCode;
 import org.apache.hadoop.hbase.TableName;
@@ -48,8 +49,6 @@ import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.filter.CompareFilter.CompareOp;
-import org.apache.hadoop.hbase.shaded.org.apache.commons.io.FileUtils;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.junit.Assume;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -77,7 +76,7 @@ public class TestMirroringTable {
   final Predicate<byte[]> failEvenRowKeysPredicate =
       new Predicate<byte[]>() {
         @Override
-        public boolean apply(@NullableDecl byte[] bytes) {
+        public boolean apply(byte[] bytes) {
           return bytes.length == 8 && Longs.fromByteArray(bytes) % 2 == 0;
         }
       };

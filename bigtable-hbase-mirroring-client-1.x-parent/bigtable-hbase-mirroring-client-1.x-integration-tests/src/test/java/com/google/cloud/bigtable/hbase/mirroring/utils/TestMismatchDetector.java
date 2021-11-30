@@ -15,10 +15,10 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Comparators;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.utils.Comparators;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.hadoop.hbase.client.Get;

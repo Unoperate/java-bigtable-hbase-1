@@ -24,7 +24,7 @@ import org.apache.hadoop.hbase.client.TableBuilder;
 import org.apache.hadoop.hbase.security.User;
 
 public class MirroringConnection
-    extends com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection implements Connection {
+    extends com.google.cloud.bigtable.mirroring.core.MirroringConnection implements Connection {
   public MirroringConnection(Configuration conf, boolean managed, ExecutorService pool, User user)
       throws Throwable {
     super(conf, managed, pool, user);

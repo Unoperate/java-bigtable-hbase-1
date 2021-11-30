@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

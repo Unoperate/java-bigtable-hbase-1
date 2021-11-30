@@ -16,7 +16,7 @@
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
 import com.google.cloud.bigtable.hbase.mirroring.utils.compat.TableCreator;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.core.MirroringConnection;
 import java.io.IOException;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;

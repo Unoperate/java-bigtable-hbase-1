@@ -15,7 +15,8 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x.utils;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.ResourceReservation;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureUtils;
 import com.google.common.util.concurrent.FutureCallback;
 import java.util.List;
@@ -29,7 +30,7 @@ public class AsyncRequestScheduling {
   public static <T>
       OperationStages<CompletableFuture<T>> reserveFlowControlResourcesThenScheduleSecondary(
           final CompletableFuture<T> primaryFuture,
-          final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
+          final CompletableFuture<ResourceReservation> reservationFuture,
           final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
           final Function<T, FutureCallback<T>> verificationCreator) {
     return reserveFlowControlResourcesThenScheduleSecondary(
@@ -39,7 +40,7 @@ public class AsyncRequestScheduling {
   public static <T>
       OperationStages<CompletableFuture<T>> reserveFlowControlResourcesThenScheduleSecondary(
           final CompletableFuture<T> primaryFuture,
-          final CompletableFuture<FlowController.ResourceReservation> reservationFuture,
+          final CompletableFuture<ResourceReservation> reservationFuture,
           final Supplier<CompletableFuture<T>> secondaryFutureSupplier,
           final Function<T, FutureCallback<T>> verificationCreator,
           final Consumer<Throwable> flowControlReservationErrorHandler) {
@@ -79,7 +80,7 @@ public class AsyncRequestScheduling {
   }
 
   private static <T> CompletableFuture<Void> scheduleVerificationAfterSecondaryOperation(
-      final FlowController.ResourceReservation reservation,
+      final ResourceReservation reservation,
       final CompletableFuture<T> secondaryFuture,
       final FutureCallback<T> verificationCallback) {
     return secondaryFuture.handle(

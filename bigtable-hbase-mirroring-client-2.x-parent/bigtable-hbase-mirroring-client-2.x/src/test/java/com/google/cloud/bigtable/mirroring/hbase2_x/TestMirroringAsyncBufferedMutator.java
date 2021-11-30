@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.setupFlowControllerMock;
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -24,12 +24,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.RequestResourcesDescription;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.NoopTimestamper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.RequestResourcesDescription;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.ResourceReservation;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.NoopTimestamper;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase2_x.utils.futures.FutureConverter;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -94,8 +95,7 @@ public class TestMirroringAsyncBufferedMutator {
               return new CompletableFuture<>();
             });
 
-    CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
-        new CompletableFuture<>();
+    CompletableFuture<ResourceReservation> resourcesAllocated = new CompletableFuture<>();
     when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
         .thenReturn(FutureConverter.toListenable(resourcesAllocated));
 
@@ -142,8 +142,7 @@ public class TestMirroringAsyncBufferedMutator {
 
   @Test
   public void testRequestResourceFailed() {
-    CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
-        new CompletableFuture<>();
+    CompletableFuture<ResourceReservation> resourcesAllocated = new CompletableFuture<>();
     when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
         .thenReturn(FutureConverter.toListenable(resourcesAllocated));
 
@@ -178,8 +177,7 @@ public class TestMirroringAsyncBufferedMutator {
               return secondaryFailure;
             });
 
-    CompletableFuture<FlowController.ResourceReservation> resourcesAllocated =
-        new CompletableFuture<>();
+    CompletableFuture<ResourceReservation> resourcesAllocated = new CompletableFuture<>();
     when(flowController.asyncRequestResource(any(RequestResourcesDescription.class)))
         .thenReturn(FutureConverter.toListenable(resourcesAllocated));
 

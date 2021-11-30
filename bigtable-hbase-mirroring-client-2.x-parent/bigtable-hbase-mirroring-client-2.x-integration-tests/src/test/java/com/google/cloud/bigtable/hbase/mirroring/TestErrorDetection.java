@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_READ_VERIFICATION_RATE_PERCENT;
+import static com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper.MIRRORING_READ_VERIFICATION_RATE_PERCENT;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -29,8 +29,7 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.PropagatingThread;
 import com.google.cloud.bigtable.hbase.mirroring.utils.TestMismatchDetectorCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.core.ExecutorServiceRule;
 import com.google.cloud.bigtable.mirroring.hbase2_x.MirroringAsyncConnection;
 import com.google.common.primitives.Longs;
 import java.io.IOException;
@@ -46,6 +45,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.AdvancedScanResultConsumer;
 import org.apache.hadoop.hbase.client.AsyncConnection;
 import org.apache.hadoop.hbase.client.AsyncTable;
+import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
@@ -81,7 +81,7 @@ public class TestErrorDetection {
     config.set(MIRRORING_READ_VERIFICATION_RATE_PERCENT, "100");
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void readsAndWritesArePerformed()
       throws IOException, ExecutionException, InterruptedException {
     final TableName tableName = connectionRule.createTable(columnFamily1);
@@ -107,7 +107,7 @@ public class TestErrorDetection {
     }
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void mismatchIsDetected() throws IOException, InterruptedException, ExecutionException {
     final TableName tableName = connectionRule.createTable(columnFamily1);
     try (MirroringAsyncConnection asyncConnection =
@@ -144,7 +144,7 @@ public class TestErrorDetection {
   }
 
   @Ignore("Fails for unknown reasons")
-  @Test
+  @Test(timeout = 10000)
   public void concurrentInsertionAndReadingInsertsWithScanner()
       throws IOException, InterruptedException, TimeoutException {
 
@@ -218,7 +218,7 @@ public class TestErrorDetection {
     assertEquals(0, TestMismatchDetectorCounter.getInstance().getErrorCount());
   }
 
-  @Test
+  @Test(timeout = 10000)
   public void conditionalMutationsPreserveConsistency() throws IOException, TimeoutException {
     // TODO(mwalkiewicz): fix BigtableToHBase2
     Assume.assumeTrue(
@@ -280,7 +280,7 @@ public class TestErrorDetection {
       }
     }
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (Connection connection = databaseHelpers.createConnection()) {
       try (Table t = connection.getTable(tableName)) {
         try (ResultScanner s = t.getScanner(columnFamily1, qualifier1)) {
           int counter = 0;

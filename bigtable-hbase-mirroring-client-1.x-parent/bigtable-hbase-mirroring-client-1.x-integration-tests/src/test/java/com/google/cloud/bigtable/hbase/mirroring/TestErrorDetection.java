@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_READ_VERIFICATION_RATE_PERCENT;
+import static com.google.cloud.bigtable.mirroring.core.utils.MirroringConfigurationHelper.MIRRORING_READ_VERIFICATION_RATE_PERCENT;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -27,8 +27,8 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.PropagatingThread;
 import com.google.cloud.bigtable.hbase.mirroring.utils.TestMismatchDetectorCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.MirroringConnection;
+import com.google.cloud.bigtable.mirroring.core.ExecutorServiceRule;
+import com.google.cloud.bigtable.mirroring.core.MirroringConnection;
 import com.google.common.primitives.Longs;
 import java.io.IOException;
 import java.util.ArrayList;

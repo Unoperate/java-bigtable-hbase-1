@@ -15,9 +15,9 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createGet;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.createPut;
-import static com.google.cloud.bigtable.mirroring.hbase1_x.TestHelpers.setupFlowControllerMock;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createGet;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.createPut;
+import static com.google.cloud.bigtable.mirroring.core.TestHelpers.setupFlowControllerMock;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -26,15 +26,15 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.google.cloud.bigtable.mirroring.hbase1_x.ExecutorServiceRule;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.NoopTimestamper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
-import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
+import com.google.cloud.bigtable.mirroring.core.ExecutorServiceRule;
+import com.google.cloud.bigtable.mirroring.core.utils.ReadSampler;
+import com.google.cloud.bigtable.mirroring.core.utils.SecondaryWriteErrorConsumerWithMetrics;
+import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowController;
+import com.google.cloud.bigtable.mirroring.core.utils.mirroringmetrics.MirroringTracer;
+import com.google.cloud.bigtable.mirroring.core.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.NoopTimestamper;
+import com.google.cloud.bigtable.mirroring.core.utils.timestamper.Timestamper;
+import com.google.cloud.bigtable.mirroring.core.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.util.ArrayList;
