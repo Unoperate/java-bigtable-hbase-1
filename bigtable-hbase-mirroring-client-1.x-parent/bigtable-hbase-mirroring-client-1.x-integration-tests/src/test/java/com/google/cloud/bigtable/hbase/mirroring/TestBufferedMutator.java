@@ -65,6 +65,7 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
 import org.junit.Assume;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -88,7 +89,7 @@ public class TestBufferedMutator {
 
   @Parameterized.Parameters(name = "mutateConcurrently: {0}")
   public static Object[] data() {
-    return new Object[] {false, true};
+    return new Object[] {true};
   }
 
   private final boolean mutateConcurrently;
@@ -217,6 +218,7 @@ public class TestBufferedMutator {
   }
 
   @Test
+  @Ignore
   public void testBufferedMutatorSecondaryErrorHandling() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isSecondaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());
@@ -311,6 +313,7 @@ public class TestBufferedMutator {
   }
 
   @Test
+  @Ignore
   public void testBufferedMutatorPrimaryErrorHandling() throws IOException {
     Assume.assumeTrue(
         ConfigurationHelper.isPrimaryHBase() && ConfigurationHelper.isUsingHBaseMiniCluster());

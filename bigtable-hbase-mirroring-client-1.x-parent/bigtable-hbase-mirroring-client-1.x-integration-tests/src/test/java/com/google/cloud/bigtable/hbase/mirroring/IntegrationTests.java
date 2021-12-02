@@ -24,11 +24,11 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-  TestErrorDetection.class,
-  TestBlocking.class,
+  //  TestErrorDetection.class,
+  //  TestBlocking.class,
   TestBufferedMutator.class,
-  TestMirroringTable.class,
-  TestReadVerificationSampling.class,
+  //  TestMirroringTable.class,
+  //  TestReadVerificationSampling.class,
 })
 public class IntegrationTests {
   // Classes in test suites should use their own ConnectionRule, the one here serves to keep a
