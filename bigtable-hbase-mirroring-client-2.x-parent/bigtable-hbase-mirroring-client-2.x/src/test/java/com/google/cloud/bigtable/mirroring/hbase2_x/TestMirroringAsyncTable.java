@@ -660,8 +660,8 @@ public class TestMirroringAsyncTable {
 
     waitForAll(resultFutures);
 
-    assertThat(resultFutures.get(0).isCompletedExceptionally()); // get1
-    assertThat(resultFutures.get(1).get()).isEqualTo(get2Result); // get2
+    assertThat(resultFutures.get(0).isCompletedExceptionally()); // get1 - failed
+    assertThat(resultFutures.get(1).get()).isEqualTo(get2Result); // get2 - ok
 
     verify(primaryTable, times(1)).batch(requests);
     verify(secondaryTable, times(1)).batch(eq(secondaryRequests));
