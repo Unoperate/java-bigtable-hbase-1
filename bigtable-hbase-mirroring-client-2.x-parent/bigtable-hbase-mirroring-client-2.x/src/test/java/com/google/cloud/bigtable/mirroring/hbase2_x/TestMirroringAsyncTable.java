@@ -297,7 +297,7 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnExists()
+  public void testSecondaryExceptionCallsVerificationErrorHandlerOnExists()
       throws ExecutionException, InterruptedException {
     Get get = createGet("test");
     final boolean expectedResult = true;
