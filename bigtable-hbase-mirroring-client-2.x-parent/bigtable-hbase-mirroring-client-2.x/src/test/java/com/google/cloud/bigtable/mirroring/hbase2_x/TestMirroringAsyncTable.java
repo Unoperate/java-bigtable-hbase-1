@@ -197,8 +197,7 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void testMismatchDetectorIsCalledOnGetMultiple()
-      throws ExecutionException, InterruptedException {
+  public void testMismatchDetectorIsCalledOnGetMultiple() {
     List<Get> get = createGets("test");
     Result[] expectedResultArray = {createResult("test", "value")};
     CompletableFuture<Result> expectedFuture = new CompletableFuture<>();
@@ -210,18 +209,7 @@ public class TestMirroringAsyncTable {
 
     List<CompletableFuture<Result>> resultFutures = mirroringTable.get(get);
     expectedFuture.complete(expectedResultArray[0]);
-    List<Result> results =
-        resultFutures.stream()
-            .map(
-                future -> {
-                  try {
-                    return future.get();
-                  } catch (Exception e) {
-                    fail("Shouldn't have thrown");
-                    return null;
-                  }
-                })
-            .collect(Collectors.toList());
+    List<Result> results = waitForAll(resultFutures);
     assertThat(results).isEqualTo(Arrays.asList(expectedResultArray));
 
     verify(mismatchDetector, times(1))
@@ -251,18 +239,7 @@ public class TestMirroringAsyncTable {
     when(secondaryTable.get(get)).thenReturn(exceptionalResultFutureList);
 
     List<CompletableFuture<Result>> resultFutures = mirroringTable.get(get);
-    List<Result> results =
-        resultFutures.stream()
-            .map(
-                future -> {
-                  try {
-                    return future.get();
-                  } catch (Exception e) {
-                    fail("Shouldn't have thrown");
-                    return null;
-                  }
-                })
-            .collect(Collectors.toList());
+    List<Result> results = waitForAll(resultFutures);
     assertThat(results).isEqualTo(expectedResultList);
 
     ArgumentCaptor<CompletionException> argument =
@@ -463,7 +440,6 @@ public class TestMirroringAsyncTable {
       try {
         results.add(future.get());
       } catch (Exception e) {
-        results.add(null);
       }
     }
     return results;
@@ -548,6 +524,7 @@ public class TestMirroringAsyncTable {
 
     verify(referenceCounter, never()).incrementReferenceCount();
     List<CompletableFuture<Object>> resultFutures = mirroringTable.batch(requests);
+    assertThat(resultFutures.size()).isEqualTo(2);
     verify(referenceCounter, times(1)).incrementReferenceCount();
 
     IOException ioe = new IOException("expected");
@@ -557,7 +534,6 @@ public class TestMirroringAsyncTable {
     verify(referenceCounter, times(1)).decrementReferenceCount();
 
     List<Object> results = waitForAll(resultFutures);
-    assertThat(results.size()).isEqualTo(2);
 
     verify(primaryTable, times(1)).batch(requests);
     verify(secondaryTable, never()).batch(anyList());
@@ -568,7 +544,7 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void testBatchGetAndPut() {
+  public void testBatchGetAndPut() throws ExecutionException, InterruptedException {
     Put put1 = createPut("test1", "f1", "q1", "v1");
     Put put2 = createPut("test2", "f2", "q2", "v2");
     Put put3 = createPut("test3", "f3", "q3", "v3");
@@ -628,16 +604,15 @@ public class TestMirroringAsyncTable {
     secondaryFutures.get(3).complete(get3Result); // get3 - ok
     verify(referenceCounter, times(1)).decrementReferenceCount();
 
-    List<Object> results = waitForAll(resultFutures);
-    assertThat(results.size()).isEqualTo(primaryFutures.size());
+    waitForAll(resultFutures);
 
-    assertThat(results.get(0)).isEqualTo(null); // put1
+    assertThat(resultFutures.get(0).get()).isEqualTo(null); // put1
     assertThat(resultFutures.get(1).isCompletedExceptionally()); // put2
-    assertThat(results.get(2)).isEqualTo(null); // put3
+    assertThat(resultFutures.get(2).get()).isEqualTo(null); // put3
 
-    assertThat(results.get(3)).isEqualTo(get1Result);
+    assertThat(resultFutures.get(3).get()).isEqualTo(get1Result);
     assertThat(resultFutures.get(4).isCompletedExceptionally());
-    assertThat(results.get(5)).isEqualTo(get3Result);
+    assertThat(resultFutures.get(5).get()).isEqualTo(get3Result);
 
     verify(primaryTable, times(1)).batch(requests);
     verify(secondaryTable, times(1)).batch(eq(secondaryRequests));
@@ -652,7 +627,8 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void testBatchGetsPrimaryFailsSecondaryOk() {
+  public void testBatchGetsPrimaryFailsSecondaryOk()
+      throws ExecutionException, InterruptedException {
     Get get1 = createGet("get1");
     Get get2 = createGet("get2");
 
@@ -674,17 +650,18 @@ public class TestMirroringAsyncTable {
     when(secondaryTable.batch(secondaryRequests)).thenReturn(secondaryFutures);
 
     List<CompletableFuture<Object>> resultFutures = mirroringTable.batch(requests);
+    assertThat(resultFutures.size()).isEqualTo(primaryFutures.size());
+
     IOException ioe = new IOException("expected");
 
     primaryFutures.get(0).completeExceptionally(ioe); // get1 - failed
     primaryFutures.get(1).complete(get2Result); // get2 - ok
     secondaryFutures.get(0).complete(get2Result); // get2 - ok
 
-    List<Object> results = waitForAll(resultFutures);
-    assertThat(results.size()).isEqualTo(primaryFutures.size());
+    waitForAll(resultFutures);
 
     assertThat(resultFutures.get(0).isCompletedExceptionally()); // get1
-    assertThat(results.get(1)).isEqualTo(get2Result); // put3
+    assertThat(resultFutures.get(1).get()).isEqualTo(get2Result); // put3
 
     verify(primaryTable, times(1)).batch(requests);
     verify(secondaryTable, times(1)).batch(eq(secondaryRequests));
