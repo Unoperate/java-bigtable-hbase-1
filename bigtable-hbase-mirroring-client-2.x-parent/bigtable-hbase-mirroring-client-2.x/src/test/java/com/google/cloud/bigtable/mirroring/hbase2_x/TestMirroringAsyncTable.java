@@ -232,17 +232,18 @@ public class TestMirroringAsyncTable {
   }
 
   @Test
-  public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnGetMultiple()
-      throws ExecutionException, InterruptedException {
+  public void testSecondaryReadExceptionCallsVerificationErrorHandlerOnGetMultiple() {
     List<Get> get = createGets("test1", "test2");
-    Result[] expectedResultArray = {
-      createResult("test1", "value1"), createResult("test2", "value2")
-    };
-    CompletableFuture<Result> expectedFuture1 = new CompletableFuture<>();
-    CompletableFuture<Result> expectedFuture2 = new CompletableFuture<>();
+    List<Result> expectedResultList =
+        Arrays.asList(createResult("test1", "value1"), createResult("test2", "value2"));
+    IOException ioe = new IOException("expected");
     CompletableFuture<Result> exceptionalFuture = new CompletableFuture<>();
+    exceptionalFuture.completeExceptionally(ioe);
+
     List<CompletableFuture<Result>> expectedResultFutureList =
-        Arrays.asList(expectedFuture1, expectedFuture2);
+        expectedResultList.stream()
+            .map(CompletableFuture::completedFuture)
+            .collect(Collectors.toList());
     List<CompletableFuture<Result>> exceptionalResultFutureList =
         Arrays.asList(exceptionalFuture, exceptionalFuture);
 
@@ -250,16 +251,19 @@ public class TestMirroringAsyncTable {
     when(secondaryTable.get(get)).thenReturn(exceptionalResultFutureList);
 
     List<CompletableFuture<Result>> resultFutures = mirroringTable.get(get);
-    assertThat(resultFutures.size()).isEqualTo(2);
-
-    expectedFuture1.complete(expectedResultArray[0]);
-    expectedFuture2.complete(expectedResultArray[1]);
-    IOException ioe = new IOException("expected");
-    exceptionalFuture.completeExceptionally(ioe);
-    Result result1 = resultFutures.get(0).get();
-    assertThat(result1).isEqualTo(expectedResultArray[0]);
-    Result result2 = resultFutures.get(1).get();
-    assertThat(result2).isEqualTo(expectedResultArray[1]);
+    List<Result> results =
+        resultFutures.stream()
+            .map(
+                future -> {
+                  try {
+                    return future.get();
+                  } catch (Exception e) {
+                    fail("Shouldn't have thrown");
+                    return null;
+                  }
+                })
+            .collect(Collectors.toList());
+    assertThat(results).isEqualTo(expectedResultList);
 
     ArgumentCaptor<CompletionException> argument =
         ArgumentCaptor.forClass(CompletionException.class);
