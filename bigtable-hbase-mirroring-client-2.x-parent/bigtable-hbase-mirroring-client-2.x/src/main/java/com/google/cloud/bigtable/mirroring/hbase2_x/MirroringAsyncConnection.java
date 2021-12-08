@@ -190,8 +190,8 @@ public class MirroringAsyncConnection implements AsyncConnection {
               }
             },
             MoreExecutors.directExecutor());
-    this.referenceCounter.decrementReferenceCount();
 
+    this.referenceCounter.decrementReferenceCount();
     try {
       // Wait for in-flight requests to be finished but with a timeout to prevent deadlock.
       closingFinishedFuture.get(
