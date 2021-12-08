@@ -56,6 +56,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellBuilderFactory;
 import org.apache.hadoop.hbase.CellBuilderType;
@@ -208,11 +209,20 @@ public class TestMirroringAsyncTable {
     when(secondaryTable.get(get)).thenReturn(expectedResultFutureList);
 
     List<CompletableFuture<Result>> resultFutures = mirroringTable.get(get);
-    assertThat(resultFutures.size()).isEqualTo(1);
-
     expectedFuture.complete(expectedResultArray[0]);
-    Result result = resultFutures.get(0).get();
-    assertThat(result).isEqualTo(expectedResultArray[0]);
+    List<Result> results =
+        resultFutures.stream()
+            .map(
+                future -> {
+                  try {
+                    return future.get();
+                  } catch (Exception e) {
+                    fail("Shouldn't have thrown");
+                    return null;
+                  }
+                })
+            .collect(Collectors.toList());
+    assertThat(results).isEqualTo(Arrays.asList(expectedResultArray));
 
     verify(mismatchDetector, times(1))
         .batch(eq(get), eq(expectedResultArray), eq(expectedResultArray));
