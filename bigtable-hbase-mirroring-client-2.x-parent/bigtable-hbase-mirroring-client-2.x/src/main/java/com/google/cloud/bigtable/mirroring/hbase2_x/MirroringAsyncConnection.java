@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.mirroring.hbase2_x;
 
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.AccumulatedExceptions;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.ReadSampler;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorConsumerWithMetrics;
@@ -53,8 +54,7 @@ import org.apache.hadoop.hbase.client.ScanResultConsumerBase;
 import org.apache.hadoop.hbase.security.User;
 
 public class MirroringAsyncConnection implements AsyncConnection {
-  private static final com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger Log =
-      new com.google.cloud.bigtable.mirroring.hbase1_x.utils.Logger(MirroringAsyncConnection.class);
+  private static final Logger Log = new Logger(MirroringAsyncConnection.class);
 
   private final MirroringAsyncConfiguration configuration;
   private final AsyncConnection primaryConnection;
