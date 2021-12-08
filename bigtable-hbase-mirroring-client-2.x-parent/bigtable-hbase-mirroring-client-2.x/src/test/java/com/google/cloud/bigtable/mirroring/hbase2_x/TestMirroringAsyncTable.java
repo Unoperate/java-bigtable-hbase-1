@@ -871,33 +871,59 @@ public class TestMirroringAsyncTable {
             });
     Put expectedPut = OperationUtils.makePutFromResult(incrementResult);
 
-    // increment() and append() modify the reference counter twice to make logic less brittle
     when(primaryTable.increment(any(Increment.class)))
         .thenReturn(CompletableFuture.completedFuture(incrementResult));
+
     verify(referenceCounter, never()).decrementReferenceCount();
     verify(referenceCounter, never()).incrementReferenceCount();
     mirroringTable.increment(increment).get();
+    // increment() and append() modify the reference counter twice to make logic less brittle
     verify(referenceCounter, times(2)).decrementReferenceCount();
     verify(referenceCounter, times(2)).incrementReferenceCount();
-    mirroringTable
-        .incrementColumnValue("r1".getBytes(), "f1".getBytes(), "q1".getBytes(), 3L)
-        .get();
-    verify(referenceCounter, times(4)).decrementReferenceCount();
-    verify(referenceCounter, times(4)).incrementReferenceCount();
+
+    verify(primaryTable, times(1)).increment(increment);
+    verify(secondaryTable, never()).increment(any(Increment.class));
+    ArgumentCaptor<Put> putCaptor = ArgumentCaptor.forClass(Put.class);
+    verify(secondaryTable, times(1)).put(putCaptor.capture());
+    assertPutsAreEqual(putCaptor.getValue(), expectedPut);
+  }
+
+  @Test
+  public void testIncrementColumnValue() throws ExecutionException, InterruptedException {
+    Increment increment = new Increment("r1".getBytes());
+    Result incrementResult =
+        Result.create(
+            new Cell[] {
+              CellBuilderFactory.create(CellBuilderType.SHALLOW_COPY)
+                  .setRow("r1".getBytes())
+                  .setFamily("f1".getBytes())
+                  .setQualifier("q1".getBytes())
+                  .setTimestamp(12)
+                  .setType(Cell.Type.Put)
+                  .setValue(Longs.toByteArray(142))
+                  .build()
+            });
+    Put expectedPut = OperationUtils.makePutFromResult(incrementResult);
+
+    when(primaryTable.increment(any(Increment.class)))
+        .thenReturn(CompletableFuture.completedFuture(incrementResult));
+
+    verify(referenceCounter, never()).decrementReferenceCount();
+    verify(referenceCounter, never()).incrementReferenceCount();
+    // We're testing that it's equivalent to plain increment().
     mirroringTable
         .incrementColumnValue(
             "r1".getBytes(), "f1".getBytes(), "q1".getBytes(), 3L, Durability.SYNC_WAL)
         .get();
-    verify(referenceCounter, times(6)).decrementReferenceCount();
-    verify(referenceCounter, times(6)).incrementReferenceCount();
+    // increment() and append() modify the reference counter twice to make logic less brittle
+    verify(referenceCounter, times(2)).decrementReferenceCount();
+    verify(referenceCounter, times(2)).incrementReferenceCount();
 
-    ArgumentCaptor<Put> argument = ArgumentCaptor.forClass(Put.class);
+    verify(primaryTable, times(1)).increment(increment);
     verify(secondaryTable, never()).increment(any(Increment.class));
-    verify(secondaryTable, times(3)).put(argument.capture());
-
-    assertPutsAreEqual(argument.getAllValues().get(0), expectedPut);
-    assertPutsAreEqual(argument.getAllValues().get(1), expectedPut);
-    assertPutsAreEqual(argument.getAllValues().get(2), expectedPut);
+    ArgumentCaptor<Put> putCaptor = ArgumentCaptor.forClass(Put.class);
+    verify(secondaryTable, times(1)).put(putCaptor.capture());
+    assertPutsAreEqual(putCaptor.getValue(), expectedPut);
   }
 
   @Test
@@ -920,10 +946,10 @@ public class TestMirroringAsyncTable {
     when(primaryTable.append(any(Append.class)))
         .thenReturn(CompletableFuture.completedFuture(appendResult));
 
-    // increment() and append() modify the reference counter twice to make logic less brittle
     verify(referenceCounter, never()).decrementReferenceCount();
     verify(referenceCounter, never()).incrementReferenceCount();
     mirroringTable.append(append).get();
+    // increment() and append() modify the reference counter twice to make logic less brittle
     verify(referenceCounter, times(2)).decrementReferenceCount();
     verify(referenceCounter, times(2)).incrementReferenceCount();
 
