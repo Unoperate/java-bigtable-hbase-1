@@ -877,7 +877,11 @@ public class TestMirroringAsyncTable {
     verify(referenceCounter, never()).decrementReferenceCount();
     verify(referenceCounter, never()).incrementReferenceCount();
     mirroringTable.increment(increment).get();
-    // increment() and append() modify the reference counter twice to make logic less brittle
+    // increment() and append() modify the reference counter twice to make logic less brittle:
+    // We increment and decrement reference counters around both mutationAsPut() and
+    // writeWithFlowControl() - it simplifies the implementation.
+    // It also causes no harm because - as  this test shows - the reference counters are
+    // incremented and decremented the same number of times.
     verify(referenceCounter, times(2)).decrementReferenceCount();
     verify(referenceCounter, times(2)).incrementReferenceCount();
 
@@ -915,7 +919,11 @@ public class TestMirroringAsyncTable {
         .incrementColumnValue(
             "r1".getBytes(), "f1".getBytes(), "q1".getBytes(), 3L, Durability.SYNC_WAL)
         .get();
-    // increment() and append() modify the reference counter twice to make logic less brittle
+    // increment() and append() modify the reference counter twice to make logic less brittle:
+    // We increment and decrement reference counters around both mutationAsPut() and
+    // writeWithFlowControl() - it simplifies the implementation.
+    // It also causes no harm because - as  this test shows - the reference counters are
+    // incremented and decremented the same number of times.
     verify(referenceCounter, times(2)).decrementReferenceCount();
     verify(referenceCounter, times(2)).incrementReferenceCount();
 
@@ -949,7 +957,11 @@ public class TestMirroringAsyncTable {
     verify(referenceCounter, never()).decrementReferenceCount();
     verify(referenceCounter, never()).incrementReferenceCount();
     mirroringTable.append(append).get();
-    // increment() and append() modify the reference counter twice to make logic less brittle
+    // increment() and append() modify the reference counter twice to make logic less brittle:
+    // We increment and decrement reference counters around both mutationAsPut() and
+    // writeWithFlowControl() - it simplifies the implementation.
+    // It also causes no harm because - as  this test shows - the reference counters are
+    // incremented and decremented the same number of times.
     verify(referenceCounter, times(2)).decrementReferenceCount();
     verify(referenceCounter, times(2)).incrementReferenceCount();
 
