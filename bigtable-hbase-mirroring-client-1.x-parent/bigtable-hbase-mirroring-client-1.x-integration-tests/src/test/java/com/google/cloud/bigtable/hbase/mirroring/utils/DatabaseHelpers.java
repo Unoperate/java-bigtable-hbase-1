@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -182,6 +183,12 @@ public class DatabaseHelpers {
 
   public MirroringConnection createConnection() throws IOException {
     return connectionRule.createConnection(this.executorServiceRule.executorService);
+  }
+
+  public MirroringConnection createTimestampedConnection() throws IOException {
+    Configuration conf = ConfigurationHelper.newConfiguration();
+    conf.setBoolean(MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS, true);
+    return connectionRule.createConnection(this.executorServiceRule.executorService, conf);
   }
 
   public MirroringConnection createConnection(Configuration configuration) throws IOException {

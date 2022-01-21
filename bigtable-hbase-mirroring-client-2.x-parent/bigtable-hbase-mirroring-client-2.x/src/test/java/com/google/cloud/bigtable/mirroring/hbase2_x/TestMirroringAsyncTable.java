@@ -44,6 +44,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowContro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanConstants.HBaseOperation;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
@@ -102,6 +103,7 @@ public class TestMirroringAsyncTable {
   @Mock ListenableReferenceCounter referenceCounter;
   @Mock AsyncTable.CheckAndMutateBuilder primaryBuilder;
   @Mock ExecutorService executorService;
+  @Mock Timestamper timestamper;
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
 
@@ -118,6 +120,7 @@ public class TestMirroringAsyncTable {
                 secondaryWriteErrorConsumer,
                 new MirroringTracer(),
                 new ReadSampler(100),
+                timestamper,
                 referenceCounter,
                 executorService,
                 10));

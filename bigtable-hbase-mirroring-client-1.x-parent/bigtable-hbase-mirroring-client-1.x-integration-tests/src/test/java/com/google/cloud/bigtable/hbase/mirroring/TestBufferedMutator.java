@@ -16,6 +16,7 @@
 package com.google.cloud.bigtable.hbase.mirroring;
 
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_CONCURRENT_WRITES;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FLOW_CONTROLLER_STRATEGY_MAX_OUTSTANDING_REQUESTS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_SYNCHRONOUS_WRITES;
 import static com.google.common.truth.Truth.assertThat;
@@ -104,6 +105,7 @@ public class TestBufferedMutator {
     // testing the other case here anyways) and set it to true to meet the requirements otherwise.
     configuration.set(MIRRORING_CONCURRENT_WRITES, String.valueOf(this.mutateConcurrently));
     configuration.set(MIRRORING_SYNCHRONOUS_WRITES, String.valueOf(this.mutateConcurrently));
+    configuration.setBoolean(MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS, true);
     return configuration;
   }
 

@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring;
 
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.cloud.bigtable.hbase.mirroring.utils.AsyncConnectionRule;
@@ -22,8 +23,8 @@ import com.google.cloud.bigtable.hbase.mirroring.utils.ConfigurationHelper;
 import com.google.cloud.bigtable.hbase.mirroring.utils.ConnectionRule;
 import com.google.cloud.bigtable.hbase.mirroring.utils.DatabaseHelpers;
 import com.google.cloud.bigtable.hbase.mirroring.utils.Helpers;
-import com.google.cloud.bigtable.hbase.mirroring.utils.TestMismatchDetectorCounter;
 import com.google.cloud.bigtable.hbase.mirroring.utils.MismatchDetectorCounterRule;
+import com.google.cloud.bigtable.hbase.mirroring.utils.TestMismatchDetectorCounter;
 import com.google.cloud.bigtable.hbase.mirroring.utils.TestWriteErrorConsumer;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegion;
 import com.google.cloud.bigtable.hbase.mirroring.utils.failinghbaseminicluster.FailingHBaseHRegionRule;
@@ -81,6 +82,10 @@ public class TestMirroringAsyncTable {
   public DatabaseHelpers databaseHelpers = new DatabaseHelpers(connectionRule, executorServiceRule);
 
   public static final Configuration config = ConfigurationHelper.newConfiguration();
+
+  static {
+    config.setBoolean(MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS, true);
+  }
 
   static final byte[] columnFamily1 = "cf1".getBytes();
   static final byte[] qualifier1 = "cq1".getBytes();

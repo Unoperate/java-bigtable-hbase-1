@@ -49,6 +49,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.Mirro
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringSpanFactory;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.DefaultMismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector.ScannerResultVerifier;
@@ -114,6 +115,7 @@ public class TestMirroringTable {
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   @Mock ReferenceCounter referenceCounter;
   @Mock MirroringMetricsRecorder mirroringMetricsRecorder;
+  @Mock Timestamper timestamper;
 
   MismatchDetector mismatchDetector;
   MirroringTable mirroringTable;
@@ -137,6 +139,7 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
+                this.timestamper,
                 false,
                 false,
                 this.mirroringTracer,
@@ -1267,6 +1270,7 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
+                this.timestamper,
                 performWritesConcurrently,
                 waitForSecondaryWrites,
                 this.mirroringTracer,
@@ -1356,6 +1360,7 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
+                this.timestamper,
                 performWritesConcurrently,
                 waitForSecondaryWrites,
                 this.mirroringTracer,
@@ -1488,6 +1493,7 @@ public class TestMirroringTable {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
+                this.timestamper,
                 performWritesConcurrently,
                 waitForSecondaryWrites,
                 this.mirroringTracer,

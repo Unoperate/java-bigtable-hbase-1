@@ -34,6 +34,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.util.concurrent.SettableFuture;
 import java.io.IOException;
@@ -73,6 +74,7 @@ public class TestMirroringTableInputModification {
   @Mock MismatchDetector mismatchDetector;
   @Mock FlowController flowController;
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
+  @Mock Timestamper timestamper;
 
   MirroringTable mirroringTable;
   SettableFuture<Void> secondaryOperationBlockingFuture;
@@ -90,6 +92,7 @@ public class TestMirroringTableInputModification {
                 flowController,
                 secondaryWriteErrorConsumer,
                 new ReadSampler(100),
+                timestamper,
                 false,
                 false,
                 new MirroringTracer(),

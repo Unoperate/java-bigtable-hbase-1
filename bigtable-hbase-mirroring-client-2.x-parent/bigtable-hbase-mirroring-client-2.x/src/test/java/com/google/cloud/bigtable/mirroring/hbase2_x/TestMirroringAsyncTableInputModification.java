@@ -32,6 +32,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.util.concurrent.SettableFuture;
 import java.util.ArrayList;
@@ -72,6 +73,7 @@ public class TestMirroringAsyncTableInputModification {
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   @Mock ListenableReferenceCounter referenceCounter;
   @Mock ExecutorService executorService;
+  @Mock Timestamper timestamper;
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
   CompletableFuture<Void> letPrimaryThroughFuture;
@@ -91,6 +93,7 @@ public class TestMirroringAsyncTableInputModification {
                 secondaryWriteErrorConsumer,
                 new MirroringTracer(),
                 new ReadSampler(100),
+                timestamper,
                 referenceCounter,
                 executorService,
                 10));

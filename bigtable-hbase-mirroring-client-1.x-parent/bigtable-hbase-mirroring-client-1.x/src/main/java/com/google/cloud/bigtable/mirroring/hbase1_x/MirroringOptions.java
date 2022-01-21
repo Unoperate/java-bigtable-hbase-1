@@ -18,6 +18,7 @@ package com.google.cloud.bigtable.mirroring.hbase1_x;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_BUFFERED_MUTATOR_BYTES_TO_FLUSH;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_CONCURRENT_WRITES;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_CONNECTION_CONNECTION_TERMINATION_TIMEOUT;
+import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_DROP_ON_OVERFLOW_KEY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_MAX_BUFFER_SIZE_KEY;
 import static com.google.cloud.bigtable.mirroring.hbase1_x.utils.MirroringConfigurationHelper.MIRRORING_FAILLOG_PREFIX_PATH_KEY;
@@ -106,6 +107,7 @@ public class MirroringOptions {
   public final Faillog faillog;
 
   public final int resultScannerBufferedMismatchedResults;
+  public final boolean enableDefaultClientSideTimestamps;
 
   public MirroringOptions(Configuration configuration) {
     this.mismatchDetectorFactoryClass =
@@ -153,5 +155,8 @@ public class MirroringOptions {
         "Performing writes concurrently and not waiting for writes is forbidden. "
             + "It has no advantage over performing writes asynchronously and not waiting for them.");
     this.faillog = new Faillog(configuration);
+
+    this.enableDefaultClientSideTimestamps =
+        configuration.getBoolean(MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS, false);
   }
 }

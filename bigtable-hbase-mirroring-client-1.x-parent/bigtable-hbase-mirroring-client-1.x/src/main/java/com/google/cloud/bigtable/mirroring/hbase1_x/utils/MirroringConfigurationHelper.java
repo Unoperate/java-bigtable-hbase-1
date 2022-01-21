@@ -30,6 +30,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.client.BufferedMutator;
+import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.client.Table;
@@ -279,6 +281,21 @@ public class MirroringConfigurationHelper {
    */
   public static final String MIRRORING_SCANNER_BUFFERED_MISMATCHED_READS =
       "google.bigtable.mirroring.result-scanner.buffered-mismatched-reads";
+
+  /**
+   * If set to {@code true} the Mirroring Client will automatically add timestamps to {@link
+   * org.apache.hadoop.hbase.client.Put}s without timestamp set based on client's host local time.
+   * Client-side timestamps assigned by {@link Table}s and {@link BufferedMutator}`s created by one
+   * {@link Connection} are always increasing, even if system clock is moved backwards, for example
+   * by NTP or manually by the user. To enable client-side timestamping set this key to `true`.
+   *
+   * <p>Be aware that client-side timestamping modifies only `Put`s - `Delete`s, `Increment`s and
+   * `Append`s are not affected by this setting and will cause inconsistencies between databases.
+   *
+   * <p>Default value: false.
+   */
+  public static final String MIRRORING_ENABLE_DEFAULT_CLIENT_SIDE_TIMESTAMPS =
+      "google.bigtable.mirroring.enable-default-client-side-timestamps";
 
   public static void fillConnectionConfigWithClassImplementation(
       Configuration connectionConfig,

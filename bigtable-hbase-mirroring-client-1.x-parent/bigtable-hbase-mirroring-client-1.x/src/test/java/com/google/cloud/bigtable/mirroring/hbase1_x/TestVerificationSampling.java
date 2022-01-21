@@ -34,6 +34,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
@@ -61,6 +62,7 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class TestVerificationSampling {
   @Rule public final MockitoRule mockitoRule = MockitoJUnit.rule();
+  @Mock Timestamper timestamper;
 
   @Rule
   public final ExecutorServiceRule executorServiceRule =
@@ -91,6 +93,7 @@ public class TestVerificationSampling {
                 flowController,
                 secondaryWriteErrorConsumer,
                 readSampler,
+                timestamper,
                 false,
                 false,
                 new MirroringTracer(),

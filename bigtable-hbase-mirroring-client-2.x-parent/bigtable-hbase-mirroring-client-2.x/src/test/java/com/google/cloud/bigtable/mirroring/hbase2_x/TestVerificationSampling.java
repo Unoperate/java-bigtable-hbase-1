@@ -32,6 +32,7 @@ import com.google.cloud.bigtable.mirroring.hbase1_x.utils.SecondaryWriteErrorCon
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.flowcontrol.FlowController;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.mirroringmetrics.MirroringTracer;
 import com.google.cloud.bigtable.mirroring.hbase1_x.utils.referencecounting.ListenableReferenceCounter;
+import com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper.Timestamper;
 import com.google.cloud.bigtable.mirroring.hbase1_x.verification.MismatchDetector;
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
@@ -73,6 +74,7 @@ public class TestVerificationSampling {
   @Mock SecondaryWriteErrorConsumerWithMetrics secondaryWriteErrorConsumer;
   @Mock ReadSampler readSampler;
   @Mock ListenableReferenceCounter referenceCounter;
+  @Mock Timestamper timestamper;
 
   MirroringAsyncTable<ScanResultConsumerBase> mirroringTable;
 
@@ -92,6 +94,7 @@ public class TestVerificationSampling {
                 secondaryWriteErrorConsumer,
                 new MirroringTracer(),
                 readSampler,
+                timestamper,
                 referenceCounter,
                 executorServiceRule.executorService,
                 10));

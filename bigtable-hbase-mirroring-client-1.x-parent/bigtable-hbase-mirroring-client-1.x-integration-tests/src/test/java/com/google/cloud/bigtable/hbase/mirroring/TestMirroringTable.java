@@ -91,7 +91,7 @@ public class TestMirroringTable {
     int databaseEntriesCount = 1000;
 
     final TableName tableName = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           t1.put(Helpers.createPut(i, columnFamily1, qualifier1));
@@ -104,7 +104,7 @@ public class TestMirroringTable {
   @Test
   public void testPuts() throws IOException {
     final TableName tableName = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName)) {
         int id = 0;
         for (int i = 0; i < 10; i++) {
@@ -130,7 +130,7 @@ public class TestMirroringTable {
         failEvenRowKeysPredicate, OperationStatusCode.SANITY_CHECK_FAILURE, "failed");
 
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -149,7 +149,7 @@ public class TestMirroringTable {
     databaseHelpers.verifyTableConsistency(tableName1);
 
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
         int id = 0;
         for (int i = 0; i < 100; i++) {
@@ -182,7 +182,7 @@ public class TestMirroringTable {
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           t1.put(Helpers.createPut(i, columnFamily1, qualifier1));
@@ -195,7 +195,7 @@ public class TestMirroringTable {
 
     ReportedErrorsContext reportedErrorsContext2 = new ReportedErrorsContext();
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
         int id = 0;
         for (int i = 0; i < databaseEntriesCount / 100; i++) {
@@ -217,7 +217,7 @@ public class TestMirroringTable {
     int databaseEntriesCount = 1000;
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -229,7 +229,7 @@ public class TestMirroringTable {
 
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName2, databaseEntriesCount, columnFamily1, qualifier1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
         int id = 0;
         for (int i = 0; i < databaseEntriesCount / 100; i++) {
@@ -264,7 +264,7 @@ public class TestMirroringTable {
     FailingHBaseHRegion.failMutation(
         failEvenRowKeysPredicate, OperationStatusCode.SANITY_CHECK_FAILURE, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -281,7 +281,7 @@ public class TestMirroringTable {
     }
     databaseHelpers.verifyTableConsistency(tableName1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
         int id = 0;
         for (int i = 0; i < databaseEntriesCount / 100; i++) {
@@ -333,7 +333,7 @@ public class TestMirroringTable {
         failEvenRowKeysPredicate, OperationStatusCode.BAD_FAMILY, "failed");
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -347,7 +347,7 @@ public class TestMirroringTable {
     reportedErrorsContext1.assertNewErrorsReported(databaseEntriesCount / 2);
 
     ReportedErrorsContext reportedErrorsContext2 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName2)) {
         int id = 0;
         for (int i = 0; i < databaseEntriesCount / 100; i++) {
@@ -376,7 +376,7 @@ public class TestMirroringTable {
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           // We modify each row using for comparison a cell in its column qualifier1.
@@ -449,7 +449,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -493,7 +493,7 @@ public class TestMirroringTable {
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -543,7 +543,7 @@ public class TestMirroringTable {
         qualifier4,
         qualifier5);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           // We delete each row using for comparison a cell in its column qualifier1.
@@ -612,7 +612,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -657,7 +657,7 @@ public class TestMirroringTable {
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -697,7 +697,7 @@ public class TestMirroringTable {
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -756,7 +756,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -803,7 +803,7 @@ public class TestMirroringTable {
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -842,7 +842,7 @@ public class TestMirroringTable {
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -853,7 +853,7 @@ public class TestMirroringTable {
 
     databaseHelpers.verifyTableConsistency(tableName1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -875,7 +875,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -910,7 +910,7 @@ public class TestMirroringTable {
         failEvenRowKeysPredicate, OperationStatusCode.SANITY_CHECK_FAILURE, "failed");
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -930,7 +930,7 @@ public class TestMirroringTable {
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -941,7 +941,7 @@ public class TestMirroringTable {
 
     databaseHelpers.verifyTableConsistency(tableName1);
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -965,7 +965,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -1001,7 +1001,7 @@ public class TestMirroringTable {
         failEvenRowKeysPredicate, OperationStatusCode.SANITY_CHECK_FAILURE, "failed");
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table table = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -1019,7 +1019,7 @@ public class TestMirroringTable {
     int databaseEntriesCount = 1000;
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -1042,7 +1042,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -1070,7 +1070,7 @@ public class TestMirroringTable {
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -1090,7 +1090,7 @@ public class TestMirroringTable {
     int databaseEntriesCount = 1000;
     final TableName tableName1 = connectionRule.createTable(columnFamily1);
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -1112,7 +1112,7 @@ public class TestMirroringTable {
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           final byte[] rowKey = rowKeyFromId(i);
@@ -1140,7 +1140,7 @@ public class TestMirroringTable {
     databaseHelpers.fillTable(tableName1, databaseEntriesCount, columnFamily1, qualifier1);
 
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName1)) {
         for (int i = 0; i < databaseEntriesCount; i++) {
           byte[] rowKey = rowKeyFromId(i);
@@ -1160,7 +1160,7 @@ public class TestMirroringTable {
     int databaseEntriesCount = 1000;
 
     final TableName tableName = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName)) {
         int id = 0;
         while (id < databaseEntriesCount) {
@@ -1189,7 +1189,7 @@ public class TestMirroringTable {
     FailingHBaseHRegion.failMutation(failEvenRowKeysPredicate, "failed");
 
     final TableName tableName = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName)) {
         int id = 0;
         while (id < databaseEntriesCount) {
@@ -1232,7 +1232,7 @@ public class TestMirroringTable {
 
     ReportedErrorsContext reportedErrorsContext1 = new ReportedErrorsContext();
     final TableName tableName2 = connectionRule.createTable(columnFamily1);
-    try (MirroringConnection connection = databaseHelpers.createConnection()) {
+    try (MirroringConnection connection = databaseHelpers.createTimestampedConnection()) {
       try (Table t1 = connection.getTable(tableName2)) {
         int id = 0;
         while (id < databaseEntriesCount) {
