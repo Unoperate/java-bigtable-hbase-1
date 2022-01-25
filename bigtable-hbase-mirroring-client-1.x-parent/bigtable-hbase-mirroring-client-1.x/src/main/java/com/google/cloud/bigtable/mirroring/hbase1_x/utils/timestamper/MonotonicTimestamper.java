@@ -21,6 +21,7 @@ import java.util.Map;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HConstants;
+import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
@@ -32,6 +33,13 @@ public class MonotonicTimestamper implements Timestamper {
   public void fillTimestamp(Put put) {
     long timestamp = timer.getCurrentTimeMillis();
     setPutTimestamp(put, timestamp);
+  }
+
+  @Override
+  public void fillTimestamp(Mutation mutation) {
+    if (mutation instanceof Put) {
+      fillTimestamp((Put) mutation);
+    }
   }
 
   @Override

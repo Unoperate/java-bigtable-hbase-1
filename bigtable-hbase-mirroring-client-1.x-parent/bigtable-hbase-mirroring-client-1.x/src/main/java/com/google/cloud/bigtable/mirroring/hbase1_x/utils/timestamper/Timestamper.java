@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper;
 
+import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
@@ -26,4 +27,6 @@ public interface Timestamper {
   void fillTimestamp(RowMutations rowMutations);
 
   void fillTimestamp(Put put);
+
+  void fillTimestamp(Mutation mutation);
 }

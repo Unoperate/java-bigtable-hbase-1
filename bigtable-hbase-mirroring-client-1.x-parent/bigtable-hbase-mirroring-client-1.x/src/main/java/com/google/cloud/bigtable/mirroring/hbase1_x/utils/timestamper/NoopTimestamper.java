@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.hbase1_x.utils.timestamper;
 
+import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowMutations;
@@ -28,4 +29,7 @@ public class NoopTimestamper implements Timestamper {
 
   @Override
   public void fillTimestamp(Put put) {}
+
+  @Override
+  public void fillTimestamp(Mutation mutation) {}
 }

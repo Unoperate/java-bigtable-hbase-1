@@ -411,7 +411,8 @@ public class MirroringAsyncConnection implements AsyncConnection {
           this.primaryMutatorBuilder.build(),
           this.secondaryMutatorBuilder.build(),
           flowController,
-          secondaryWriteErrorConsumer);
+          secondaryWriteErrorConsumer,
+          timestamper);
     }
 
     @Override
