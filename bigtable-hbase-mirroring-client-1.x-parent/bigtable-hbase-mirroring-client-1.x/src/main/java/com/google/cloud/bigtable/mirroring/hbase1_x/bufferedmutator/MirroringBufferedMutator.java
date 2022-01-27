@@ -449,7 +449,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
      * this field is synchronized.
      *
      * <p>{@link BufferedMutations} is not thread safe and usage of this field should by
-     * synchronized by {@code synchronized(this)}.
+     * synchronized on current instance of {@link FlushSerializer}.
      */
     private final BufferedMutations<BufferEntryType> mutationEntries;
 
@@ -468,7 +468,8 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
      * FlowController - once there are not more resources to be used asynchronously scheduling of
      * new operations will block.
      *
-     * <p>Access to this field should be synchronized by {@code synchronized(this)}
+     * <p>Access to {@code lastFlushFutures} field should be synchronized on current instance of
+     * {@link FlushSerializer}.
      *
      * <p>We have to ensure the ordering to prevent the following scenario:
      *
