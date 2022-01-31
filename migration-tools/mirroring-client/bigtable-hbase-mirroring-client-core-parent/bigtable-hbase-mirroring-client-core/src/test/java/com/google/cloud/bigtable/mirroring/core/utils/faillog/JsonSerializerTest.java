@@ -18,7 +18,6 @@ package com.google.cloud.bigtable.mirroring.core.utils.faillog;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
-import com.google.protobuf.Descriptors;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.apache.hadoop.hbase.client.Durability;
@@ -34,8 +33,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class JsonSerializerTest {
   @Test
-  public void serializeAndDeserialize()
-      throws IOException, Descriptors.DescriptorValidationException {
+  public void serializeAndDeserialize() throws IOException {
     Increment increment = new Increment(new byte[] {'r'});
     for (int i = 0; i < 2; i++) {
       byte[] bytes = Bytes.toBytes(i);

@@ -34,6 +34,7 @@ limitations under the License.
 
   <modules>
     <module>bigtable-hbase-mirroring-client-core</module>
+    <module>protobuf-java-format-shaded</module>
   </modules>
 
   <build>
