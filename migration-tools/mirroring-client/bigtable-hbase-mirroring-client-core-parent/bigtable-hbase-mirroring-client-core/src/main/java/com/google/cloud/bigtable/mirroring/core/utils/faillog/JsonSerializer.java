@@ -15,7 +15,7 @@
  */
 package com.google.cloud.bigtable.mirroring.core.utils.faillog;
 
-import com.googlecode.protobuf.format.JsonJacksonFormat;
+import com.google.bigtable.hbase.mirroring.shaded.com.googlecode.protobuf.format.JsonJacksonFormat;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,8 +23,6 @@ import java.nio.charset.StandardCharsets;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.Descriptors.Descriptor;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.DynamicMessage;
 import org.apache.hadoop.hbase.shaded.com.google.protobuf.GeneratedMessage;
-
-// import org.apache.hadoop.hbase.shaded.com.googlecode.protobuf.format.JsonJacksonFormat;
 
 /** The singleton of this class translates HBase protos into JSON and vice-versa. */
 public class JsonSerializer {

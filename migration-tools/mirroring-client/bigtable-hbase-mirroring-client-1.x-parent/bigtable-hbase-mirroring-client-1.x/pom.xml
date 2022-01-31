@@ -30,25 +30,13 @@ limitations under the License.
   <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
   <description>
     Bigtable/HBase Mirroring Client conforming to HBase API 1.x.
-    Shades all dependencies of bigtable-hbase-mirroring-client-core except hbase-client.
   </description>
-
-  <properties>
-    <shading-prefix>com.google.bigtable.hbase.mirroring.repackaged</shading-prefix>
-    <shading-prefix-path>com/google/bigtable/hbase/mirroring/repackaged</shading-prefix-path>
-  </properties>
 
   <dependencies>
     <dependency>
       <groupId>com.google.cloud.bigtable</groupId>
       <artifactId>bigtable-hbase-mirroring-client-core</artifactId>
       <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-client</artifactId>
-      <version>${hbase1.version}</version>
       <scope>compile</scope>
     </dependency>
 
@@ -82,9 +70,6 @@ limitations under the License.
 
   <build>
     <plugins>
-      <!-- disable google-cloud-shared-config enforcement checks because
-      hbase-client's dependency subtree doesn't follow the same rules and is
-      unable to be fixed here -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
@@ -92,22 +77,26 @@ limitations under the License.
           <execution>
             <id>enforce</id>
             <configuration>
-              <skip>true</skip>
+              <rules>
+                <requireUpperBoundDeps>
+                  <excludes>
+                    <!--
+                    bigtable-hbase-mirroring-client-core requires 30.1-android (${guava.version})
+                    api-common:1.10.4 requires 30.1.1-android
+                     -->
+                    <exclude>com.google.guava:guava</exclude>
+                  </excludes>
+                </requireUpperBoundDeps>
+              </rules>
             </configuration>
-          </execution>
-          <!-- This must be a drop in replacement for hbase-client, so can't
-            manage hbase's deps -->
-          <execution>
-            <id>enforce-banned-deps</id>
             <goals>
               <goal>enforce</goal>
             </goals>
-            <configuration>
-              <skip>true</skip>
-            </configuration>
           </execution>
         </executions>
       </plugin>
+
+      <!-- copy protobuf-java-format-shaded and core into jar -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -120,140 +109,12 @@ limitations under the License.
             <configuration>
               <shadedArtifactAttached>false</shadedArtifactAttached>
               <createDependencyReducedPom>true</createDependencyReducedPom>
-              <!-- Need to manually promote to dependencies to keep the structure of hbase-shade-client -->
-              <promoteTransitiveDependencies>
-                false
-              </promoteTransitiveDependencies>
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/**/pom.properties</exclude>
-                    <exclude>META-INF/**/pom.xml</exclude>
-                    <exclude>META-INF/MANIFEST.MF</exclude>
-                    <exclude>META-INF/LICENSE</exclude>
-                    <exclude>META-INF/LICENSE.txt</exclude>
-                    <exclude>META-INF/NOTICE</exclude>
-                    <exclude>META-INF/DEPENDENCIES</exclude>
-                    <exclude>META-INF/NOTICE.txt</exclude>
-                  </excludes>
-                </filter>
-              </filters>
               <artifactSet>
                 <includes>
-                  <include>com.google.cloud.bigtable:bigtable-hbase-mirroring-client-core</include>
-                  <include>com.google.api:api-common</include>
-                  <include>com.fasterxml.jackson.core:jackson-databind</include>
-                  <include>com.fasterxml.jackson.core:jackson-core</include>
-                  <include>com.fasterxml.jackson.core:jackson-annotations</include>
-                  <include>io.opencensus:opencensus-api</include>
-                  <include>io.grpc:grpc-context</include>
-                  <include>javax.annotation:javax.annotation-api</include>
-                  <include>com.googlecode.protobuf-java-format:protobuf-java-format</include>
-                  <include>com.google.guava:guava</include>
-                  <include>com.google.guava:failureaccess</include>
-                  <include>com.google.guava:listenablefuture</include>
-                  <inlcude>com.google.j2objc:j2objc-annotations</inlcude>
-                  <include>org.checkerframework:checker-compat-qual</include>
-                  <include>com.google.j2objc:j2objc-annotations</include>
-                  <include>commons-logging:commons-logging</include>
+                  <include>com.google.cloud.bigtable:protobuf-java-format-shaded</include>
+                  <include>${project.groupId}:bigtable-hbase-mirroring-client-core</include>
                 </includes>
               </artifactSet>
-              <relocations>
-                <relocation>
-                  <pattern>com.google.api</pattern>
-                  <shadedPattern>${shading-prefix}.com.google.api</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.fasterxml.jackson</pattern>
-                  <shadedPattern>${shading-prefix}.com.fasterxml.jackson</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.opencensus</pattern>
-                  <shadedPattern>${shading-prefix}.io.opencensus</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.commons.logging</pattern>
-                  <shadedPattern>${shading-prefix}.org.apache.commons.logging</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.grpc</pattern>
-                  <shadedPattern>${shading-prefix}.io.grpc</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>javax.annotation</pattern>
-                  <shadedPattern>${shading-prefix}.javax.annotation</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.googlecode.protobuf</pattern>
-                  <shadedPattern>${shading-prefix}.com.googlecode.protobuf</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.google.common</pattern>
-                  <shadedPattern>${shading-prefix}.com.google.common</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.google.thirdparty.publicsuffix</pattern>
-                  <shadedPattern>${shading-prefix}.com.google.thirdparty.publicsuffix</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.google.j2objc</pattern>
-                  <shadedPattern>${shading-prefix}.com.google.j2objc</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.checkerframework.checker</pattern>
-                  <shadedPattern>${shading-prefix}.org.checkerframework.checker</shadedPattern>
-                </relocation>
-              </relocations>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>com.google.cloud.bigtable.test</groupId>
-        <artifactId>bigtable-build-helper</artifactId>
-        <version>2.0.0-alpha2-SNAPSHOT</version> <!-- {x-version-update:bigtable-client-parent:current} -->
-
-        <executions>
-          <execution>
-            <id>verify-shaded-jar-entries</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>verify-shaded-jar-entries</goal>
-            </goals>
-            <configuration>
-              <allowedJarClassEntries>
-                <classEntry>com/google/cloud/bigtable/mirroring/hbase1_x</classEntry>
-                <classEntry>com/google/cloud/bigtable/mirroring/core</classEntry>
-                <classEntry>${shading-prefix-path}</classEntry>
-              </allowedJarClassEntries>
-            </configuration>
-          </execution>
-          <!-- ignore verify-shaded-exclusions run -->
-          <execution>
-            <id>verify-mirror-deps</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>verify-mirror-deps</goal>
-            </goals>
-            <configuration>
-              <targetDependencies>
-                <targetDependency>org.apache.hbase:hbase-client</targetDependency>
-              </targetDependencies>
-              <ignoredDependencies>
-                <!-- We have shaded 30.1-android and hbase-client depends on 12.0.1 -->
-                <dependency>com.google.guava:guava</dependency>
-                <!-- hbase-client depends on 3.0.0 and shaded guava:30.1.1-android depends on 3.0.2 -->
-                <dependency>com.google.code.findbugs:jsr305</dependency>
-
-                <!-- for some reason hbase-client exposes testing deps as a compile dep, just ignore them -->
-                <dependency>junit:junit</dependency>
-                <dependency>org.hamcrest:hamcrest-core</dependency>
-              </ignoredDependencies>
             </configuration>
           </execution>
         </executions>

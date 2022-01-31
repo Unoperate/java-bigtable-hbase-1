@@ -39,8 +39,15 @@ limitations under the License.
     This project is a parent project for the hbase 1.x mirroring client projects.
   </description>
 
+  <properties>
+    <shading-prefix>com.google.bigtable.hbase.mirroring.shaded</shading-prefix>
+    <shading-prefix-path>com/google/bigtable/hbase/mirroring/shaded</shading-prefix-path>
+  </properties>
+
   <modules>
     <module>bigtable-hbase-mirroring-client-1.x</module>
+    <module>bigtable-hbase-mirroring-client-1.x-shaded</module>
+    <module>bigtable-hbase-mirroring-client-1.x-hadoop</module>
     <module>bigtable-hbase-mirroring-client-1.x-integration-tests</module>
   </modules>
 

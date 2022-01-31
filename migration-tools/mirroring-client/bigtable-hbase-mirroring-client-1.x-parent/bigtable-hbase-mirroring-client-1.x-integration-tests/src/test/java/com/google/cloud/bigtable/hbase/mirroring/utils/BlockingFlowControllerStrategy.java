@@ -15,12 +15,12 @@
  */
 package com.google.cloud.bigtable.hbase.mirroring.utils;
 
-import com.google.bigtable.hbase.mirroring.repackaged.com.google.common.util.concurrent.ListenableFuture;
-import com.google.bigtable.hbase.mirroring.repackaged.com.google.common.util.concurrent.SettableFuture;
 import com.google.cloud.bigtable.mirroring.core.MirroringOptions;
 import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.FlowControlStrategy;
 import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.RequestResourcesDescription;
 import com.google.cloud.bigtable.mirroring.core.utils.flowcontrol.ResourceReservation;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import java.util.concurrent.Executor;
 
 public class BlockingFlowControllerStrategy implements FlowControlStrategy {

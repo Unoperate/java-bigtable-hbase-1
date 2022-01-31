@@ -13,12 +13,15 @@
   <version>1.4</version>
   <description>
     This is a wrapper around `com.googlecode.protobuf-java-format:protobuf-java-format` that rewrites the bytecode to use `org.apache.hadoop.hbase.shaded.com.google.protobuf` instead of plain
-    `com.google.protobuf` for compatibility with `hbase-shaded-client`.
+    `com.google.protobuf` for compatibility with `hbase-shaded-client`. Classes using shaded protobufs are exposed in `com.google.bigtable.hbase.mirroring.shaded.com.googlecode.protobuf.format`
+    package.
   </description>
 
   <properties>
     <hbase-shading-prefix>org.apache.hadoop.hbase.shaded</hbase-shading-prefix>
     <hbase-shading-prefix-path>org/apache/hadoop/hbase/shaded</hbase-shading-prefix-path>
+    <shading-prefix>com.google.bigtable.hbase.mirroring.shaded</shading-prefix>
+    <shading-prefix-path>com/google/bigtable/hbase/mirroring/shaded</shading-prefix-path>
   </properties>
 
   <dependencies>
@@ -42,6 +45,8 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <shadedArtifactAttached>false</shadedArtifactAttached>
+              <createDependencyReducedPom>true</createDependencyReducedPom>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
@@ -54,6 +59,10 @@
                 <relocation>
                   <pattern>com.google.protobuf</pattern>
                   <shadedPattern>${hbase-shading-prefix}.com.google.protobuf</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.googlecode.protobuf.format</pattern>
+                  <shadedPattern>${shading-prefix}.com.googlecode.protobuf.format</shadedPattern>
                 </relocation>
               </relocations>
             </configuration>
@@ -74,7 +83,7 @@
             </goals>
             <configuration>
               <allowedJarClassEntries>
-                <classEntry>com/googlecode/protobuf/format</classEntry>
+                <classEntry>${shading-prefix-path}/com/googlecode/protobuf/format</classEntry>
               </allowedJarClassEntries>
             </configuration>
           </execution>
