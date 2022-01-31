@@ -287,7 +287,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
 
       try {
         // Schedule flush of all buffered data and:
-        // synchronous) wait for primary flush to finish;
+        // sequential) wait for primary flush to finish;
         // concurrent) wait for both flushes to finish.
         flushBufferedMutatorBeforeClosing();
       } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -310,7 +310,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
 
       try {
         // Schedule closing secondary buffered mutator.
-        // synchronous) it will be called at some point in the future.
+        // sequential) it will be called at some point in the future.
         // concurrent) it will be called immediately because all asynchronous operations are already
         // finished and directExecutor will call it in this thread.
         referenceCounter
