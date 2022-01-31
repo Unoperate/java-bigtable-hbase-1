@@ -496,7 +496,7 @@ public abstract class MirroringBufferedMutator<BufferEntryType> implements Buffe
      * <p>{@link #storeResourcesAndFlushIfThresholdIsExceeded} relies on the fact that access to
      * this field is synchronized.
      *
-     * <p>{@link BufferedMutations} is not thread safe and usage of this field should by
+     * <p>{@link BufferedMutations} is not thread safe and usage of this field should be
      * synchronized on current instance of {@link FlushSerializer}.
      */
     private final BufferedMutations<BufferEntryType> mutationEntries;
